@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript"],
+  "jsPlugins": ["./.hooks/you-lint-not-pass/lint-plugins/you-lint-not-pass-policy.js"],
   "ignorePatterns": ["dist/**", "node_modules/**", "*.d.ts"],
   "categories": {
     "correctness": "error",
@@ -14,6 +15,7 @@
     "denyWarnings": true
   },
   "rules": {
+    "you-lint-not-pass-policy/no-inline-suppression-comments": "error",
     "typescript/explicit-function-return-type": "error",
     "typescript/explicit-module-boundary-types": "error",
     "typescript/no-dynamic-delete": "error",

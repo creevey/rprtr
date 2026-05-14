@@ -1,0 +1,3 @@
+[submodule ".hooks/you-lint-not-pass"]
+	path = .hooks/you-lint-not-pass
+	url = https://github.com/wKich/you-lint-not-pass.git

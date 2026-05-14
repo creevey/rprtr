@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .hooks/you-lint-not-pass/claude/pre-tool-use.mjs",
+            "timeout": 200,
+            "statusMessage": "Lint policy check..."
+          }
+        ]
+      }
+    ]
+  }
+}
