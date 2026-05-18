@@ -4,13 +4,21 @@ const NAMED_SCREENSHOT_STEP_TITLE = /toHaveScreenshot\((.+?)\)/
 const UNNAMED_SCREENSHOT_STEP_TITLE = /^Expect "toHaveScreenshot"(?:\s|$)/
 const SYNTHETIC_SCREENSHOT_PREFIX = '__unnamed-screenshot-'
 
-export interface ScreenshotDeclaration {
+export interface NamedScreenshotDeclaration {
   visualName: string
-  kind: 'named' | 'unnamed'
-  declaredName?: string
-  snapshotBaseName?: string
+  kind: 'named'
+  declaredName: string
+  snapshotBaseName: string
   occurrenceIndex: number
 }
+
+export interface UnnamedScreenshotDeclaration {
+  visualName: string
+  kind: 'unnamed'
+  occurrenceIndex: number
+}
+
+export type ScreenshotDeclaration = NamedScreenshotDeclaration | UnnamedScreenshotDeclaration
 
 export interface AttachmentData {
   name: string
@@ -36,7 +44,7 @@ function addVisualSuffix(visualName: string, occurrenceIndex: number): string {
     : `${visualName.slice(0, slashIndex + 1)}${visualName.slice(slashIndex + 1)}-${occurrenceIndex - 1}`
 }
 
-function normalizeNamedScreenshot(titleMatch: string, state: ExtractionState): ScreenshotDeclaration | null {
+function normalizeNamedScreenshot(titleMatch: string, state: ExtractionState): NamedScreenshotDeclaration | null {
   const unquotedName = titleMatch.trim().replace(/^['"`]|['"`]$/g, '')
 
   if (unquotedName === '') {

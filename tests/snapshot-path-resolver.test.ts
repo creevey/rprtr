@@ -6,6 +6,7 @@ import { resolveBaselineTargets, sanitizeForFilePath } from '../src/snapshot-pat
 const TEST_DIR = join(process.cwd(), 'tests')
 const TEST_FILE = join(TEST_DIR, 'example.spec.ts')
 const REPORTER_TITLE_PATH = ['', 'chromium', 'example.spec.ts', 'Suite', 'visual pass']
+type ResolveBaselineTargetsInput = Parameters<typeof resolveBaselineTargets>[0]
 
 describe('sanitizeForFilePath', () => {
   test('collapses consecutive unsafe characters into a single dash', () => {
@@ -23,6 +24,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'header',
           kind: 'named',
           declaredName: 'header',
+          snapshotBaseName: 'header',
           occurrenceIndex: 1,
         },
       ],
@@ -54,6 +56,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'header',
           kind: 'named',
           declaredName: 'header',
+          snapshotBaseName: 'header',
           occurrenceIndex: 1,
         },
       ],
@@ -86,6 +89,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'header:mobile',
           kind: 'named',
           declaredName: 'header:mobile',
+          snapshotBaseName: 'header:mobile',
           occurrenceIndex: 1,
         },
       ],
@@ -117,12 +121,14 @@ describe('resolveBaselineTargets', () => {
           visualName: 'header',
           kind: 'named',
           declaredName: 'header',
+          snapshotBaseName: 'header',
           occurrenceIndex: 1,
         },
         {
           visualName: 'header-1',
           kind: 'named',
           declaredName: 'header',
+          snapshotBaseName: 'header',
           occurrenceIndex: 2,
         },
       ],
@@ -152,7 +158,7 @@ describe('resolveBaselineTargets', () => {
   })
 
   test('resolves an unnamed screenshot using Playwright anonymous naming rules', () => {
-    const targets = resolveBaselineTargets({
+    const input: ResolveBaselineTargetsInput = {
       testFile: TEST_FILE,
       reporterTitlePath: REPORTER_TITLE_PATH,
       declarations: [
@@ -169,7 +175,8 @@ describe('resolveBaselineTargets', () => {
         projectName: 'chromium',
         snapshotSuffix: process.platform,
       },
-    } as Parameters<typeof resolveBaselineTargets>[0])
+    }
+    const targets = resolveBaselineTargets(input)
 
     expect(targets).toEqual([
       {
@@ -186,7 +193,7 @@ describe('resolveBaselineTargets', () => {
   })
 
   test('resolves multiple unnamed screenshots in one test using incrementing anonymous indexes', () => {
-    const targets = resolveBaselineTargets({
+    const input: ResolveBaselineTargetsInput = {
       testFile: TEST_FILE,
       reporterTitlePath: REPORTER_TITLE_PATH,
       declarations: [
@@ -208,7 +215,8 @@ describe('resolveBaselineTargets', () => {
         projectName: 'chromium',
         snapshotSuffix: process.platform,
       },
-    } as Parameters<typeof resolveBaselineTargets>[0])
+    }
+    const targets = resolveBaselineTargets(input)
 
     expect(targets).toEqual([
       {
@@ -235,7 +243,7 @@ describe('resolveBaselineTargets', () => {
   })
 
   test('trims long unnamed screenshot titles with the same hash format Playwright uses', () => {
-    const target = resolveBaselineTargets({
+    const input: ResolveBaselineTargetsInput = {
       testFile: TEST_FILE,
       reporterTitlePath: [
         '',
@@ -258,11 +266,36 @@ describe('resolveBaselineTargets', () => {
         projectName: 'chromium',
         snapshotSuffix: process.platform,
       },
-    } as Parameters<typeof resolveBaselineTargets>[0])[0]
+    }
+    const target = resolveBaselineTargets(input)[0]
 
     expect(target).toBeDefined()
     expect(basename(target!.snapshotPath)).toMatch(/-[0-9a-f]{5}-/)
     expect(basename(target!.snapshotPath)).toEndWith(`-chromium-${process.platform}.png`)
+  })
+
+  test('returns no target for malformed named declarations instead of treating them as unnamed', () => {
+    const targets = resolveBaselineTargets({
+      testFile: TEST_FILE,
+      reporterTitlePath: REPORTER_TITLE_PATH,
+      declarations: [
+        {
+          visualName: 'header',
+          kind: 'named',
+          snapshotBaseName: 'header',
+          occurrenceIndex: 1,
+        } as unknown as ResolveBaselineTargetsInput['declarations'][number],
+      ],
+      config: {
+        configDir: process.cwd(),
+        testDir: TEST_DIR,
+        snapshotDir: TEST_DIR,
+        projectName: 'chromium',
+        snapshotSuffix: process.platform,
+      },
+    })
+
+    expect(targets).toEqual([])
   })
 
   test('returns no target for slash-containing names when no existence callback is provided', () => {
@@ -274,6 +307,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'dir/header',
           kind: 'named',
           declaredName: 'dir/header.png',
+          snapshotBaseName: 'dir/header',
           occurrenceIndex: 1,
         },
       ],
@@ -292,7 +326,7 @@ describe('resolveBaselineTargets', () => {
   test('resolves the string-call variant when it is the only existing slash-name candidate', () => {
     const stringVariantPath = join(TEST_DIR, 'example.spec.ts-snapshots', `dir-header-chromium-${process.platform}.png`)
 
-    const targets = resolveBaselineTargets({
+    const input: ResolveBaselineTargetsInput = {
       testFile: TEST_FILE,
       reporterTitlePath: REPORTER_TITLE_PATH,
       declarations: [
@@ -300,6 +334,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'dir/header',
           kind: 'named',
           declaredName: 'dir/header.png',
+          snapshotBaseName: 'dir/header',
           occurrenceIndex: 1,
         },
       ],
@@ -311,7 +346,8 @@ describe('resolveBaselineTargets', () => {
         snapshotSuffix: process.platform,
       },
       snapshotPathExists: (snapshotPath) => snapshotPath === stringVariantPath,
-    } as Parameters<typeof resolveBaselineTargets>[0])
+    }
+    const targets = resolveBaselineTargets(input)
 
     expect(targets).toEqual([
       {
@@ -331,7 +367,7 @@ describe('resolveBaselineTargets', () => {
       `header-chromium-${process.platform}.png`,
     )
 
-    const targets = resolveBaselineTargets({
+    const input: ResolveBaselineTargetsInput = {
       testFile: TEST_FILE,
       reporterTitlePath: REPORTER_TITLE_PATH,
       declarations: [
@@ -339,6 +375,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'dir/header',
           kind: 'named',
           declaredName: 'dir/header.png',
+          snapshotBaseName: 'dir/header',
           occurrenceIndex: 1,
         },
       ],
@@ -350,7 +387,8 @@ describe('resolveBaselineTargets', () => {
         snapshotSuffix: process.platform,
       },
       snapshotPathExists: (snapshotPath) => snapshotPath === arrayVariantPath,
-    } as Parameters<typeof resolveBaselineTargets>[0])
+    }
+    const targets = resolveBaselineTargets(input)
 
     expect(targets).toEqual([
       {
@@ -371,7 +409,7 @@ describe('resolveBaselineTargets', () => {
       `header-chromium-${process.platform}.png`,
     )
 
-    const targets = resolveBaselineTargets({
+    const input: ResolveBaselineTargetsInput = {
       testFile: TEST_FILE,
       reporterTitlePath: REPORTER_TITLE_PATH,
       declarations: [
@@ -379,6 +417,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'dir/header',
           kind: 'named',
           declaredName: 'dir/header.png',
+          snapshotBaseName: 'dir/header',
           occurrenceIndex: 1,
         },
       ],
@@ -390,7 +429,8 @@ describe('resolveBaselineTargets', () => {
         snapshotSuffix: process.platform,
       },
       snapshotPathExists: (snapshotPath) => snapshotPath === stringVariantPath || snapshotPath === arrayVariantPath,
-    } as Parameters<typeof resolveBaselineTargets>[0])
+    }
+    const targets = resolveBaselineTargets(input)
 
     expect(targets).toEqual([])
   })
@@ -403,7 +443,7 @@ describe('resolveBaselineTargets', () => {
       `header:mobile-chromium-${process.platform}.png`,
     )
 
-    const targets = resolveBaselineTargets({
+    const input: ResolveBaselineTargetsInput = {
       testFile: TEST_FILE,
       reporterTitlePath: REPORTER_TITLE_PATH,
       declarations: [
@@ -411,6 +451,7 @@ describe('resolveBaselineTargets', () => {
           visualName: 'dir/header:mobile',
           kind: 'named',
           declaredName: 'dir/header:mobile.png',
+          snapshotBaseName: 'dir/header:mobile',
           occurrenceIndex: 1,
         },
       ],
@@ -422,7 +463,8 @@ describe('resolveBaselineTargets', () => {
         snapshotSuffix: process.platform,
       },
       snapshotPathExists: (snapshotPath) => snapshotPath === arrayVariantPath,
-    } as Parameters<typeof resolveBaselineTargets>[0])
+    }
+    const targets = resolveBaselineTargets(input)
 
     expect(targets).toEqual([
       {

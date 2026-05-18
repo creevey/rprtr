@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { basename, dirname, extname, join, parse, relative, resolve } from 'path'
 
-import type { ScreenshotDeclaration } from './reporter-utils.ts'
+import type { NamedScreenshotDeclaration, ScreenshotDeclaration } from './reporter-utils.ts'
 
 const DEFAULT_SCREENSHOT_TEMPLATE =
   '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-projectName}{-snapshotSuffix}{ext}'
@@ -15,11 +15,6 @@ export interface SnapshotResolverConfig {
   readonly snapshotSuffix: string
   readonly snapshotPathTemplate?: string
   readonly toHaveScreenshotPathTemplate?: string
-}
-
-export interface NamedScreenshotDeclaration extends ScreenshotDeclaration {
-  readonly kind: 'named'
-  readonly declaredName: string
 }
 
 export interface SnapshotResolverInput {
@@ -226,23 +221,23 @@ function anonymousName(reporterTitlePath: readonly string[], occurrenceIndex: nu
   return sanitizeFilePathBeforeExtension(trimLongString(rawAnonymousName), '.png')
 }
 
-function isNamedDeclaration(declaration: ScreenshotDeclaration): declaration is NamedScreenshotDeclaration {
-  return declaration.kind === 'named' && declaration.declaredName !== undefined
-}
-
 function resolveTarget(
   input: SnapshotResolverInput,
   declaration: ScreenshotDeclaration,
 ): ResolvedBaselineTarget | undefined {
-  if (isNamedDeclaration(declaration)) {
-    return resolveNamedTarget(input, declaration)
+  switch (declaration.kind) {
+    case 'named':
+      return typeof declaration.declaredName === 'string' && declaration.declaredName !== ''
+        ? resolveNamedTarget(input, declaration)
+        : undefined
+    case 'unnamed': {
+      const anonymousFileName = anonymousName(input.reporterTitlePath, declaration.occurrenceIndex)
+      const extension = '.png'
+      const nameArgument = join(dirname(anonymousFileName), basename(anonymousFileName, extension))
+
+      return createResolvedBaselineTarget(input, declaration, nameArgument, extension)
+    }
   }
-
-  const anonymousFileName = anonymousName(input.reporterTitlePath, declaration.occurrenceIndex)
-  const extension = '.png'
-  const nameArgument = join(dirname(anonymousFileName), basename(anonymousFileName, extension))
-
-  return createResolvedBaselineTarget(input, declaration, nameArgument, extension)
 }
 
 export function resolveBaselineTargets(input: SnapshotResolverInput): ResolvedBaselineTarget[] {
