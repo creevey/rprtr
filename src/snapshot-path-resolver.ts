@@ -137,15 +137,11 @@ function resolveNamedTarget(
     `${declaration.declaredName}${extension}`,
     extension,
   )
-  const relativeOutputPath =
-    declaration.occurrenceIndex === 1
-      ? sanitizedNameWithExtension
-      : addSuffixToFilePath(sanitizedNameWithExtension, `-${declaration.occurrenceIndex - 1}`)
   const nameArgument = removeExtension(sanitizedNameWithExtension, extension)
 
   return {
     visualName: declaration.visualName,
-    attachmentBaseName: removeExtension(relativeOutputPath, extension),
+    attachmentBaseName: declaration.visualName,
     snapshotPath: applyTemplate(input, nameArgument, extension),
   }
 }

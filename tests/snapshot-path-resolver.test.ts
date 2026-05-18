@@ -69,7 +69,7 @@ describe('resolveBaselineTargets', () => {
     ])
   })
 
-  test('sanitizes named screenshot strings before template expansion and output naming', () => {
+  test('keeps the UI attachment base aligned with the declared visual name while sanitizing the snapshot path', () => {
     const targets = resolveBaselineTargets({
       testFile: TEST_FILE,
       reporterTitlePath: REPORTER_TITLE_PATH,
@@ -93,7 +93,7 @@ describe('resolveBaselineTargets', () => {
     expect(targets).toEqual([
       {
         visualName: 'header:mobile',
-        attachmentBaseName: 'header-mobile',
+        attachmentBaseName: 'header:mobile',
         snapshotPath: join(TEST_DIR, 'example.spec.ts-snapshots', `header-mobile-chromium-${process.platform}.png`),
       },
     ])
