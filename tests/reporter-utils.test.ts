@@ -32,6 +32,7 @@ test('extractScreenshotDeclarations keeps duplicate names distinct and preserves
       visualName: 'header',
       kind: 'named',
       declaredName: 'header',
+      snapshotBaseName: 'header',
       occurrenceIndex: 1,
     },
     {
@@ -43,6 +44,7 @@ test('extractScreenshotDeclarations keeps duplicate names distinct and preserves
       visualName: 'header-1',
       kind: 'named',
       declaredName: 'header',
+      snapshotBaseName: 'header',
       occurrenceIndex: 2,
     },
     {

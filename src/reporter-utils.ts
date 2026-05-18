@@ -8,6 +8,7 @@ export interface ScreenshotDeclaration {
   visualName: string
   kind: 'named' | 'unnamed'
   declaredName?: string
+  snapshotBaseName?: string
   occurrenceIndex: number
 }
 
@@ -56,6 +57,7 @@ function normalizeNamedScreenshot(titleMatch: string, state: ExtractionState): S
     visualName: addVisualSuffix(declaredName, occurrenceIndex),
     kind: 'named',
     declaredName,
+    snapshotBaseName: declaredName,
     occurrenceIndex,
   }
 }

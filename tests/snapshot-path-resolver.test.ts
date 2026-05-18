@@ -185,6 +185,55 @@ describe('resolveBaselineTargets', () => {
     ])
   })
 
+  test('resolves multiple unnamed screenshots in one test using incrementing anonymous indexes', () => {
+    const targets = resolveBaselineTargets({
+      testFile: TEST_FILE,
+      reporterTitlePath: REPORTER_TITLE_PATH,
+      declarations: [
+        {
+          visualName: '__unnamed-screenshot-1',
+          kind: 'unnamed',
+          occurrenceIndex: 1,
+        },
+        {
+          visualName: '__unnamed-screenshot-2',
+          kind: 'unnamed',
+          occurrenceIndex: 2,
+        },
+      ],
+      config: {
+        configDir: process.cwd(),
+        testDir: TEST_DIR,
+        snapshotDir: TEST_DIR,
+        projectName: 'chromium',
+        snapshotSuffix: process.platform,
+      },
+    } as Parameters<typeof resolveBaselineTargets>[0])
+
+    expect(targets).toEqual([
+      {
+        visualName: '__unnamed-screenshot-1',
+        attachmentBaseName: '__unnamed-screenshot-1',
+        artifactBaseName: '-unnamed-screenshot-1',
+        snapshotPath: join(
+          TEST_DIR,
+          'example.spec.ts-snapshots',
+          `Suite-visual-pass-1-chromium-${process.platform}.png`,
+        ),
+      },
+      {
+        visualName: '__unnamed-screenshot-2',
+        attachmentBaseName: '__unnamed-screenshot-2',
+        artifactBaseName: '-unnamed-screenshot-2',
+        snapshotPath: join(
+          TEST_DIR,
+          'example.spec.ts-snapshots',
+          `Suite-visual-pass-2-chromium-${process.platform}.png`,
+        ),
+      },
+    ])
+  })
+
   test('trims long unnamed screenshot titles with the same hash format Playwright uses', () => {
     const target = resolveBaselineTargets({
       testFile: TEST_FILE,
