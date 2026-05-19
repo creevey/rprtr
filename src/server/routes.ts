@@ -18,6 +18,7 @@ export interface RoutesContext {
   saveReport: () => Promise<void>
   approvalRouting?: {
     configDir: string
+    playwrightTestDir?: string
     playwrightSnapshotDir?: string
     playwrightSnapshotPathTemplate?: string
     playwrightToHaveScreenshotPathTemplate?: string
@@ -87,7 +88,7 @@ function resolveApprovalTarget(ctx: RoutesContext, test: TestData, retry: number
     declarations: [declaration],
     config: {
       configDir: ctx.approvalRouting.configDir,
-      testDir: dirname(testFile),
+      testDir: ctx.approvalRouting.playwrightTestDir ?? dirname(testFile),
       snapshotDir: ctx.approvalRouting.playwrightSnapshotDir ?? dirname(testFile),
       projectName: test.browser,
       snapshotSuffix: process.platform,

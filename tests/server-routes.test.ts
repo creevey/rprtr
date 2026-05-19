@@ -8,7 +8,9 @@ import type { TestData } from '../src/types'
 const TMP_DIR = join(process.cwd(), 'test-approval-routing')
 const SCREENSHOT_DIR = join(TMP_DIR, 'screenshots')
 const SNAPSHOT_DIR = join(TMP_DIR, 'snapshots')
-const TEST_FILE = join(TMP_DIR, 'tests', 'example.spec.ts')
+const PLAYWRIGHT_TEST_DIR = join(TMP_DIR, 'tests')
+const TEST_FILE = join(PLAYWRIGHT_TEST_DIR, 'example.spec.ts')
+const NESTED_TEST_FILE = join(PLAYWRIGHT_TEST_DIR, 'nested', 'example.spec.ts')
 const CUSTOM_TEMPLATE = '{snapshotDir}/{projectName}/{testFilePath}/{arg}{ext}'
 
 function createContext(tests: Record<string, TestData>): Parameters<typeof handleHttpRequest>[0] {
@@ -24,6 +26,7 @@ function createContext(tests: Record<string, TestData>): Parameters<typeof handl
     saveReport: async (): Promise<void> => {},
     approvalRouting: {
       configDir: process.cwd(),
+      playwrightTestDir: PLAYWRIGHT_TEST_DIR,
       playwrightSnapshotDir: SNAPSHOT_DIR,
       playwrightToHaveScreenshotPathTemplate: CUSTOM_TEMPLATE,
     },
@@ -85,6 +88,63 @@ describe('approval routing', () => {
       'actual image',
     )
     expect(tests['test-1']?.approved).toEqual({ header: 0 })
+  })
+
+  test('approve uses configured testDir for nested test-file templates', async () => {
+    await mkdir(join(SCREENSHOT_DIR, 'test-nested'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'nested', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await writeFile(join(SCREENSHOT_DIR, 'test-nested', 'header-actual.png'), 'actual image')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'nested', 'example.spec.ts', 'header.png'), 'nested baseline image')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'flat baseline image')
+
+    const tests: Record<string, TestData> = {
+      'test-nested': {
+        id: 'test-nested',
+        title: 'visual pass',
+        titlePath: ['Suite'],
+        browser: 'chromium',
+        location: { file: NESTED_TEST_FILE, line: 10 },
+        results: [
+          {
+            status: 'failed',
+            retries: 0,
+            images: {
+              header: {
+                actual: '/screenshots/test-nested/header-actual.png',
+              },
+            },
+            visualDeclarations: [
+              {
+                visualName: 'header',
+                kind: 'named',
+                declaredName: 'header',
+                snapshotBaseName: 'header',
+                occurrenceIndex: 1,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const response = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/api/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'test-nested', retry: 0, image: 'header' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'nested', 'example.spec.ts', 'header.png'), 'utf-8')).toBe(
+      'actual image',
+    )
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'utf-8')).toBe(
+      'flat baseline image',
+    )
+    expect(tests['test-nested']?.approved).toEqual({ header: 0 })
   })
 
   test('approve fails when exact resolution is ambiguous', async () => {

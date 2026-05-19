@@ -35,6 +35,7 @@ export interface ServerOptions {
   reportPath?: string
   /** Absolute path to the built web UI assets directory, or its parent directory */
   staticDir?: string
+  playwrightTestDir?: string
   playwrightSnapshotDir?: string
   playwrightSnapshotPathTemplate?: string
   playwrightToHaveScreenshotPathTemplate?: string
@@ -241,6 +242,7 @@ function createRoutesContext(
     saveReport,
     approvalRouting: {
       configDir: process.cwd(),
+      playwrightTestDir: options.playwrightTestDir,
       playwrightSnapshotDir: options.playwrightSnapshotDir,
       playwrightSnapshotPathTemplate: options.playwrightSnapshotPathTemplate,
       playwrightToHaveScreenshotPathTemplate: options.playwrightToHaveScreenshotPathTemplate,
