@@ -143,10 +143,21 @@ async function handleApiApprove(ctx: RoutesContext, req: Request): Promise<Respo
   }
 }
 
-async function handleApiApproveAll(ctx: RoutesContext): Promise<Response> {
-  let approvedCount = 0
+type BulkApprovalOutcome =
+  | {
+      kind: 'approved'
+      imageName: string
+      retry: number
+      snapshotPath: string
+      test: TestData
+    }
+  | { kind: 'unresolved' }
+  | { kind: 'failed' }
 
-  const baselineUpdates = Object.values(ctx.reportData.tests).flatMap((test) => {
+type BulkApprovalCounts = { approved: number; unresolved: number; failed: number }
+
+function createBulkApprovalUpdates(ctx: RoutesContext): Array<Promise<BulkApprovalOutcome>> {
+  return Object.values(ctx.reportData.tests).flatMap((test) => {
     if (!test.results || test.results.length === 0) {
       return []
     }
@@ -159,31 +170,63 @@ async function handleApiApproveAll(ctx: RoutesContext): Promise<Response> {
 
     return Object.keys(lastResult.images).flatMap((imageName) => {
       const actualUrl = lastResult.images?.[imageName]?.actual
-      const snapshotPath = resolveApprovalTarget(ctx, test, lastRetry, imageName)
-
-      if (actualUrl === undefined || snapshotPath === null) {
+      if (actualUrl === undefined) {
         return []
+      }
+
+      const snapshotPath = resolveApprovalTarget(ctx, test, lastRetry, imageName)
+      if (snapshotPath === null) {
+        return [Promise.resolve({ kind: 'unresolved' as const })]
       }
 
       return [
         copyFilePortable(actualPathFromUrl(ctx, actualUrl), snapshotPath)
-          .then(() => {
-            approvedCount += 1
-            test.approved = { ...(test.approved ?? {}), [imageName]: lastRetry }
-            console.log(`  ✔ Updated baseline: ${snapshotPath}`)
-          })
-          .catch((err: unknown) => {
+          .then(
+            (): BulkApprovalOutcome => ({
+              kind: 'approved',
+              imageName,
+              retry: lastRetry,
+              snapshotPath,
+              test,
+            }),
+          )
+          .catch((err: unknown): BulkApprovalOutcome => {
             const errorMsg = err instanceof Error ? err.message : String(err)
             console.error(`  ✗ Failed to update baseline: ${errorMsg}`)
+            return { kind: 'failed' }
           }),
       ]
     })
   })
+}
 
-  await Promise.all(baselineUpdates)
+function summarizeBulkApprovalOutcomes(outcomes: readonly BulkApprovalOutcome[]): BulkApprovalCounts {
+  return outcomes.reduce(
+    (summary, outcome) => {
+      switch (outcome.kind) {
+        case 'approved': {
+          outcome.test.approved = { ...(outcome.test.approved ?? {}), [outcome.imageName]: outcome.retry }
+          console.log(`  ✔ Updated baseline: ${outcome.snapshotPath}`)
+          return { ...summary, approved: summary.approved + 1 }
+        }
+        case 'unresolved':
+          return { ...summary, unresolved: summary.unresolved + 1 }
+        case 'failed':
+          return { ...summary, failed: summary.failed + 1 }
+      }
+    },
+    { approved: 0, unresolved: 0, failed: 0 },
+  )
+}
+
+async function handleApiApproveAll(ctx: RoutesContext): Promise<Response> {
+  const outcomes = await Promise.all(createBulkApprovalUpdates(ctx))
+  const counts = summarizeBulkApprovalOutcomes(outcomes)
   await ctx.saveReport()
-  console.log(`  ✔ Approved all — ${approvedCount} image(s)`)
-  return Response.json({ success: true })
+  console.log(
+    `  ✔ Approved all — approved: ${counts.approved}, unresolved: ${counts.unresolved}, failed: ${counts.failed}`,
+  )
+  return Response.json({ success: counts.failed === 0, ...counts })
 }
 
 async function handleApiImages(req: Request): Promise<Response> {

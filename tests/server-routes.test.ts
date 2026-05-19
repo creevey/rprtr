@@ -562,13 +562,15 @@ describe('approval routing', () => {
     expect(tests['test-success']?.approved).toBeUndefined()
   })
 
-  test('approve-all uses exact resolver targets and skips unresolved images', async () => {
+  test('approve-all reports mixed outcomes and only records approvals for successful copies', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-success'), { recursive: true })
     await mkdir(join(SCREENSHOT_DIR, 'test-ambiguous'), { recursive: true })
+    await mkdir(join(SCREENSHOT_DIR, 'test-failed'), { recursive: true })
     await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), { recursive: true })
     await writeFile(join(SCREENSHOT_DIR, 'test-success', 'header-actual.png'), 'actual image')
     await writeFile(join(SCREENSHOT_DIR, 'test-ambiguous', 'dir-header-actual.png'), 'ambiguous actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'missing.png'), 'failed baseline')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir-header.png'), 'string baseline')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir', 'header.png'), 'array baseline')
 
@@ -627,6 +629,33 @@ describe('approval routing', () => {
           },
         ],
       },
+      'test-failed': {
+        id: 'test-failed',
+        title: 'visual pass',
+        titlePath: ['Suite'],
+        browser: 'chromium',
+        location: { file: TEST_FILE, line: 10 },
+        results: [
+          {
+            status: 'failed',
+            retries: 0,
+            images: {
+              missing: {
+                actual: '/screenshots/test-failed/missing-actual.png',
+              },
+            },
+            visualDeclarations: [
+              {
+                visualName: 'missing',
+                kind: 'named',
+                declaredName: 'missing',
+                snapshotBaseName: 'missing',
+                occurrenceIndex: 1,
+              },
+            ],
+          },
+        ],
+      },
     }
 
     const response = await handleHttpRequest(
@@ -635,9 +664,12 @@ describe('approval routing', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ success: true })
+    expect(await response.json()).toEqual({ success: false, approved: 1, unresolved: 1, failed: 1 })
     expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'utf-8')).toBe(
       'actual image',
+    )
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'missing.png'), 'utf-8')).toBe(
+      'failed baseline',
     )
     expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir-header.png'), 'utf-8')).toBe(
       'string baseline',
@@ -647,5 +679,6 @@ describe('approval routing', () => {
     )
     expect(tests['test-success']?.approved).toEqual({ header: 0 })
     expect(tests['test-ambiguous']?.approved).toBeUndefined()
+    expect(tests['test-failed']?.approved).toBeUndefined()
   })
 })
