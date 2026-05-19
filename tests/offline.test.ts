@@ -671,16 +671,16 @@ describe('Offline Mode', () => {
     ).toMatchObject([
       {
         name: '../header-expected.png',
-        path: 'test-visual-traversal-copy/%2E%2E/header-expected.png',
+        path: 'test-visual-traversal-copy/+dotdot+/header-expected.png',
       },
     ])
-    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'test-visual-traversal-copy', '%2E%2E', 'header-expected.png'))).toBe(
+    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'test-visual-traversal-copy', '+dotdot+', 'header-expected.png'))).toBe(
       true,
     )
     expect(existsSync(join(TEST_SCREENSHOT_DIR, 'header-expected.png'))).toBe(false)
   })
 
-  test('keeps traversal-named PNG attachments inside the per-test screenshot directory with encoded artifact paths', async () => {
+  test('keeps traversal-named PNG attachments inside the per-test screenshot directory with sentinel artifact paths', async () => {
     const { CrvyRprtr } = await import('../src/reporter')
 
     const reporter = new CrvyRprtr({
@@ -734,10 +734,10 @@ describe('Offline Mode', () => {
     ).toMatchObject([
       {
         name: '../header.png',
-        path: 'test-attachment-traversal-save/%2E%2E/header.png',
+        path: 'test-attachment-traversal-save/+dotdot+/header.png',
       },
     ])
-    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'test-attachment-traversal-save', '%2E%2E', 'header.png'))).toBe(true)
+    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'test-attachment-traversal-save', '+dotdot+', 'header.png'))).toBe(true)
     expect(existsSync(join(TEST_SCREENSHOT_DIR, 'header.png'))).toBe(false)
   })
 

@@ -8,19 +8,21 @@ import pLimit from 'p-limit'
 import { writeReportArtifact } from './report-artifact.ts'
 import { type AttachmentData, type ScreenshotDeclaration, extractScreenshotDeclarations } from './reporter-utils.ts'
 import { resolveBaselineTargets } from './snapshot-path-resolver.ts'
+const CURRENT_DIRECTORY_ARTIFACT_SEGMENT = '+dot+',
+  PARENT_DIRECTORY_ARTIFACT_SEGMENT = '+dotdot+'
 const MAX_CONCURRENT_FILE_OPS = 5,
   SAFE_ARTIFACT_CHARACTER = /^[A-Za-z0-9._-]$/
 type RunEvent = { type: 'test-begin' | 'test-end' | 'run-end'; data: unknown }
 type BaselineResolverInput = Parameters<typeof resolveBaselineTargets>[0]
 type ResolvedBaselineTarget = ReturnType<typeof resolveBaselineTargets>[number]
-const encodeArtifactPathSegment = (segment: string): string =>
-  segment === '.' || segment === '..'
-    ? segment.replace(/\./g, '%2E')
-    : Array.from(segment, (character) =>
-        SAFE_ARTIFACT_CHARACTER.test(character) ? character : encodeURIComponent(character),
-      ).join('')
-const safeArtifactPath = (attachmentName: string): string =>
-  attachmentName.split('/').map(encodeArtifactPathSegment).join('/')
+const encodeArtifactPathSegment = (segment: string): string => {
+  if (segment === '.') return CURRENT_DIRECTORY_ARTIFACT_SEGMENT
+  if (segment === '..') return PARENT_DIRECTORY_ARTIFACT_SEGMENT
+  return Array.from(segment, (character) =>
+    SAFE_ARTIFACT_CHARACTER.test(character) ? character : encodeURIComponent(character),
+  ).join('')
+}
+const safeArtifactPath = (name: string): string => name.split('/').map(encodeArtifactPathSegment).join('/')
 export interface CrvyRprtrOptions {
   serverUrl?: string
   screenshotDir?: string
@@ -140,17 +142,14 @@ export class CrvyRprtr implements Reporter {
       this.testMetadata.delete(test.id)
     }
   }
-  private baselineResolverInput(
-    test: TestCase,
-    declarations: readonly ScreenshotDeclaration[],
-  ): BaselineResolverInput | null {
+  private baselineInput(test: TestCase, shots: readonly ScreenshotDeclaration[]): BaselineResolverInput | null {
     const project = test.parent.project()
     const snapshotDir = this.playwrightSnapshotDir ?? project?.snapshotDir
     if (project === undefined || typeof project.testDir !== 'string' || typeof snapshotDir !== 'string') return null
     return {
       testFile: test.location.file,
       reporterTitlePath: this.testMetadata.get(test.id)?.reporterTitlePath ?? this.reporterTitlePath(test),
-      declarations,
+      declarations: shots,
       config: {
         configDir: this.configDir,
         testDir: project.testDir,
@@ -188,7 +187,7 @@ export class CrvyRprtr implements Reporter {
     savedAttachments: AttachmentData[],
   ): Promise<void> {
     if (status !== 'passed' || screenshotDeclarations.length === 0) return
-    const input = this.baselineResolverInput(test, screenshotDeclarations)
+    const input = this.baselineInput(test, screenshotDeclarations)
     if (input === null) return
     const targets = resolveBaselineTargets(input)
     if (targets.length === 0) return
