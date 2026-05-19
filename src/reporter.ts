@@ -10,7 +10,6 @@ import { type AttachmentData, type ScreenshotDeclaration, extractScreenshotDecla
 import { resolveBaselineTargets } from './snapshot-path-resolver.ts'
 const MAX_CONCURRENT_FILE_OPS = 5,
   SAFE_ARTIFACT_CHARACTER = /^[A-Za-z0-9._-]$/
-
 type RunEvent = { type: 'test-begin' | 'test-end' | 'run-end'; data: unknown }
 type BaselineResolverInput = Parameters<typeof resolveBaselineTargets>[0]
 type ResolvedBaselineTarget = ReturnType<typeof resolveBaselineTargets>[number]
@@ -20,7 +19,7 @@ const encodeArtifactPathSegment = (segment: string): string =>
     : Array.from(segment, (character) =>
         SAFE_ARTIFACT_CHARACTER.test(character) ? character : encodeURIComponent(character),
       ).join('')
-const copiedBaselineArtifactPath = (attachmentName: string): string =>
+const safeArtifactPath = (attachmentName: string): string =>
   attachmentName.split('/').map(encodeArtifactPathSegment).join('/')
 export interface CrvyRprtrOptions {
   serverUrl?: string
@@ -171,7 +170,7 @@ export class CrvyRprtr implements Reporter {
     savedAttachments: AttachmentData[],
   ): Promise<void> {
     const attachmentName = `${target.attachmentBaseName}-expected.png`
-    const artifactPath = copiedBaselineArtifactPath(attachmentName)
+    const artifactPath = safeArtifactPath(attachmentName)
     const destPath = join(testScreenshotDir, artifactPath)
     try {
       await mkdir(dirname(destPath), { recursive: true })
@@ -216,12 +215,13 @@ export class CrvyRprtr implements Reporter {
         .map((attachment) =>
           limit(async () => {
             try {
-              await mkdir(testScreenshotDir, { recursive: true })
-              const destPath = join(testScreenshotDir, attachment.name)
+              const artifactPath = safeArtifactPath(attachment.name)
+              const destPath = join(testScreenshotDir, artifactPath)
+              await mkdir(dirname(destPath), { recursive: true })
               await copyFile(attachment.path, destPath)
               savedAttachments.push({
                 name: attachment.name,
-                path: `${safeTestId}/${attachment.name}`,
+                path: `${safeTestId}/${artifactPath}`,
                 contentType: attachment.contentType,
               })
               console.log(`[CrvyRprtr] Saved screenshot: ${destPath}`)

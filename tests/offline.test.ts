@@ -680,6 +680,67 @@ describe('Offline Mode', () => {
     expect(existsSync(join(TEST_SCREENSHOT_DIR, 'header-expected.png'))).toBe(false)
   })
 
+  test('keeps traversal-named PNG attachments inside the per-test screenshot directory with encoded artifact paths', async () => {
+    const { CrvyRprtr } = await import('../src/reporter')
+
+    const reporter = new CrvyRprtr({
+      screenshotDir: TEST_SCREENSHOT_DIR,
+      reportHtmlPath: TEST_ARTIFACT_PATH,
+    })
+
+    await mkdir(TEST_SCREENSHOT_DIR, { recursive: true })
+    const sourceAttachmentPath = join(TEST_SCREENSHOT_DIR, 'source-header.png')
+    await writeFile(sourceAttachmentPath, 'attachment image')
+
+    const sent: unknown[] = []
+
+    type TestReporter = {
+      send: (message: unknown) => void
+      onTestEnd: (test: object, result: object) => Promise<void>
+    }
+
+    const reporterAny = reporter as unknown as TestReporter
+    reporterAny.send = (message: unknown): void => {
+      sent.push(message)
+    }
+
+    await reporterAny.onTestEnd(
+      {
+        id: 'test-attachment-traversal-save',
+        title: 'attachment path stays local',
+        location: { file: TEST_FILE, line: 10 },
+        parent: {
+          project: () => createProject('chromium'),
+        },
+      },
+      {
+        status: 'passed',
+        errors: [],
+        duration: 100,
+        attachments: [
+          {
+            name: '../header.png',
+            path: sourceAttachmentPath,
+            contentType: 'image/png',
+          },
+        ],
+        steps: [],
+      },
+    )
+
+    expect(sent).toHaveLength(1)
+    expect(
+      (sent[0] as { data: { attachments: Array<{ name: string; path: string }> } }).data.attachments,
+    ).toMatchObject([
+      {
+        name: '../header.png',
+        path: 'test-attachment-traversal-save/%2E%2E/header.png',
+      },
+    ])
+    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'test-attachment-traversal-save', '%2E%2E', 'header.png'))).toBe(true)
+    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'header.png'))).toBe(false)
+  })
+
   test('keeps encoded slash-named copied baseline paths distinct from flat safe-name paths that used to collide', async () => {
     const { CrvyRprtr } = await import('../src/reporter')
 
