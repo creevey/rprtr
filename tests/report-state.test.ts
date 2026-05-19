@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { applyTestBeginEvent, applyTestEndEvent, createMutableReportState } from '../src/report-state'
+import { ReportApiResponseSchema, TestEndDataSchema, safeParse } from '../src/schemas'
 
 describe('report-state visual classification', () => {
   test('keeps skipped test and result statuses consistent', () => {
@@ -164,6 +165,68 @@ describe('report-state approval metadata', () => {
     const result = state.reportData.tests['test-approval-meta']?.results?.[0]
 
     expect(result?.visualDeclarations).toEqual([
+      {
+        visualName: 'header',
+        kind: 'named',
+        declaredName: 'header',
+        snapshotBaseName: 'header',
+        occurrenceIndex: 1,
+      },
+      {
+        visualName: '__unnamed-screenshot-1',
+        kind: 'unnamed',
+        occurrenceIndex: 1,
+      },
+    ])
+  })
+
+  test('preserves approval metadata through event and report schema boundaries', () => {
+    const state = createMutableReportState('./screenshots')
+
+    applyTestBeginEvent(state, {
+      id: 'test-approval-boundary',
+      title: 'visual pass',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 12 },
+    })
+
+    const parsedEvent = safeParse(TestEndDataSchema, {
+      id: 'test-approval-boundary',
+      status: 'passed',
+      attachments: [],
+      visualNames: ['header', '__unnamed-screenshot-1'],
+      visualDeclarations: [
+        {
+          visualName: 'header',
+          kind: 'named',
+          declaredName: 'header',
+          snapshotBaseName: 'header',
+          occurrenceIndex: 1,
+        },
+        {
+          visualName: '__unnamed-screenshot-1',
+          kind: 'unnamed',
+          occurrenceIndex: 1,
+        },
+      ],
+      duration: 5,
+    })
+
+    expect(parsedEvent).not.toBeNull()
+    if (parsedEvent === null) {
+      return
+    }
+
+    applyTestEndEvent(state, parsedEvent, { screenshotsBaseUrl: '/screenshots/' })
+
+    const parsedReport = safeParse(ReportApiResponseSchema, {
+      tests: state.reportData.tests,
+      isUpdateMode: state.reportData.isUpdateMode,
+    })
+
+    expect(parsedReport).not.toBeNull()
+    expect(parsedReport?.tests['test-approval-boundary']?.results?.[0]?.visualDeclarations).toEqual([
       {
         visualName: 'header',
         kind: 'named',

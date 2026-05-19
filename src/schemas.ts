@@ -23,6 +23,23 @@ export const ImagesSchema = z.object({
 
 export type Images = z.infer<typeof ImagesSchema>
 
+export const ScreenshotDeclarationSchema = z.discriminatedUnion('kind', [
+  z.object({
+    visualName: z.string(),
+    kind: z.literal('named'),
+    declaredName: z.string(),
+    snapshotBaseName: z.string(),
+    occurrenceIndex: z.number(),
+  }),
+  z.object({
+    visualName: z.string(),
+    kind: z.literal('unnamed'),
+    occurrenceIndex: z.number(),
+  }),
+])
+
+export type ScreenshotDeclaration = z.infer<typeof ScreenshotDeclarationSchema>
+
 // Attachment schema
 export const AttachmentSchema = z.object({
   name: z.string(),
@@ -46,6 +63,7 @@ export const TestResultSchema = z.object({
   status: TestResultStatusSchema,
   retries: z.number(),
   images: z.record(z.string(), ImagesSchema).optional(),
+  visualDeclarations: z.array(ScreenshotDeclarationSchema).optional(),
   error: z.string().optional(),
   duration: z.number().optional(),
 })
@@ -125,6 +143,7 @@ export const TestEndDataSchema = z.object({
   status: z.enum(['passed', 'failed', 'skipped']),
   attachments: z.array(AttachmentSchema),
   visualNames: z.array(z.string()).default([]),
+  visualDeclarations: z.array(ScreenshotDeclarationSchema).optional(),
   error: z.string().optional(),
   duration: z.number().optional(),
 })
