@@ -230,6 +230,171 @@ describe('approval routing', () => {
     }
   })
 
+  test('approve writes an unnamed screenshot to its anonymous baseline target', async () => {
+    await mkdir(join(SCREENSHOT_DIR, 'test-unnamed'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await writeFile(join(SCREENSHOT_DIR, 'test-unnamed', 'anonymous-actual.png'), 'actual image')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'Suite-visual-pass-1.png'), 'baseline image')
+
+    const tests: Record<string, TestData> = {
+      'test-unnamed': {
+        id: 'test-unnamed',
+        title: 'visual pass',
+        titlePath: ['Suite'],
+        browser: 'chromium',
+        location: { file: TEST_FILE, line: 10 },
+        results: [
+          {
+            status: 'failed',
+            retries: 0,
+            images: {
+              '__unnamed-screenshot-1': {
+                actual: '/screenshots/test-unnamed/anonymous-actual.png',
+              },
+            },
+            visualDeclarations: [
+              {
+                visualName: '__unnamed-screenshot-1',
+                kind: 'unnamed',
+                occurrenceIndex: 1,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const response = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/api/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'test-unnamed', retry: 0, image: '__unnamed-screenshot-1' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'Suite-visual-pass-1.png'), 'utf-8')).toBe(
+      'actual image',
+    )
+    expect(tests['test-unnamed']?.approved).toEqual({ '__unnamed-screenshot-1': 0 })
+  })
+
+  test('approve writes duplicate named screenshots to the matching occurrence target', async () => {
+    await mkdir(join(SCREENSHOT_DIR, 'test-duplicate'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await writeFile(join(SCREENSHOT_DIR, 'test-duplicate', 'header-1-actual.png'), 'actual image')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'first baseline image')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header-1.png'), 'second baseline image')
+
+    const tests: Record<string, TestData> = {
+      'test-duplicate': {
+        id: 'test-duplicate',
+        title: 'visual pass',
+        titlePath: ['Suite'],
+        browser: 'chromium',
+        location: { file: TEST_FILE, line: 10 },
+        results: [
+          {
+            status: 'failed',
+            retries: 0,
+            images: {
+              'header-1': {
+                actual: '/screenshots/test-duplicate/header-1-actual.png',
+              },
+            },
+            visualDeclarations: [
+              {
+                visualName: 'header',
+                kind: 'named',
+                declaredName: 'header',
+                snapshotBaseName: 'header',
+                occurrenceIndex: 1,
+              },
+              {
+                visualName: 'header-1',
+                kind: 'named',
+                declaredName: 'header',
+                snapshotBaseName: 'header',
+                occurrenceIndex: 2,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const response = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/api/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'test-duplicate', retry: 0, image: 'header-1' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'utf-8')).toBe(
+      'first baseline image',
+    )
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header-1.png'), 'utf-8')).toBe(
+      'actual image',
+    )
+    expect(tests['test-duplicate']?.approved).toEqual({ 'header-1': 0 })
+  })
+
+  test('approve resolves slash-containing names when exactly one candidate exists', async () => {
+    await mkdir(join(SCREENSHOT_DIR, 'test-slash'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), { recursive: true })
+    await writeFile(join(SCREENSHOT_DIR, 'test-slash', 'dir-header-actual.png'), 'actual image')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir', 'header.png'), 'baseline image')
+
+    const tests: Record<string, TestData> = {
+      'test-slash': {
+        id: 'test-slash',
+        title: 'visual pass',
+        titlePath: ['Suite'],
+        browser: 'chromium',
+        location: { file: TEST_FILE, line: 10 },
+        results: [
+          {
+            status: 'failed',
+            retries: 0,
+            images: {
+              'dir/header': {
+                actual: '/screenshots/test-slash/dir-header-actual.png',
+              },
+            },
+            visualDeclarations: [
+              {
+                visualName: 'dir/header',
+                kind: 'named',
+                declaredName: 'dir/header',
+                snapshotBaseName: 'dir/header',
+                occurrenceIndex: 1,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const response = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/api/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'test-slash', retry: 0, image: 'dir/header' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir', 'header.png'), 'utf-8')).toBe(
+      'actual image',
+    )
+    expect(tests['test-slash']?.approved).toEqual({ 'dir/header': 0 })
+  })
+
   test('approve fails when exact resolution is ambiguous', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-ambiguous'), { recursive: true })
     await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), { recursive: true })
