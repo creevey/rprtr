@@ -171,7 +171,7 @@ function createBulkApprovalUpdates(ctx: RoutesContext): Array<Promise<BulkApprov
     return Object.keys(lastResult.images).flatMap((imageName) => {
       const actualUrl = lastResult.images?.[imageName]?.actual
       if (actualUrl === undefined) {
-        return []
+        return [Promise.resolve({ kind: 'unresolved' as const })]
       }
 
       const snapshotPath = resolveApprovalTarget(ctx, test, lastRetry, imageName)

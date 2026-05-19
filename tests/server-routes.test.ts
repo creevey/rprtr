@@ -573,6 +573,7 @@ describe('approval routing', () => {
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'missing.png'), 'failed baseline')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir-header.png'), 'string baseline')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir', 'header.png'), 'array baseline')
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'no-actual.png'), 'no actual baseline')
 
     const tests: Record<string, TestData> = {
       'test-success': {
@@ -656,6 +657,31 @@ describe('approval routing', () => {
           },
         ],
       },
+      'test-no-actual': {
+        id: 'test-no-actual',
+        title: 'visual pass',
+        titlePath: ['Suite'],
+        browser: 'chromium',
+        location: { file: TEST_FILE, line: 10 },
+        results: [
+          {
+            status: 'failed',
+            retries: 0,
+            images: {
+              'no-actual': {},
+            },
+            visualDeclarations: [
+              {
+                visualName: 'no-actual',
+                kind: 'named',
+                declaredName: 'no-actual',
+                snapshotBaseName: 'no-actual',
+                occurrenceIndex: 1,
+              },
+            ],
+          },
+        ],
+      },
     }
 
     const response = await handleHttpRequest(
@@ -664,7 +690,7 @@ describe('approval routing', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ success: false, approved: 1, unresolved: 1, failed: 1 })
+    expect(await response.json()).toEqual({ success: false, approved: 1, unresolved: 2, failed: 1 })
     expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'utf-8')).toBe(
       'actual image',
     )
@@ -677,8 +703,12 @@ describe('approval routing', () => {
     expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir', 'header.png'), 'utf-8')).toBe(
       'array baseline',
     )
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'no-actual.png'), 'utf-8')).toBe(
+      'no actual baseline',
+    )
     expect(tests['test-success']?.approved).toEqual({ header: 0 })
     expect(tests['test-ambiguous']?.approved).toBeUndefined()
     expect(tests['test-failed']?.approved).toBeUndefined()
+    expect(tests['test-no-actual']?.approved).toBeUndefined()
   })
 })
