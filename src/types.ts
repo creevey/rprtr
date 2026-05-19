@@ -1,6 +1,8 @@
 // Core types used throughout the application
 // These types serve as the single source of truth
 
+import type { ScreenshotDeclaration } from './reporter-utils.ts'
+
 export type VisualSource = 'comparison' | 'baseline-only' | 'declared-only'
 
 export interface Images {
@@ -30,6 +32,7 @@ export interface TestResult {
   status: TestResultStatus
   retries: number
   images?: Partial<Record<string, Images>>
+  visualDeclarations?: readonly ScreenshotDeclaration[]
   error?: string
   duration?: number
 }
@@ -87,6 +90,7 @@ export interface TestEndMessage {
     status: 'passed' | 'failed' | 'skipped'
     attachments: Attachment[]
     visualNames: string[]
+    visualDeclarations?: readonly ScreenshotDeclaration[]
     error?: string
     duration?: number
   }

@@ -1,4 +1,12 @@
-import { attachmentsToImages, classifyImage, mapStatus, mergeDeclaredImages } from './report-utils.ts'
+import {
+  attachmentsToImages,
+  classifyImage,
+  copyVisualDeclarations,
+  getDeclaredVisualNames,
+  mapStatus,
+  mergeDeclaredImages,
+} from './report-utils.ts'
+import type { ScreenshotDeclaration } from './reporter-utils.ts'
 import type { TestBeginData, TestEndData } from './schemas.ts'
 import type { Images, TestData, TestResult } from './types.ts'
 
@@ -18,6 +26,10 @@ export interface MutableReportState {
 export interface ApplyTestEndResult {
   test: TestData
   diffCount: number
+}
+
+type ReportStateTestEndData = TestEndData & {
+  visualDeclarations?: readonly ScreenshotDeclaration[]
 }
 
 function isCurrentArtifact(image: Images | undefined): boolean {
@@ -106,7 +118,7 @@ export function applyTestBeginEvent(state: MutableReportState, data: TestBeginDa
 
 export function applyTestEndEvent(
   state: MutableReportState,
-  data: TestEndData,
+  data: ReportStateTestEndData,
   options: { screenshotsBaseUrl?: string } = {},
 ): ApplyTestEndResult | null {
   const test = state.reportData.tests[data.id]
@@ -117,10 +129,14 @@ export function applyTestEndEvent(
   test.status = mapStatus(data.status)
   const resultStatus: TestResult['status'] =
     data.status === 'passed' ? 'success' : data.status === 'failed' ? 'failed' : 'pending'
+  const visualDeclarations = copyVisualDeclarations(data.visualDeclarations)
   const images = preservePreviousPassingImages(
     test,
     data.status,
-    mergeDeclaredImages(attachmentsToImages(data.attachments, options.screenshotsBaseUrl), data.visualNames),
+    mergeDeclaredImages(
+      attachmentsToImages(data.attachments, options.screenshotsBaseUrl),
+      getDeclaredVisualNames(data.visualNames, visualDeclarations),
+    ),
   )
 
   // New failure with diff images invalidates any prior approval.
@@ -135,6 +151,7 @@ export function applyTestEndEvent(
       status: resultStatus,
       retries: 0,
       images,
+      visualDeclarations,
       error: data.error,
       duration: data.duration,
     },

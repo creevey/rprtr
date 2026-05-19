@@ -1,3 +1,4 @@
+import type { ScreenshotDeclaration } from './reporter-utils.ts'
 import type { Attachment } from './schemas.ts'
 import type { Images, TestData, VisualSource } from './types.ts'
 
@@ -22,6 +23,19 @@ function withImageSource(image: Images): Images {
     ...image,
     source: classifyImage(image),
   }
+}
+
+export function getDeclaredVisualNames(
+  visualNames: readonly string[],
+  visualDeclarations: readonly ScreenshotDeclaration[] | undefined,
+): readonly string[] {
+  return visualDeclarations?.map(({ visualName }) => visualName) ?? visualNames
+}
+
+export function copyVisualDeclarations(
+  visualDeclarations: readonly ScreenshotDeclaration[] | undefined,
+): readonly ScreenshotDeclaration[] | undefined {
+  return visualDeclarations?.map((visualDeclaration) => ({ ...visualDeclaration }))
 }
 
 export function mergeDeclaredImages(
