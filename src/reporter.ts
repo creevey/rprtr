@@ -6,19 +6,20 @@ import type { FullConfig, FullResult, Reporter, Suite, TestCase, TestResult } fr
 import pLimit from 'p-limit'
 
 import { writeReportArtifact } from './report-artifact.ts'
-import { type AttachmentData, extractScreenshotDeclarations } from './reporter-utils.ts'
+import { type AttachmentData, type ScreenshotDeclaration, extractScreenshotDeclarations } from './reporter-utils.ts'
 import { resolveBaselineTargets } from './snapshot-path-resolver.ts'
-const MAX_CONCURRENT_FILE_OPS = 5
-const SAFE_ARTIFACT_PATH_SEGMENT_CHARACTER = /^[A-Za-z0-9._-]$/
+const MAX_CONCURRENT_FILE_OPS = 5,
+  SAFE_ARTIFACT_CHARACTER = /^[A-Za-z0-9._-]$/
+
 type RunEvent = { type: 'test-begin' | 'test-end' | 'run-end'; data: unknown }
-type ScreenshotDeclarations = ReturnType<typeof extractScreenshotDeclarations>
-type TestMetadata = { reporterTitlePath: string[] }
 type BaselineResolverInput = Parameters<typeof resolveBaselineTargets>[0]
 type ResolvedBaselineTarget = ReturnType<typeof resolveBaselineTargets>[number]
 const encodeArtifactPathSegment = (segment: string): string =>
-  Array.from(segment, (character) =>
-    SAFE_ARTIFACT_PATH_SEGMENT_CHARACTER.test(character) ? character : encodeURIComponent(character),
-  ).join('')
+  segment === '.' || segment === '..'
+    ? segment.replace(/\./g, '%2E')
+    : Array.from(segment, (character) =>
+        SAFE_ARTIFACT_CHARACTER.test(character) ? character : encodeURIComponent(character),
+      ).join('')
 const copiedBaselineArtifactPath = (attachmentName: string): string =>
   attachmentName.split('/').map(encodeArtifactPathSegment).join('/')
 export interface CrvyRprtrOptions {
@@ -39,7 +40,7 @@ export class CrvyRprtr implements Reporter {
   private offlineReportPath: string
   private reportHtmlPath: string
   private configDir = process.cwd()
-  private testMetadata = new Map<string, TestMetadata>()
+  private testMetadata = new Map<string, { reporterTitlePath: string[] }>()
   private playwrightSnapshotDir?: string
   private playwrightSnapshotPathTemplate?: string
   private playwrightToHaveScreenshotPathTemplate?: string
@@ -120,7 +121,7 @@ export class CrvyRprtr implements Reporter {
     })
   }
   async onTestEnd(test: TestCase, result: TestResult): Promise<void> {
-    const screenshotDeclarations: ScreenshotDeclarations = extractScreenshotDeclarations(result.steps)
+    const screenshotDeclarations = extractScreenshotDeclarations(result.steps)
     const savedAttachments = await this.saveAttachments(test.id, result)
     try {
       await this.copySnapshotBaselines(test, result.status, screenshotDeclarations, savedAttachments)
@@ -140,7 +141,10 @@ export class CrvyRprtr implements Reporter {
       this.testMetadata.delete(test.id)
     }
   }
-  private baselineResolverInput(test: TestCase, declarations: ScreenshotDeclarations): BaselineResolverInput | null {
+  private baselineResolverInput(
+    test: TestCase,
+    declarations: readonly ScreenshotDeclaration[],
+  ): BaselineResolverInput | null {
     const project = test.parent.project()
     const snapshotDir = this.playwrightSnapshotDir ?? project?.snapshotDir
     if (project === undefined || typeof project.testDir !== 'string' || typeof snapshotDir !== 'string') return null
@@ -181,7 +185,7 @@ export class CrvyRprtr implements Reporter {
   private async copySnapshotBaselines(
     test: TestCase,
     status: TestResult['status'],
-    screenshotDeclarations: ScreenshotDeclarations,
+    screenshotDeclarations: readonly ScreenshotDeclaration[],
     savedAttachments: AttachmentData[],
   ): Promise<void> {
     if (status !== 'passed' || screenshotDeclarations.length === 0) return
@@ -238,10 +242,8 @@ export class CrvyRprtr implements Reporter {
     return id.replace(/[^a-zA-Z0-9-_]/g, '_')
   }
   private async writeOfflineReport(): Promise<void> {
-    if (this.runEvents.length === 0) {
-      console.log('[CrvyRprtr] No offline events to write')
-      return
-    }
+    if (this.runEvents.length === 0) console.log('[CrvyRprtr] No offline events to write')
+    if (this.runEvents.length === 0) return
     try {
       const report = {
         version: 1,
@@ -272,18 +274,16 @@ export class CrvyRprtr implements Reporter {
     await this.writeStaticArtifact()
     if (this.hadOfflineMode) await this.writeOfflineReport()
     await new Promise<void>((resolve) => {
-      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-        resolve()
-        return
-      }
-      this.ws.onclose = (): void => {
-        resolve()
-      }
-      setTimeout(() => {
-        this.ws?.close()
-        resolve()
-      }, 1000)
-      this.ws.close()
+      if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+        this.ws.onclose = (): void => {
+          resolve()
+        }
+        setTimeout(() => {
+          this.ws?.close()
+          resolve()
+        }, 1000)
+        this.ws.close()
+      } else resolve()
     })
   }
   private send(message: object): void {

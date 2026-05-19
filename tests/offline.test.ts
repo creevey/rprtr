@@ -619,6 +619,67 @@ describe('Offline Mode', () => {
     ).toBe(true)
   })
 
+  test('neutralizes traversal segments in copied baseline paths for slash-named screenshots', async () => {
+    const { CrvyRprtr } = await import('../src/reporter')
+
+    const reporter = new CrvyRprtr({
+      screenshotDir: TEST_SCREENSHOT_DIR,
+      reportHtmlPath: TEST_ARTIFACT_PATH,
+    })
+
+    await mkdir(TEST_SNAPSHOT_DIR, { recursive: true })
+    await writeFile(join(TEST_SNAPSHOT_DIR, `-header-chromium-${process.platform}.png`), 'baseline image')
+
+    const sent: unknown[] = []
+
+    type TestReporter = {
+      send: (message: unknown) => void
+      onTestEnd: (test: object, result: object) => Promise<void>
+    }
+
+    const reporterAny = reporter as unknown as TestReporter
+    reporterAny.send = (message: unknown): void => {
+      sent.push(message)
+    }
+
+    await reporterAny.onTestEnd(
+      {
+        id: 'test-visual-traversal-copy',
+        title: 'visual pass',
+        location: { file: TEST_FILE, line: 10 },
+        parent: {
+          project: () => createProject('chromium'),
+        },
+      },
+      {
+        status: 'passed',
+        errors: [],
+        duration: 100,
+        attachments: [],
+        steps: [
+          {
+            title: 'outer step',
+            steps: [{ title: 'Expect "toHaveScreenshot(../header.png)"', steps: [] }],
+          },
+        ],
+      },
+    )
+
+    expect(sent).toHaveLength(1)
+    expect(
+      (sent[0] as { data: { attachments: Array<{ name: string; path: string }> } }).data.attachments,
+    ).toMatchObject([
+      {
+        name: '../header-expected.png',
+        path: 'test-visual-traversal-copy/%2E%2E/header-expected.png',
+      },
+    ])
+    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'test-visual-traversal-copy', '%2E%2E', 'header-expected.png'))).toBe(
+      true,
+    )
+    expect(existsSync(join(TEST_SCREENSHOT_DIR, 'header-expected.png'))).toBe(false)
+  })
+
   test('keeps encoded slash-named copied baseline paths distinct from flat safe-name paths that used to collide', async () => {
     const { CrvyRprtr } = await import('../src/reporter')
 
