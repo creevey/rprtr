@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.6] - 2026-06-05
+
+### Added
+
+- Add named screenshot baseline resolver
+- Resolve unnamed and duplicate screenshot baselines
+- Resolve passed screenshot baselines through Playwright rules
+- Persist approval resolver metadata in report state
+- Emit approval resolver metadata from reporter
+- Reuse resolver for approval routing
+- Report mixed approval routing outcomes
+
+### Changed
+
+- Separate resolver attachment and artifact names
+- Tighten screenshot declaration typing
+
+### Documentation
+
+- Add passed screenshot baseline resolution design
+- Add passed screenshot baseline resolution plan
+- Document passed screenshot baseline resolution options
+- Narrow approval path claims
+- Add template-aware approval routing design
+- Add template-aware approval routing plan
+- Align approval routing docs with resolver behavior
+- Clarify approval routing configuration scope
+
+### Fixed
+
+- Sanitize named screenshot resolver inputs
+- Preserve visual names in named baseline targets
+- Disambiguate named screenshot baseline resolution
+- Restore reporter declaration compatibility
+- Use safe artifact names for copied baselines
+- Encode copied baseline artifact paths safely
+- Neutralize traversal segments in baseline artifact paths
+- Encode saved attachment artifact paths safely
+- Use stable traversal-safe artifact path encoding
+- Preserve approval metadata through schemas
+- Preserve visual name fallback for older payloads
+- Use configured testDir for approval resolution
+- Use configured configDir for approval resolution
+- Require POST for approve-all routing
+- Require POST for approve routing
+- Report no-actual bulk approval outcomes
+- Honor approval api results in client state
+
+### Testing
+
+- Cover exact approval routing cases
+
+### Ci
+
+- Switch npm publish to OIDC trusted publishing
 ## [0.0.5] - 2026-05-14
 
 ### Added

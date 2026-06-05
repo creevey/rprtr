@@ -1,6 +1,6 @@
 {
   "name": "@crvy/rprtr",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Playwright reporter with visual regression UI for comparing and approving screenshot tests",
   "keywords": [
     "crvy",
