@@ -19,7 +19,9 @@ export interface HandlerContext {
 
 export function handleTestBegin(ctx: HandlerContext, data: TestBeginData): void {
   const test = applyTestBeginEvent(ctx, data)
+  ctx.reportData.isRunning = true
   console.log(`  ▶ [${test.browser ?? '?'}] ${test.title}`)
+  broadcastToBrowsers(ctx.wsClients, { type: 'test-begin', data })
 }
 
 export function handleTestEnd(ctx: HandlerContext, data: TestEndData): void {

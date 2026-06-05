@@ -25,7 +25,6 @@
   let imageNames = $derived(result?.images ? Object.keys(result.images) : []);
   let totalRetries = $derived(test.results?.length ?? 0);
   let hasDiffAndExpect = $derived(Boolean(image?.diff && image?.expect));
-  let isBaselineOnly = $derived(image?.source === 'baseline-only');
   let isDeclaredOnly = $derived(image?.source === 'declared-only');
 
   let imagesWithError = $derived(
@@ -129,22 +128,12 @@
         </div>
       {:else if viewMode === 'side-by-side' || !hasDiffAndExpect}
         <div class="w-full flex flex-col gap-3">
-          {#if isBaselineOnly}
-            <div class="mx-auto max-w-2xl w-full rounded-md border border-info/40 bg-info/10 px-4 py-3 text-sm text-fg">
-              Baseline copied from the stored snapshot. Playwright did not emit a passed actual image for this comparison.
-            </div>
-          {/if}
           <SideBySideView {image} />
         </div>
       {:else if viewMode === 'swap'}
         <SwapView {image} />
       {:else if viewMode === 'slide'}
         <div class="flex flex-col gap-3">
-          {#if isBaselineOnly}
-            <div class="mx-auto max-w-2xl w-full rounded-md border border-info/40 bg-info/10 px-4 py-3 text-sm text-fg">
-              Baseline copied from the stored snapshot. Playwright did not emit a passed actual image for this comparison.
-            </div>
-          {/if}
           {#if image.actual && image.expect && image.diff}
             <SlideView actual={image.actual} expect={image.expect} diff={image.diff} />
           {:else if image.actual}
@@ -158,11 +147,6 @@
         </div>
       {:else if viewMode === 'blend'}
         <div class="w-full flex flex-col gap-3">
-          {#if isBaselineOnly}
-            <div class="mx-auto max-w-2xl w-full rounded-md border border-info/40 bg-info/10 px-4 py-3 text-sm text-fg">
-              Baseline copied from the stored snapshot. Playwright did not emit a passed actual image for this comparison.
-            </div>
-          {/if}
           <BlendView {image} />
         </div>
       {/if}

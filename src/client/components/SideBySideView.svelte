@@ -28,9 +28,6 @@
       <div class="flex items-center justify-center p-2">
         <img src={image.expect} alt="Expected" class="w-auto max-w-full object-contain mx-auto" loading="lazy" />
       </div>
-      {#if image.source === 'baseline-only' && !image.actual && !image.diff}
-        <div class="px-3 py-2 text-xs text-fg-muted border-t border-edge/70">Copied from the snapshot on disk.</div>
-      {/if}
     </div>
   {/if}
   {#if image.diff}

@@ -13,6 +13,7 @@ const statusUpdatesMap = new Map<TestStatus | undefined, RegExp>([
   ['approved', /(failed|pending|running)/],
   ['failed', /(pending|running)/],
   ['pending', /running/],
+  ['running', /(success|approved|failed|pending)/],
 ])
 
 export function calcStatus(oldStatus?: TestStatus, newStatus?: TestStatus): TestStatus | undefined {
