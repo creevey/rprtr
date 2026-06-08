@@ -36,6 +36,8 @@ export interface ServerOptions {
   /** Absolute path to the built web UI assets directory, or its parent directory */
   staticDir?: string
   configDir?: string
+  /** Absolute path to Playwright's outputDir (test-results), where failure artifacts are written */
+  outputDir?: string
   playwrightTestDir?: string
   playwrightSnapshotDir?: string
   playwrightSnapshotPathTemplate?: string
@@ -238,10 +240,18 @@ function createRoutesContext(
   saveReport: () => Promise<void>,
   options: ServerOptions,
 ): RoutesContext {
+  const artifactRoots = [
+    reportData.screenshotDir,
+    options.outputDir,
+    options.playwrightSnapshotDir,
+    options.playwrightTestDir,
+  ].filter((root): root is string => root !== undefined && root !== '')
+
   return {
     reportData,
     staticDir,
     saveReport,
+    artifactRoots,
     approvalRouting: {
       configDir: options.configDir ?? process.cwd(),
       playwrightTestDir: options.playwrightTestDir,

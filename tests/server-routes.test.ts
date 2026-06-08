@@ -858,6 +858,27 @@ describe('GET /file', () => {
   })
 })
 
+describe('createServerApp artifact serving', () => {
+  test('serves a file under the configured outputDir', async () => {
+    const outputDir = join(TMP_DIR, 'test-results')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(join(outputDir, 'shot.png'), 'native-bytes')
+
+    const app = await createServerApp({
+      screenshotDir: SCREENSHOT_DIR,
+      outputDir,
+      reportPath: join(TMP_DIR, 'report.json'),
+    })
+
+    const res = await app.handleRequest(
+      new Request(`http://localhost/file/${encodeURIComponent(join(outputDir, 'shot.png'))}`),
+    )
+
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('native-bytes')
+  })
+})
+
 describe('isPathWithinRoots', () => {
   const root = join(process.cwd(), 'allowed')
 
