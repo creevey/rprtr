@@ -302,7 +302,7 @@ describe('Offline Mode', () => {
         occurrenceIndex: 1,
       },
       {
-        visualName: '__unnamed-screenshot-1',
+        visualName: 'visual-pass-1',
         kind: 'unnamed',
         occurrenceIndex: 1,
       },
@@ -499,8 +499,8 @@ describe('Offline Mode', () => {
     expect(testEndMessage).toBeDefined()
     expect(testEndMessage!.data.attachments).toMatchObject([
       {
-        name: '__unnamed-screenshot-1-expected.png',
-        path: 'test-visual-unnamed-copy/__unnamed-screenshot-1-expected.png',
+        name: 'Suite-visual-pass-1-expected.png',
+        path: 'test-visual-unnamed-copy/Suite-visual-pass-1-expected.png',
       },
     ])
   })
@@ -1013,6 +1013,6 @@ describe('Offline Mode', () => {
     const testEndEvent = report.events.find((event) => event.type === 'test-end')
 
     expect(testEndEvent).toBeDefined()
-    expect((testEndEvent as { data: { visualNames: string[] } }).data.visualNames).toEqual(['__unnamed-screenshot-1'])
+    expect((testEndEvent as { data: { visualNames: string[] } }).data.visualNames).toEqual(['Suite-visual-pass-1'])
   })
 })

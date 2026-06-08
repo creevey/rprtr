@@ -16,7 +16,7 @@ import {
   writeStaticArtifact,
 } from './reporter-artifact-ops.ts'
 import { type AttachmentData, type ScreenshotDeclaration, extractScreenshotDeclarations } from './reporter-utils.ts'
-import { resolveBaselineTargets } from './snapshot-path-resolver.ts'
+import { resolveBaselineTargets, withResolvedVisualNames } from './snapshot-path-resolver.ts'
 
 export interface CrvyRprtrOptions {
   serverUrl?: string
@@ -126,7 +126,11 @@ export class CrvyRprtr implements Reporter {
   }
 
   async onTestEnd(test: TestCase, result: TestResult): Promise<void> {
-    const screenshotDeclarations = extractScreenshotDeclarations(result.steps)
+    const reporterTitlePath = this.testMetadata.get(test.id)?.reporterTitlePath ?? this.reporterTitlePath(test)
+    const screenshotDeclarations = withResolvedVisualNames(
+      extractScreenshotDeclarations(result.steps),
+      reporterTitlePath,
+    )
     const savedAttachments = await saveAttachments(this.screenshotDir, test.id, result)
     try {
       await this.copySnapshotBaselines(test, result.status, screenshotDeclarations, savedAttachments)
