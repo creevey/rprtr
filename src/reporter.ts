@@ -15,6 +15,11 @@ import {
   writeOfflineReport,
   writeStaticArtifact,
 } from './reporter-artifact-ops.ts'
+import {
+  collectNativeImageAttachments,
+  type CrvyRprtrOptions,
+  type PendingPortableArtifact,
+} from './reporter-helpers.ts'
 import { type AttachmentData, type ScreenshotDeclaration, extractScreenshotDeclarations } from './reporter-utils.ts'
 import {
   type ResolvedBaselineTarget,
@@ -23,37 +28,7 @@ import {
   withResolvedVisualNames,
 } from './snapshot-path-resolver.ts'
 
-export interface CrvyRprtrOptions {
-  serverUrl?: string
-  screenshotDir?: string
-  offlineReportPath?: string
-  reportHtmlPath?: string
-  playwrightSnapshotDir?: string
-  playwrightSnapshotPathTemplate?: string
-  playwrightToHaveScreenshotPathTemplate?: string
-  ci?: boolean
-}
-
-interface PendingPortableArtifact {
-  testId: string
-  status: TestResult['status']
-  resolvedTargets: ResolvedBaselineTarget[]
-  nativeAttachments: AttachmentData[]
-  eventData: { attachments: AttachmentData[] }
-}
-
-function collectNativeImageAttachments(result: TestResult): AttachmentData[] {
-  return result.attachments
-    .filter(
-      (attachment): attachment is typeof attachment & { path: string } =>
-        attachment.contentType === 'image/png' && attachment.path !== undefined,
-    )
-    .map((attachment) => ({
-      name: attachment.name,
-      path: attachment.path,
-      contentType: attachment.contentType,
-    }))
-}
+export type { CrvyRprtrOptions }
 
 export class CrvyRprtr implements Reporter {
   private ws: WebSocket | null = null
@@ -83,9 +58,7 @@ export class CrvyRprtr implements Reporter {
     this.playwrightSnapshotPathTemplate = options.playwrightSnapshotPathTemplate
     this.playwrightToHaveScreenshotPathTemplate = options.playwrightToHaveScreenshotPathTemplate
     this.ci = options.ci ?? isCI()
-    if (this.ci) {
-      this.isOfflineMode = true
-    }
+    if (this.ci) this.isOfflineMode = true
   }
 
   async onBegin(config: FullConfig, suite: Suite): Promise<void> {
@@ -161,7 +134,9 @@ export class CrvyRprtr implements Reporter {
   }
 
   onTestBegin(test: TestCase): void {
-    this.testMetadata.set(test.id, { reporterTitlePath: this.reporterTitlePath(test) })
+    this.testMetadata.set(test.id, {
+      reporterTitlePath: this.reporterTitlePath(test),
+    })
     this.send({
       type: 'test-begin',
       data: {
@@ -244,7 +219,6 @@ export class CrvyRprtr implements Reporter {
       ),
     )
   }
-
   async onEnd(result: FullResult): Promise<void> {
     this.send({ type: 'run-end', data: { status: result.status } })
     if (this.ci) {
