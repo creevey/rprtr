@@ -1057,8 +1057,9 @@ describe('declared-only baseline enrichment', () => {
   })
 
   test('leaves the image declared-only when no baseline exists on disk', async () => {
-    // Use a slash-containing name so the resolver checks disk for both candidates.
-    // Neither candidate file is created, so resolution returns null and enrichment is skipped.
+    // Use a simple name (no slash) with no baseline file written to disk.
+    // resolveBaselineSnapshotPath returns a non-null path for simple names even when the file
+    // is absent, so the existsSync guard in enrichDeclaredBaselines is what prevents enrichment.
     const app = await createServerApp({
       screenshotDir: SCREENSHOT_DIR,
       reportPath: join(TMP_DIR, 'report.json'),
@@ -1087,13 +1088,13 @@ describe('declared-only baseline enrichment', () => {
           id: 't1',
           status: 'passed',
           attachments: [],
-          visualNames: ['dir/header'],
+          visualNames: ['header'],
           visualDeclarations: [
             {
-              visualName: 'dir/header',
+              visualName: 'header',
               kind: 'named',
-              declaredName: 'dir/header',
-              snapshotBaseName: 'dir/header',
+              declaredName: 'header',
+              snapshotBaseName: 'header',
               occurrenceIndex: 1,
             },
           ],
@@ -1105,7 +1106,7 @@ describe('declared-only baseline enrichment', () => {
     const body = (await res.json()) as {
       tests: Record<string, { results: { images: Record<string, { expect?: string; source?: string }> }[] }>
     }
-    const image = body.tests['t1']?.results?.[0]?.images?.['dir/header']
+    const image = body.tests['t1']?.results?.[0]?.images?.['header']
     expect(image?.source).toBe('declared-only')
     expect(image?.expect).toBeUndefined()
   })

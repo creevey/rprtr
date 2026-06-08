@@ -1,3 +1,5 @@
+import { existsSync } from 'fs'
+
 import { applyTestBeginEvent, applyTestEndEvent, finalizeRunEvent } from '../report-state.ts'
 import type { TestBeginData, TestEndData } from '../schemas.ts'
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
@@ -40,7 +42,7 @@ function enrichDeclaredBaselines(ctx: HandlerContext, test: TestData): void {
     }
 
     const snapshotPath = resolveBaselineSnapshotPath(ctx.approvalRouting, test, retry, visualName)
-    if (snapshotPath === null) {
+    if (snapshotPath === null || !existsSync(snapshotPath)) {
       continue
     }
 
