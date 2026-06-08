@@ -6,7 +6,7 @@ import pLimit from 'p-limit'
 import { log, logError } from './debug-log.ts'
 import { writeReportArtifact } from './report-artifact.ts'
 import type { AttachmentData } from './reporter-utils.ts'
-import { resolveBaselineTargets } from './snapshot-path-resolver.ts'
+import type { ResolvedBaselineTarget } from './snapshot-path-resolver.ts'
 
 const CURRENT_DIRECTORY_ARTIFACT_SEGMENT = '+dot+'
 const PARENT_DIRECTORY_ARTIFACT_SEGMENT = '+dotdot+'
@@ -14,8 +14,6 @@ const MAX_CONCURRENT_FILE_OPS = 5
 const SAFE_ARTIFACT_CHARACTER = /^[A-Za-z0-9._-]$/
 
 export type RunEvent = { type: 'test-begin' | 'test-end' | 'run-end'; data: unknown }
-export type BaselineResolverInput = Parameters<typeof resolveBaselineTargets>[0]
-export type ResolvedBaselineTarget = ReturnType<typeof resolveBaselineTargets>[number]
 
 export function encodeArtifactPathSegment(segment: string): string {
   if (segment === '.') return CURRENT_DIRECTORY_ARTIFACT_SEGMENT
@@ -90,22 +88,6 @@ export async function saveAttachments(
       ),
   )
   return savedAttachments
-}
-
-export function rewriteTestEndAttachments(runEvents: RunEvent[], testId: string, attachments: AttachmentData[]): void {
-  for (const event of runEvents) {
-    const { data } = event
-    if (
-      event.type === 'test-end' &&
-      typeof data === 'object' &&
-      data !== null &&
-      'id' in data &&
-      'attachments' in data &&
-      (data as { id: unknown }).id === testId
-    ) {
-      Object.assign(data, { attachments })
-    }
-  }
 }
 
 export async function writeOfflineReport(

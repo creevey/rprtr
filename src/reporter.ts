@@ -10,7 +10,6 @@ import { log, logError } from './debug-log.ts'
 import {
   type RunEvent,
   copyResolvedBaseline,
-  rewriteTestEndAttachments,
   sanitizeId,
   saveAttachments,
   writeOfflineReport,
@@ -40,6 +39,7 @@ interface PendingPortableArtifact {
   status: TestResult['status']
   resolvedTargets: ResolvedBaselineTarget[]
   nativeAttachments: AttachmentData[]
+  eventData: { attachments: AttachmentData[] }
 }
 
 function collectNativeImageAttachments(result: TestResult): AttachmentData[] {
@@ -83,6 +83,9 @@ export class CrvyRprtr implements Reporter {
     this.playwrightSnapshotPathTemplate = options.playwrightSnapshotPathTemplate
     this.playwrightToHaveScreenshotPathTemplate = options.playwrightToHaveScreenshotPathTemplate
     this.ci = options.ci ?? isCI()
+    if (this.ci) {
+      this.isOfflineMode = true
+    }
   }
 
   async onBegin(config: FullConfig, suite: Suite): Promise<void> {
@@ -163,30 +166,29 @@ export class CrvyRprtr implements Reporter {
       reporterTitlePath,
     )
     const nativeAttachments = collectNativeImageAttachments(result)
+    const data = {
+      id: test.id,
+      title: test.title,
+      status: result.status,
+      attachments: nativeAttachments,
+      visualNames: screenshotDeclarations.map(({ visualName }) => visualName),
+      visualDeclarations: screenshotDeclarations,
+      error: result.errors.length > 0 ? result.errors[0]?.message : undefined,
+      duration: result.duration,
+    }
     try {
       if (this.ci) {
-        const baselineInput = this.baselineInput(test, screenshotDeclarations)
+        const baselineInput = result.status === 'passed' ? this.baselineInput(test, screenshotDeclarations) : null
         const resolvedTargets = baselineInput === null ? [] : resolveBaselineTargets(baselineInput)
         this.pendingArtifacts.push({
           testId: test.id,
           status: result.status,
           resolvedTargets,
           nativeAttachments,
+          eventData: data,
         })
       }
-      this.send({
-        type: 'test-end',
-        data: {
-          id: test.id,
-          title: test.title,
-          status: result.status,
-          attachments: nativeAttachments,
-          visualNames: screenshotDeclarations.map(({ visualName }) => visualName),
-          visualDeclarations: screenshotDeclarations,
-          error: result.errors.length > 0 ? result.errors[0]?.message : undefined,
-          duration: result.duration,
-        },
-      })
+      this.send({ type: 'test-end', data })
     } finally {
       this.testMetadata.delete(test.id)
     }
@@ -234,14 +236,22 @@ export class CrvyRprtr implements Reporter {
     this.send({ type: 'run-end', data: { status: result.status } })
 
     if (this.ci) {
+      const limit = pLimit(10)
       await Promise.all(
-        this.pendingArtifacts.map(async (pending) => {
-          const savedAttachments = await saveAttachments(this.screenshotDir, pending.testId, {
-            attachments: pending.nativeAttachments,
-          })
-          await this.copyBaselinesForTargets(pending.testId, pending.status, pending.resolvedTargets, savedAttachments)
-          rewriteTestEndAttachments(this.runEvents, pending.testId, savedAttachments)
-        }),
+        this.pendingArtifacts.map((pending) =>
+          limit(async () => {
+            const savedAttachments = await saveAttachments(this.screenshotDir, pending.testId, {
+              attachments: pending.nativeAttachments,
+            })
+            await this.copyBaselinesForTargets(
+              pending.testId,
+              pending.status,
+              pending.resolvedTargets,
+              savedAttachments,
+            )
+            pending.eventData.attachments = savedAttachments
+          }),
+        ),
       )
       await writeStaticArtifact(this.runEvents, this.screenshotDir, this.reportHtmlPath)
       await writeOfflineReport(this.runEvents, this.offlineReportPath, this.workerIndex)
