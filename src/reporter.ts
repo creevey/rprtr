@@ -94,6 +94,7 @@ export class CrvyRprtr implements Reporter {
     await mkdir(this.screenshotDir, { recursive: true })
     if (!this.ci) {
       this.connect()
+      this.sendRegister(config)
     }
   }
 
@@ -130,6 +131,20 @@ export class CrvyRprtr implements Reporter {
     if (this.isOfflineMode) return
     this.isOfflineMode = true
     log('[CrvyRprtr] Offline mode enabled - events will be queued to file')
+  }
+
+  private sendRegister(config: FullConfig): void {
+    const snapshotDir = this.playwrightSnapshotDir ?? config.projects[0]?.snapshotDir
+    const testDir = this.playwrightSnapshotDir === undefined ? config.projects[0]?.testDir : undefined
+    this.send({
+      type: 'register',
+      data: {
+        playwrightSnapshotDir: typeof snapshotDir === 'string' ? snapshotDir : undefined,
+        playwrightTestDir: typeof testDir === 'string' ? testDir : undefined,
+        playwrightSnapshotPathTemplate: this.playwrightSnapshotPathTemplate,
+        playwrightToHaveScreenshotPathTemplate: this.playwrightToHaveScreenshotPathTemplate,
+      },
+    })
   }
 
   private describeTitlePath(test: TestCase): string[] {
@@ -173,8 +188,7 @@ export class CrvyRprtr implements Reporter {
       attachments: nativeAttachments,
       visualNames: screenshotDeclarations.map(({ visualName }) => visualName),
       visualDeclarations: screenshotDeclarations,
-      error: result.errors.length > 0 ? result.errors[0]?.message : undefined,
-      duration: result.duration,
+      error: result.errors.length > 0 ? result.errors[0]?.message : undefined, duration: result.duration,
     }
     try {
       if (this.ci) {
@@ -207,8 +221,7 @@ export class CrvyRprtr implements Reporter {
         testDir: project.testDir,
         snapshotDir,
         projectName: project.name,
-        snapshotSuffix: process.platform,
-        snapshotPathTemplate: this.playwrightSnapshotPathTemplate,
+        snapshotSuffix: process.platform, snapshotPathTemplate: this.playwrightSnapshotPathTemplate,
         toHaveScreenshotPathTemplate: this.playwrightToHaveScreenshotPathTemplate,
       },
       snapshotPathExists: existsSync,
@@ -234,7 +247,6 @@ export class CrvyRprtr implements Reporter {
 
   async onEnd(result: FullResult): Promise<void> {
     this.send({ type: 'run-end', data: { status: result.status } })
-
     if (this.ci) {
       const limit = pLimit(10)
       await Promise.all(

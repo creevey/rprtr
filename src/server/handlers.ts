@@ -1,9 +1,10 @@
 import { existsSync } from 'fs'
 
 import { applyTestBeginEvent, applyTestEndEvent, finalizeRunEvent } from '../report-state.ts'
-import type { TestBeginData, TestEndData } from '../schemas.ts'
+import type { RegisterData, TestBeginData, TestEndData } from '../schemas.ts'
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
 import { resolveBaselineSnapshotPath, type ApprovalRouting } from './artifact-routes.ts'
+import type { RoutesContext } from './routes.ts'
 import { broadcastToBrowsers } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
@@ -19,6 +20,7 @@ export interface HandlerContext {
   currentRunIds: Set<string>
   saveReport: () => Promise<void>
   approvalRouting?: ApprovalRouting
+  routesContext: RoutesContext
 }
 
 export function handleTestBegin(ctx: HandlerContext, data: TestBeginData): void {
@@ -102,4 +104,42 @@ export function handleSync(ctx: HandlerContext): void {
     },
   }
   broadcastToBrowsers(ctx.wsClients, message)
+}
+
+export function handleRegister(ctx: HandlerContext, data: RegisterData): void {
+  const roots: string[] = []
+  if (data.playwrightSnapshotDir !== undefined && data.playwrightSnapshotDir !== '') {
+    roots.push(data.playwrightSnapshotDir)
+  }
+  if (data.playwrightTestDir !== undefined && data.playwrightTestDir !== '') {
+    roots.push(data.playwrightTestDir)
+  }
+
+  const existing = ctx.routesContext.artifactRoots ?? []
+  for (const root of roots) {
+    if (!existing.includes(root)) {
+      existing.push(root)
+    }
+  }
+  ctx.routesContext.artifactRoots = existing
+
+  if (ctx.routesContext.approvalRouting !== undefined) {
+    if (data.playwrightSnapshotDir !== undefined) {
+      ctx.routesContext.approvalRouting.playwrightSnapshotDir = data.playwrightSnapshotDir
+    }
+    if (data.playwrightTestDir !== undefined) {
+      ctx.routesContext.approvalRouting.playwrightTestDir = data.playwrightTestDir
+    }
+    if (data.playwrightSnapshotPathTemplate !== undefined) {
+      ctx.routesContext.approvalRouting.playwrightSnapshotPathTemplate = data.playwrightSnapshotPathTemplate
+    }
+    if (data.playwrightToHaveScreenshotPathTemplate !== undefined) {
+      ctx.routesContext.approvalRouting.playwrightToHaveScreenshotPathTemplate = data.playwrightToHaveScreenshotPathTemplate
+    }
+  }
+
+  console.log('[Server] Reporter registered with config:', {
+    playwrightSnapshotDir: data.playwrightSnapshotDir,
+    playwrightTestDir: data.playwrightTestDir,
+  })
 }

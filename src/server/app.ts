@@ -7,13 +7,14 @@ import { findOfflineReportPaths, mergeOfflineReportsIntoTests, parseOfflineRepor
 import {
   IncomingWebSocketMessageSchema,
   LoadedReportDataSchema,
+  RegisterDataSchema,
   RunEndDataSchema,
   TestBeginDataSchema,
   TestEndDataSchema,
   safeParse,
   type IncomingWebSocketMessage,
+  type OfflineReport,
 } from '../schemas.ts'
-import type { OfflineReport } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { fileExists, isDirectory, readJsonFile, writeJsonFile } from './file-utils.ts'
 import {
@@ -22,6 +23,7 @@ import {
   handleRunEnd,
   handleApprove,
   handleSync,
+  handleRegister,
   type HandlerContext,
 } from './handlers.ts'
 import { handleHttpRequest, type RoutesContext } from './routes.ts'
@@ -71,22 +73,6 @@ function createReportData(options: ServerOptions): ReportData {
     browsers: ['chromium'],
     isUpdateMode: false,
     screenshotDir: options.screenshotDir ?? './screenshots',
-  }
-}
-
-function createHandlerContext(
-  reportData: ReportData,
-  wsClients: Set<RuntimeWebSocket>,
-  currentRunIds: Set<string>,
-  saveReport: () => Promise<void>,
-  approvalRouting: HandlerContext['approvalRouting'],
-): HandlerContext {
-  return {
-    reportData,
-    wsClients,
-    currentRunIds,
-    saveReport,
-    approvalRouting,
   }
 }
 
@@ -183,6 +169,15 @@ async function handleParsedWebSocketMessage(ctx: HandlerContext, msg: IncomingWe
     case 'sync':
       handleSync(ctx)
       break
+    case 'register': {
+      const parsed = safeParse(RegisterDataSchema, msg.data)
+      if (parsed === null) {
+        console.error('Invalid register message data', msg.data)
+        break
+      }
+      handleRegister(ctx, parsed)
+      break
+    }
   }
 }
 
@@ -281,9 +276,14 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   }
 
   const routesContext = createRoutesContext(reportData, staticDir, saveReport, options)
-
-  const getHandlerContext = (): HandlerContext =>
-    createHandlerContext(reportData, wsClients, currentRunIds, saveReport, routesContext.approvalRouting)
+  const getHandlerContext = (): HandlerContext => ({
+    reportData,
+    wsClients,
+    currentRunIds,
+    saveReport,
+    approvalRouting: routesContext.approvalRouting,
+    routesContext,
+  })
   const handleRequest = (req: Request): Promise<Response> => handleHttpRequest(routesContext, req)
   const handleWebSocketMessage = createWebSocketMessageHandler(getHandlerContext)
 

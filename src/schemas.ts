@@ -122,7 +122,7 @@ export const CrvyRprtrSuiteSchema: z.ZodType<CrvyRprtrSuite> = z.lazy(() =>
 
 // Incoming: reporter -> server. data is parsed per-type by the handler.
 export const IncomingWebSocketMessageSchema = z.object({
-  type: z.enum(['test-begin', 'test-end', 'run-end', 'approve', 'sync']),
+  type: z.enum(['test-begin', 'test-end', 'run-end', 'approve', 'sync', 'register']),
   data: z.unknown(),
 })
 export type IncomingWebSocketMessage = z.infer<typeof IncomingWebSocketMessageSchema>
@@ -183,6 +183,15 @@ export const RunEndDataSchema = z.object({
   status: z.enum(['passed', 'failed', 'skipped']),
 })
 export type RunEndData = z.infer<typeof RunEndDataSchema>
+
+// Register data schema (reporter -> server, sent on connect)
+export const RegisterDataSchema = z.object({
+  playwrightSnapshotDir: z.string().optional(),
+  playwrightTestDir: z.string().optional(),
+  playwrightSnapshotPathTemplate: z.string().optional(),
+  playwrightToHaveScreenshotPathTemplate: z.string().optional(),
+})
+export type RegisterData = z.infer<typeof RegisterDataSchema>
 
 // Report data schema
 export const ReportDataSchema = z.object({

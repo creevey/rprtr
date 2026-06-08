@@ -20,6 +20,11 @@ function createContext(): { ctx: HandlerContext; clients: Set<MockWebSocket> } {
     wsClients: clients as unknown as Set<RuntimeWebSocket>,
     currentRunIds: state.currentRunIds,
     saveReport: async (): Promise<void> => {},
+    routesContext: {
+      reportData: state.reportData,
+      staticDir: './dist',
+      saveReport: async (): Promise<void> => {},
+    },
   }
   return { ctx, clients }
 }

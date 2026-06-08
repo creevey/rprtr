@@ -15,7 +15,7 @@ export interface RoutesContext {
   }
   staticDir: string
   saveReport: () => Promise<void>
-  artifactRoots?: readonly string[]
+  artifactRoots?: string[]
   approvalRouting?: {
     configDir: string
     playwrightTestDir?: string

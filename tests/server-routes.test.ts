@@ -1194,3 +1194,140 @@ describe('isPathWithinRoots', () => {
     expect(isPathWithinRoots(join(root, 'a.png'), [])).toBe(false)
   })
 })
+
+describe('register message', () => {
+  test('adds playwrightSnapshotDir to artifactRoots so /file serves from it', async () => {
+    const snapshotDir = join(TMP_DIR, 'pw-snapshots')
+    await mkdir(snapshotDir, { recursive: true })
+    await writeFile(join(snapshotDir, 'test.png'), 'snapshot-image')
+
+    const app = await createServerApp({
+      screenshotDir: SCREENSHOT_DIR,
+      reportPath: join(TMP_DIR, 'report.json'),
+    })
+
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'register',
+        data: { playwrightSnapshotDir: snapshotDir },
+      }),
+    )
+
+    const res = await app.handleRequest(
+      new Request(`http://localhost/file/${encodeURIComponent(join(snapshotDir, 'test.png'))}`),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('snapshot-image')
+  })
+
+  test('adds playwrightTestDir to artifactRoots', async () => {
+    const testDir = join(TMP_DIR, 'pw-test-dir')
+    await mkdir(testDir, { recursive: true })
+    await writeFile(join(testDir, 'artifact.png'), 'test-artifact')
+
+    const app = await createServerApp({
+      screenshotDir: SCREENSHOT_DIR,
+      reportPath: join(TMP_DIR, 'report.json'),
+    })
+
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'register',
+        data: { playwrightTestDir: testDir },
+      }),
+    )
+
+    const res = await app.handleRequest(
+      new Request(`http://localhost/file/${encodeURIComponent(join(testDir, 'artifact.png'))}`),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('test-artifact')
+  })
+
+  test('does not duplicate roots on repeated register calls', async () => {
+    const snapshotDir = join(TMP_DIR, 'pw-snapshots-dup')
+    await mkdir(snapshotDir, { recursive: true })
+    await writeFile(join(snapshotDir, 'a.png'), 'img')
+
+    const app = await createServerApp({
+      screenshotDir: SCREENSHOT_DIR,
+      reportPath: join(TMP_DIR, 'report.json'),
+    })
+
+    await app.handleWebSocketMessage(
+      JSON.stringify({ type: 'register', data: { playwrightSnapshotDir: snapshotDir } }),
+    )
+    await app.handleWebSocketMessage(
+      JSON.stringify({ type: 'register', data: { playwrightSnapshotDir: snapshotDir } }),
+    )
+
+    const res = await app.handleRequest(
+      new Request(`http://localhost/file/${encodeURIComponent(join(snapshotDir, 'a.png'))}`),
+    )
+    expect(res.status).toBe(200)
+  })
+
+  test('updates approvalRouting with playwrightSnapshotDir', async () => {
+    const snapshotDir = join(TMP_DIR, 'pw-snapshots-routing')
+    await mkdir(join(snapshotDir, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SCREENSHOT_DIR, 'test-1'), { recursive: true })
+    await writeFile(join(SCREENSHOT_DIR, 'test-1', 'shot-actual.png'), 'actual')
+    await writeFile(join(snapshotDir, 'chromium', 'example.spec.ts', 'shot.png'), 'baseline')
+
+    const app = await createServerApp({
+      screenshotDir: SCREENSHOT_DIR,
+      reportPath: join(TMP_DIR, 'report.json'),
+      configDir: process.cwd(),
+      playwrightTestDir: PLAYWRIGHT_TEST_DIR,
+      playwrightToHaveScreenshotPathTemplate: CUSTOM_TEMPLATE,
+    })
+
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'register',
+        data: { playwrightSnapshotDir: snapshotDir },
+      }),
+    )
+
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'test-begin',
+        data: {
+          id: 'test-1',
+          title: 'visual pass',
+          titlePath: ['Suite'],
+          browser: 'chromium',
+          location: { file: TEST_FILE, line: 10 },
+        },
+      }),
+    )
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'test-end',
+        data: {
+          id: 'test-1',
+          status: 'passed',
+          attachments: [],
+          visualNames: ['shot'],
+          visualDeclarations: [
+            {
+              visualName: 'shot',
+              kind: 'named',
+              declaredName: 'shot',
+              snapshotBaseName: 'shot',
+              occurrenceIndex: 1,
+            },
+          ],
+        },
+      }),
+    )
+
+    const res = await app.handleRequest(new Request('http://localhost/api/report'))
+    const body = (await res.json()) as {
+      tests: Record<string, { results: { images: Record<string, { expect?: string; source?: string }> }[] }>
+    }
+    const image = body.tests['test-1']?.results?.[0]?.images?.['shot']
+    expect(image?.source).toBe('baseline-only')
+    expect(image?.expect).toBe(`/baseline/${encodeURIComponent('test-1')}/0/${encodeURIComponent('shot')}`)
+  })
+})
