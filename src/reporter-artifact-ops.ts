@@ -92,6 +92,22 @@ export async function saveAttachments(
   return savedAttachments
 }
 
+export function rewriteTestEndAttachments(runEvents: RunEvent[], testId: string, attachments: AttachmentData[]): void {
+  for (const event of runEvents) {
+    const { data } = event
+    if (
+      event.type === 'test-end' &&
+      typeof data === 'object' &&
+      data !== null &&
+      'id' in data &&
+      'attachments' in data &&
+      (data as { id: unknown }).id === testId
+    ) {
+      Object.assign(data, { attachments })
+    }
+  }
+}
+
 export async function writeOfflineReport(
   runEvents: RunEvent[],
   offlineReportPath: string,
