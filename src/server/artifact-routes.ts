@@ -55,7 +55,7 @@ function reporterTitlePath(test: TestData): readonly string[] {
   return ['', test.browser, testFile ?? '', ...test.titlePath, test.title]
 }
 
-type ApprovalRouting = RoutesContext['approvalRouting']
+export type ApprovalRouting = RoutesContext['approvalRouting']
 
 export function resolveBaselineSnapshotPath(
   routing: ApprovalRouting,

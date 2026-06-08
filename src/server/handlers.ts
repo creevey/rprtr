@@ -1,6 +1,7 @@
 import { applyTestBeginEvent, applyTestEndEvent, finalizeRunEvent } from '../report-state.ts'
 import type { TestBeginData, TestEndData } from '../schemas.ts'
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
+import { resolveBaselineSnapshotPath, type ApprovalRouting } from './artifact-routes.ts'
 import { broadcastToBrowsers } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
@@ -15,6 +16,7 @@ export interface HandlerContext {
   wsClients: Set<RuntimeWebSocket>
   currentRunIds: Set<string>
   saveReport: () => Promise<void>
+  approvalRouting?: ApprovalRouting
 }
 
 export function handleTestBegin(ctx: HandlerContext, data: TestBeginData): void {
@@ -25,6 +27,28 @@ export function handleTestBegin(ctx: HandlerContext, data: TestBeginData): void 
   broadcastToBrowsers(ctx.wsClients, message)
 }
 
+function enrichDeclaredBaselines(ctx: HandlerContext, test: TestData): void {
+  const retry = (test.results?.length ?? 0) - 1
+  const images = test.results?.[retry]?.images
+  if (retry < 0 || images === undefined) {
+    return
+  }
+
+  for (const [visualName, image] of Object.entries(images)) {
+    if (image === undefined || image.source !== 'declared-only') {
+      continue
+    }
+
+    const snapshotPath = resolveBaselineSnapshotPath(ctx.approvalRouting, test, retry, visualName)
+    if (snapshotPath === null) {
+      continue
+    }
+
+    image.expect = `/baseline/${encodeURIComponent(test.id)}/${retry}/${encodeURIComponent(visualName)}`
+    image.source = 'baseline-only'
+  }
+}
+
 export function handleTestEnd(ctx: HandlerContext, data: TestEndData): void {
   const result = applyTestEndEvent(ctx, data)
   if (result === null) {
@@ -32,6 +56,7 @@ export function handleTestEnd(ctx: HandlerContext, data: TestEndData): void {
     return
   }
   const { test, diffCount } = result
+  enrichDeclaredBaselines(ctx, test)
   const icon = data.status === 'passed' ? '✓' : data.status === 'skipped' ? '–' : '✗'
   const dur = data.duration === null || data.duration === undefined ? '' : ` (${data.duration}ms)`
   const diffNote = diffCount > 0 ? ` [${diffCount} diff(s)]` : ''

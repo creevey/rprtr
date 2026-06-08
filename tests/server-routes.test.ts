@@ -1000,6 +1000,63 @@ describe('createServerApp artifact serving', () => {
   })
 })
 
+describe('declared-only baseline enrichment', () => {
+  test('handleTestEnd sets a /baseline expect url when the baseline resolves', async () => {
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
+
+    const app = await createServerApp({
+      screenshotDir: SCREENSHOT_DIR,
+      reportPath: join(TMP_DIR, 'report.json'),
+      configDir: process.cwd(),
+      playwrightTestDir: PLAYWRIGHT_TEST_DIR,
+      playwrightSnapshotDir: SNAPSHOT_DIR,
+      playwrightToHaveScreenshotPathTemplate: CUSTOM_TEMPLATE,
+    })
+
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'test-begin',
+        data: {
+          id: 't1',
+          title: 'visual pass',
+          titlePath: ['Suite'],
+          browser: 'chromium',
+          location: { file: TEST_FILE, line: 10 },
+        },
+      }),
+    )
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'test-end',
+        data: {
+          id: 't1',
+          status: 'passed',
+          attachments: [],
+          visualNames: ['header'],
+          visualDeclarations: [
+            {
+              visualName: 'header',
+              kind: 'named',
+              declaredName: 'header',
+              snapshotBaseName: 'header',
+              occurrenceIndex: 1,
+            },
+          ],
+        },
+      }),
+    )
+
+    const res = await app.handleRequest(new Request('http://localhost/api/report'))
+    const body = (await res.json()) as {
+      tests: Record<string, { results: { images: Record<string, { expect?: string; source?: string }> }[] }>
+    }
+    const image = body.tests['t1']?.results?.[0]?.images?.['header']
+    expect(image?.source).toBe('baseline-only')
+    expect(image?.expect).toBe(`/baseline/${encodeURIComponent('t1')}/0/${encodeURIComponent('header')}`)
+  })
+})
+
 describe('isPathWithinRoots', () => {
   const root = join(process.cwd(), 'allowed')
 

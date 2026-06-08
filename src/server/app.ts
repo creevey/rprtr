@@ -75,12 +75,14 @@ function createHandlerContext(
   wsClients: Set<RuntimeWebSocket>,
   currentRunIds: Set<string>,
   saveReport: () => Promise<void>,
+  approvalRouting: HandlerContext['approvalRouting'],
 ): HandlerContext {
   return {
     reportData,
     wsClients,
     currentRunIds,
     saveReport,
+    approvalRouting,
   }
 }
 
@@ -276,7 +278,8 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
 
   const routesContext = createRoutesContext(reportData, staticDir, saveReport, options)
 
-  const getHandlerContext = (): HandlerContext => createHandlerContext(reportData, wsClients, currentRunIds, saveReport)
+  const getHandlerContext = (): HandlerContext =>
+    createHandlerContext(reportData, wsClients, currentRunIds, saveReport, routesContext.approvalRouting)
   const handleRequest = (req: Request): Promise<Response> => handleHttpRequest(routesContext, req)
   const handleWebSocketMessage = createWebSocketMessageHandler(getHandlerContext)
 
