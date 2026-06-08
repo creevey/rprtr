@@ -145,6 +145,39 @@ describe('syncTreeState', () => {
     expect(tree.children?.['Suite']?.status).toBe('success')
   })
 
+  test('syncTreeState removes tests not in the update set (by design)', () => {
+    const tree = treeifyTests({
+      'test-1': makeTest({ id: 'test-1', title: 'Test One', status: 'pending' }),
+      'test-2': makeTest({ id: 'test-2', title: 'Test Two', status: 'pending' }),
+    })
+
+    // Syncing with only test-1 should remove test-2
+    syncTreeState(tree, { 'test-1': makeTest({ id: 'test-1', title: 'Test One', status: 'success' }) })
+
+    expect(findTest(tree, 'test-1')).not.toBeNull()
+    expect(findTest(tree, 'test-1')?.test.status).toBe('success')
+    expect(findTest(tree, 'test-2')).toBeNull()
+  })
+
+  test('preserves all tests when merged with existing data before sync', () => {
+    const tree = treeifyTests({
+      'test-1': makeTest({ id: 'test-1', title: 'Test One', status: 'pending' }),
+      'test-2': makeTest({ id: 'test-2', title: 'Test Two', status: 'pending' }),
+      'test-3': makeTest({ id: 'test-3', title: 'Test Three', browser: 'firefox', status: 'pending' }),
+    })
+
+    // Merge incoming update with existing tests (what the WebSocket handler should do)
+    const existing = collectTestsById(tree)
+    const update = makeTest({ id: 'test-1', title: 'Test One', status: 'success' })
+    syncTreeState(tree, { ...existing, [update.id]: update })
+
+    // All tests should still exist
+    expect(findTest(tree, 'test-1')).not.toBeNull()
+    expect(findTest(tree, 'test-1')?.test.status).toBe('success')
+    expect(findTest(tree, 'test-2')).not.toBeNull()
+    expect(findTest(tree, 'test-3')).not.toBeNull()
+  })
+
   test('preserves user checked state when updating an existing test', () => {
     const initial: Record<string, TestData> = {
       'test-1': makeTest({ id: 'test-1' }),

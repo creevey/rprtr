@@ -325,7 +325,9 @@
       switch (msg.type) {
         case 'test-begin':
         case 'test-update': {
-          syncTreeState(tests, { [msg.data.id]: msg.data });
+          const current = collectTestsById(tests);
+          current[msg.data.id] = msg.data;
+          syncTreeState(tests, current);
           break;
         }
         case 'run-end': {
