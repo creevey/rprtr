@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, readFile, rm, symlink, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 import { createServerApp } from '../src/server/app'
 import { handleHttpRequest, isPathWithinRoots } from '../src/server/routes'
@@ -450,6 +450,58 @@ describe('approval routing', () => {
       'array baseline',
     )
     expect(tests['test-ambiguous']?.approved).toBeUndefined()
+  })
+
+  test('approve with /file URL decodes the absolute path and writes to the baseline', async () => {
+    const nativeActual = join(TMP_DIR, 'native', 'header-actual.png')
+    await mkdir(dirname(nativeActual), { recursive: true })
+    await writeFile(nativeActual, 'actual image')
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
+
+    const tests: Record<string, TestData> = {
+      'test-1': {
+        id: 'test-1',
+        title: 'visual pass',
+        titlePath: ['Suite'],
+        browser: 'chromium',
+        location: { file: TEST_FILE, line: 10 },
+        results: [
+          {
+            status: 'failed',
+            retries: 0,
+            images: {
+              header: {
+                actual: `/file/${encodeURIComponent(nativeActual)}`,
+              },
+            },
+            visualDeclarations: [
+              {
+                visualName: 'header',
+                kind: 'named',
+                declaredName: 'header',
+                snapshotBaseName: 'header',
+                occurrenceIndex: 1,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const response = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/api/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'test-1', retry: 0, image: 'header' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ success: true })
+    expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'utf8')).toBe('actual image')
+    expect(tests['test-1']?.approved).toEqual({ header: 0 })
   })
 
   test('approve ignores GET and DELETE requests without mutating approval state or files', async () => {

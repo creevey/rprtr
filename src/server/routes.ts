@@ -57,9 +57,13 @@ function handleApiReport(ctx: RoutesContext): Response {
 const APPROVAL_TARGET_ERROR = 'Could not resolve approval target'
 
 function actualPathFromUrl(ctx: RoutesContext, actualUrl: string): string {
-  return actualUrl.startsWith('/screenshots/')
-    ? join(ctx.reportData.screenshotDir, actualUrl.slice('/screenshots/'.length))
-    : actualUrl
+  if (actualUrl.startsWith('/screenshots/')) {
+    return join(ctx.reportData.screenshotDir, actualUrl.slice('/screenshots/'.length))
+  }
+  if (actualUrl.startsWith('/file/')) {
+    return decodeURIComponent(actualUrl.slice('/file/'.length))
+  }
+  return actualUrl
 }
 
 async function handleApiApprove(ctx: RoutesContext, req: Request): Promise<Response> {
