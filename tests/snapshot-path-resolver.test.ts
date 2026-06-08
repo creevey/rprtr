@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { basename, join } from 'path'
 
-import { resolveBaselineTargets, sanitizeForFilePath } from '../src/snapshot-path-resolver'
+import {
+  playwrightAnonymousVisualName,
+  resolveBaselineTargets,
+  sanitizeForFilePath,
+} from '../src/snapshot-path-resolver'
 
 const TEST_DIR = join(process.cwd(), 'tests')
 const TEST_FILE = join(TEST_DIR, 'example.spec.ts')
@@ -474,5 +478,19 @@ describe('resolveBaselineTargets', () => {
         snapshotPath: arrayVariantPath,
       },
     ])
+  })
+})
+
+describe('playwrightAnonymousVisualName', () => {
+  test('reconstructs Playwright auto-name without extension', () => {
+    expect(playwrightAnonymousVisualName(REPORTER_TITLE_PATH, 1)).toBe('Suite-visual-pass-1')
+  })
+
+  test('increments with occurrence index', () => {
+    expect(playwrightAnonymousVisualName(REPORTER_TITLE_PATH, 2)).toBe('Suite-visual-pass-2')
+  })
+
+  test('returns null when the title path has no test title', () => {
+    expect(playwrightAnonymousVisualName(['', 'chromium', 'example.spec.ts'], 1)).toBeNull()
   })
 })

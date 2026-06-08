@@ -221,6 +221,17 @@ function anonymousName(reporterTitlePath: readonly string[], occurrenceIndex: nu
   return sanitizeFilePathBeforeExtension(trimLongString(rawAnonymousName), '.png')
 }
 
+export function playwrightAnonymousVisualName(
+  reporterTitlePath: readonly string[],
+  occurrenceIndex: number,
+): string | null {
+  if (reporterTitlesWithoutProjectAndFile(reporterTitlePath).length === 0) {
+    return null
+  }
+
+  return removeExtension(anonymousName(reporterTitlePath, occurrenceIndex), '.png')
+}
+
 function resolveTarget(
   input: SnapshotResolverInput,
   declaration: ScreenshotDeclaration,
