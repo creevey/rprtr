@@ -40,13 +40,18 @@ function createContext(tests: Record<string, TestData>): Parameters<typeof handl
 
 afterEach(async () => {
   await rm(TMP_DIR, { recursive: true, force: true })
-  await rm(join(process.cwd(), RELATIVE_SNAPSHOT_DIR), { recursive: true, force: true })
+  await rm(join(process.cwd(), RELATIVE_SNAPSHOT_DIR), {
+    recursive: true,
+    force: true,
+  })
 })
 
 describe('approval routing', () => {
   test('approve writes to the resolver-selected custom-template target', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-1'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-1', 'header-actual.png'), 'actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
@@ -98,8 +103,12 @@ describe('approval routing', () => {
 
   test('approve uses configured testDir for nested test-file templates', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-nested'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'nested', 'example.spec.ts'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'nested', 'example.spec.ts'), {
+      recursive: true,
+    })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-nested', 'header-actual.png'), 'actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'nested', 'example.spec.ts', 'header.png'), 'nested baseline image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'flat baseline image')
@@ -218,7 +227,11 @@ describe('approval routing', () => {
         new Request('http://localhost/api/approve', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ id: 'test-config-dir', retry: 0, image: 'header' }),
+          body: JSON.stringify({
+            id: 'test-config-dir',
+            retry: 0,
+            image: 'header',
+          }),
         }),
       )
 
@@ -232,7 +245,9 @@ describe('approval routing', () => {
 
   test('approve writes an unnamed screenshot to its anonymous baseline target', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-unnamed'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-unnamed', 'anonymous-actual.png'), 'actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'Suite-visual-pass-1.png'), 'baseline image')
 
@@ -269,7 +284,11 @@ describe('approval routing', () => {
       new Request('http://localhost/api/approve', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: 'test-unnamed', retry: 0, image: '__unnamed-screenshot-1' }),
+        body: JSON.stringify({
+          id: 'test-unnamed',
+          retry: 0,
+          image: '__unnamed-screenshot-1',
+        }),
       }),
     )
 
@@ -277,12 +296,16 @@ describe('approval routing', () => {
     expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'Suite-visual-pass-1.png'), 'utf-8')).toBe(
       'actual image',
     )
-    expect(tests['test-unnamed']?.approved).toEqual({ '__unnamed-screenshot-1': 0 })
+    expect(tests['test-unnamed']?.approved).toEqual({
+      '__unnamed-screenshot-1': 0,
+    })
   })
 
   test('approve writes duplicate named screenshots to the matching occurrence target', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-duplicate'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-duplicate', 'header-1-actual.png'), 'actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'first baseline image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header-1.png'), 'second baseline image')
@@ -329,7 +352,11 @@ describe('approval routing', () => {
       new Request('http://localhost/api/approve', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: 'test-duplicate', retry: 0, image: 'header-1' }),
+        body: JSON.stringify({
+          id: 'test-duplicate',
+          retry: 0,
+          image: 'header-1',
+        }),
       }),
     )
 
@@ -345,7 +372,9 @@ describe('approval routing', () => {
 
   test('approve resolves slash-containing names when exactly one candidate exists', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-slash'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-slash', 'dir-header-actual.png'), 'actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir', 'header.png'), 'baseline image')
 
@@ -384,7 +413,11 @@ describe('approval routing', () => {
       new Request('http://localhost/api/approve', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: 'test-slash', retry: 0, image: 'dir/header' }),
+        body: JSON.stringify({
+          id: 'test-slash',
+          retry: 0,
+          image: 'dir/header',
+        }),
       }),
     )
 
@@ -397,7 +430,9 @@ describe('approval routing', () => {
 
   test('approve fails when exact resolution is ambiguous', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-ambiguous'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-ambiguous', 'dir-header-actual.png'), 'actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir-header.png'), 'string baseline')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir', 'header.png'), 'array baseline')
@@ -437,12 +472,19 @@ describe('approval routing', () => {
       new Request('http://localhost/api/approve', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: 'test-ambiguous', retry: 0, image: 'dir/header' }),
+        body: JSON.stringify({
+          id: 'test-ambiguous',
+          retry: 0,
+          image: 'dir/header',
+        }),
       }),
     )
 
     expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ success: false, error: 'Could not resolve approval target' })
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Could not resolve approval target',
+    })
     expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir-header.png'), 'utf-8')).toBe(
       'string baseline',
     )
@@ -456,7 +498,9 @@ describe('approval routing', () => {
     const nativeActual = join(TMP_DIR, 'native', 'header-actual.png')
     await mkdir(dirname(nativeActual), { recursive: true })
     await writeFile(nativeActual, 'actual image')
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
     const tests: Record<string, TestData> = {
@@ -510,7 +554,9 @@ describe('approval routing', () => {
       const baselinePath = join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png')
 
       await mkdir(join(SCREENSHOT_DIR, testId), { recursive: true })
-      await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+      await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+        recursive: true,
+      })
       await writeFile(join(SCREENSHOT_DIR, testId, 'header-actual.png'), `${method} actual image`)
       await writeFile(baselinePath, `${method} baseline image`)
 
@@ -568,7 +614,9 @@ describe('approval routing', () => {
 
   test('approve-all ignores GET requests without mutating approval state or files', async () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-success'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-success', 'header-actual.png'), 'actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
@@ -618,7 +666,9 @@ describe('approval routing', () => {
     await mkdir(join(SCREENSHOT_DIR, 'test-success'), { recursive: true })
     await mkdir(join(SCREENSHOT_DIR, 'test-ambiguous'), { recursive: true })
     await mkdir(join(SCREENSHOT_DIR, 'test-failed'), { recursive: true })
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'dir'), {
+      recursive: true,
+    })
     await writeFile(join(SCREENSHOT_DIR, 'test-success', 'header-actual.png'), 'actual image')
     await writeFile(join(SCREENSHOT_DIR, 'test-ambiguous', 'dir-header-actual.png'), 'ambiguous actual image')
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
@@ -742,7 +792,12 @@ describe('approval routing', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ success: false, approved: 1, unresolved: 2, failed: 1 })
+    expect(await response.json()).toEqual({
+      success: false,
+      approved: 1,
+      unresolved: 2,
+      failed: 1,
+    })
     expect(await readFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'utf-8')).toBe(
       'actual image',
     )
@@ -767,7 +822,9 @@ describe('approval routing', () => {
 
 describe('GET /baseline', () => {
   test('resolves and serves the baseline for a stored declaration', async () => {
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
     const tests: Record<string, TestData> = {
@@ -818,7 +875,9 @@ describe('GET /baseline', () => {
   })
 
   test('returns 404 for an empty visual name (trailing slash)', async () => {
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
     const tests: Record<string, TestData> = {
@@ -852,7 +911,9 @@ describe('GET /baseline', () => {
   })
 
   test('returns 404 for an empty retry segment even when the baseline exists', async () => {
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
     const tests: Record<string, TestData> = {
@@ -1002,7 +1063,9 @@ describe('createServerApp artifact serving', () => {
 
 describe('declared-only baseline enrichment', () => {
   test('handleTestEnd sets a /baseline expect url when the baseline resolves', async () => {
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
     const app = await createServerApp({
@@ -1049,7 +1112,14 @@ describe('declared-only baseline enrichment', () => {
 
     const res = await app.handleRequest(new Request('http://localhost/api/report'))
     const body = (await res.json()) as {
-      tests: Record<string, { results: { images: Record<string, { expect?: string; source?: string }> }[] }>
+      tests: Record<
+        string,
+        {
+          results: {
+            images: Record<string, { expect?: string; source?: string }>
+          }[]
+        }
+      >
     }
     const image = body.tests['t1']?.results?.[0]?.images?.['header']
     expect(image?.source).toBe('baseline-only')
@@ -1104,7 +1174,14 @@ describe('declared-only baseline enrichment', () => {
 
     const res = await app.handleRequest(new Request('http://localhost/api/report'))
     const body = (await res.json()) as {
-      tests: Record<string, { results: { images: Record<string, { expect?: string; source?: string }> }[] }>
+      tests: Record<
+        string,
+        {
+          results: {
+            images: Record<string, { expect?: string; source?: string }>
+          }[]
+        }
+      >
     }
     const image = body.tests['t1']?.results?.[0]?.images?.['header']
     expect(image?.source).toBe('declared-only')
@@ -1112,7 +1189,9 @@ describe('declared-only baseline enrichment', () => {
   })
 
   test('does not enrich a declared-only image when the test status is failed', async () => {
-    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await writeFile(join(SNAPSHOT_DIR, 'chromium', 'example.spec.ts', 'header.png'), 'baseline image')
 
     const app = await createServerApp({
@@ -1159,7 +1238,14 @@ describe('declared-only baseline enrichment', () => {
 
     const res = await app.handleRequest(new Request('http://localhost/api/report'))
     const body = (await res.json()) as {
-      tests: Record<string, { results: { images: Record<string, { expect?: string; source?: string }> }[] }>
+      tests: Record<
+        string,
+        {
+          results: {
+            images: Record<string, { expect?: string; source?: string }>
+          }[]
+        }
+      >
     }
     const image = body.tests['t1']?.results?.[0]?.images?.['header']
     expect(image?.source).toBe('declared-only')
@@ -1255,10 +1341,16 @@ describe('register message', () => {
     })
 
     await app.handleWebSocketMessage(
-      JSON.stringify({ type: 'register', data: { playwrightSnapshotDir: snapshotDir } }),
+      JSON.stringify({
+        type: 'register',
+        data: { playwrightSnapshotDir: snapshotDir },
+      }),
     )
     await app.handleWebSocketMessage(
-      JSON.stringify({ type: 'register', data: { playwrightSnapshotDir: snapshotDir } }),
+      JSON.stringify({
+        type: 'register',
+        data: { playwrightSnapshotDir: snapshotDir },
+      }),
     )
 
     const res = await app.handleRequest(
@@ -1269,7 +1361,9 @@ describe('register message', () => {
 
   test('updates approvalRouting with playwrightSnapshotDir', async () => {
     const snapshotDir = join(TMP_DIR, 'pw-snapshots-routing')
-    await mkdir(join(snapshotDir, 'chromium', 'example.spec.ts'), { recursive: true })
+    await mkdir(join(snapshotDir, 'chromium', 'example.spec.ts'), {
+      recursive: true,
+    })
     await mkdir(join(SCREENSHOT_DIR, 'test-1'), { recursive: true })
     await writeFile(join(SCREENSHOT_DIR, 'test-1', 'shot-actual.png'), 'actual')
     await writeFile(join(snapshotDir, 'chromium', 'example.spec.ts', 'shot.png'), 'baseline')
@@ -1324,7 +1418,14 @@ describe('register message', () => {
 
     const res = await app.handleRequest(new Request('http://localhost/api/report'))
     const body = (await res.json()) as {
-      tests: Record<string, { results: { images: Record<string, { expect?: string; source?: string }> }[] }>
+      tests: Record<
+        string,
+        {
+          results: {
+            images: Record<string, { expect?: string; source?: string }>
+          }[]
+        }
+      >
     }
     const image = body.tests['test-1']?.results?.[0]?.images?.['shot']
     expect(image?.source).toBe('baseline-only')

@@ -134,7 +134,8 @@ export function handleRegister(ctx: HandlerContext, data: RegisterData): void {
       ctx.routesContext.approvalRouting.playwrightSnapshotPathTemplate = data.playwrightSnapshotPathTemplate
     }
     if (data.playwrightToHaveScreenshotPathTemplate !== undefined) {
-      ctx.routesContext.approvalRouting.playwrightToHaveScreenshotPathTemplate = data.playwrightToHaveScreenshotPathTemplate
+      ctx.routesContext.approvalRouting.playwrightToHaveScreenshotPathTemplate =
+        data.playwrightToHaveScreenshotPathTemplate
     }
   }
 
