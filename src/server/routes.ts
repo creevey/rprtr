@@ -16,6 +16,7 @@ export interface RoutesContext {
   }
   staticDir: string
   saveReport: () => Promise<void>
+  artifactRoots?: readonly string[]
   approvalRouting?: {
     configDir: string
     playwrightTestDir?: string
@@ -25,14 +26,7 @@ export interface RoutesContext {
   }
 }
 
-export const LIVE_UPDATES_WEBSOCKET_PATH = '/'
-
-export function isWebSocketUpgradeRequest(req: Request): boolean {
-  return (
-    new URL(req.url).pathname === LIVE_UPDATES_WEBSOCKET_PATH &&
-    req.headers.get('upgrade')?.toLowerCase() === 'websocket'
-  )
-}
+export { isPathWithinRoots, isWebSocketUpgradeRequest, LIVE_UPDATES_WEBSOCKET_PATH } from './utils.ts'
 
 async function handleRoot(ctx: RoutesContext): Promise<Response> {
   const html = await respondWithFile(join(ctx.staticDir, 'index.html'), 'text/html')

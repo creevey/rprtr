@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 
 import { createServerApp } from '../src/server/app'
-import { handleHttpRequest } from '../src/server/routes'
+import { handleHttpRequest, isPathWithinRoots } from '../src/server/routes'
 import type { TestData } from '../src/types'
 
 const TMP_DIR = join(process.cwd(), 'test-approval-routing')
@@ -710,5 +710,25 @@ describe('approval routing', () => {
     expect(tests['test-ambiguous']?.approved).toBeUndefined()
     expect(tests['test-failed']?.approved).toBeUndefined()
     expect(tests['test-no-actual']?.approved).toBeUndefined()
+  })
+})
+
+describe('isPathWithinRoots', () => {
+  const root = join(process.cwd(), 'allowed')
+
+  test('accepts a file inside an allowed root', () => {
+    expect(isPathWithinRoots(join(root, 'sub', 'a.png'), [root])).toBe(true)
+  })
+
+  test('accepts the root itself', () => {
+    expect(isPathWithinRoots(root, [root])).toBe(true)
+  })
+
+  test('rejects a path outside every root', () => {
+    expect(isPathWithinRoots(join(process.cwd(), 'other', 'a.png'), [root])).toBe(false)
+  })
+
+  test('rejects traversal escaping the root', () => {
+    expect(isPathWithinRoots(join(root, '..', 'secret.png'), [root])).toBe(false)
   })
 })
