@@ -493,4 +493,8 @@ describe('playwrightAnonymousVisualName', () => {
   test('returns null when the title path has no test title', () => {
     expect(playwrightAnonymousVisualName(['', 'chromium', 'example.spec.ts'], 1)).toBeNull()
   })
+
+  test('returns null for a title path shorter than three segments', () => {
+    expect(playwrightAnonymousVisualName(['', 'chromium'], 1)).toBeNull()
+  })
 })

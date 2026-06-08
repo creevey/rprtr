@@ -216,20 +216,20 @@ function reporterTitlesWithoutProjectAndFile(reporterTitlePath: readonly string[
   return reporterTitlePath.slice(3).filter((part) => part !== '')
 }
 
+function anonymousNameFromTitles(titles: readonly string[], occurrenceIndex: number): string {
+  return sanitizeFilePathBeforeExtension(trimLongString(`${titles.join(' ')} ${occurrenceIndex}.png`), '.png')
+}
+
 function anonymousName(reporterTitlePath: readonly string[], occurrenceIndex: number): string {
-  const rawAnonymousName = `${reporterTitlesWithoutProjectAndFile(reporterTitlePath).join(' ')} ${occurrenceIndex}.png`
-  return sanitizeFilePathBeforeExtension(trimLongString(rawAnonymousName), '.png')
+  return anonymousNameFromTitles(reporterTitlesWithoutProjectAndFile(reporterTitlePath), occurrenceIndex)
 }
 
 export function playwrightAnonymousVisualName(
   reporterTitlePath: readonly string[],
   occurrenceIndex: number,
 ): string | null {
-  if (reporterTitlesWithoutProjectAndFile(reporterTitlePath).length === 0) {
-    return null
-  }
-
-  return removeExtension(anonymousName(reporterTitlePath, occurrenceIndex), '.png')
+  const titles = reporterTitlesWithoutProjectAndFile(reporterTitlePath)
+  return titles.length === 0 ? null : removeExtension(anonymousNameFromTitles(titles, occurrenceIndex), '.png')
 }
 
 function resolveTarget(
