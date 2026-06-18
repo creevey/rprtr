@@ -122,6 +122,71 @@ describe('report-state visual classification', () => {
     expect(images['header']?.expect).toBe('/screenshots/test-1/header-expected')
     expect(images['footer']).toBeUndefined()
   })
+
+  test('does not carry a stale comparison actual URL into a later passing run', () => {
+    const state = createMutableReportState('./screenshots')
+
+    applyTestBeginEvent(state, {
+      id: 't-stale',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+
+    applyTestEndEvent(state, {
+      id: 't-stale',
+      status: 'failed',
+      attachments: [
+        {
+          name: 'header-actual.png',
+          path: '/tmp/test-results/t-stale/header-actual.png',
+          contentType: 'image/png',
+        },
+      ],
+      visualNames: ['header'],
+      visualDeclarations: [
+        {
+          visualName: 'header',
+          kind: 'named',
+          declaredName: 'header',
+          snapshotBaseName: 'header',
+          occurrenceIndex: 1,
+        },
+      ],
+    })
+
+    const firstRunActual = state.reportData.tests['t-stale']?.results?.[0]?.images?.['header']?.actual
+    expect(firstRunActual).toBe('/file/%2Ftmp%2Ftest-results%2Ft-stale%2Fheader-actual.png')
+
+    applyTestBeginEvent(state, {
+      id: 't-stale',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+
+    applyTestEndEvent(state, {
+      id: 't-stale',
+      status: 'passed',
+      attachments: [],
+      visualNames: ['header'],
+      visualDeclarations: [
+        {
+          visualName: 'header',
+          kind: 'named',
+          declaredName: 'header',
+          snapshotBaseName: 'header',
+          occurrenceIndex: 1,
+        },
+      ],
+    })
+
+    const passedImage = state.reportData.tests['t-stale']?.results?.[0]?.images?.['header']
+    expect(passedImage?.actual).toBeUndefined()
+    expect(passedImage?.source).toBe('declared-only')
+  })
 })
 
 describe('report-state approval metadata', () => {

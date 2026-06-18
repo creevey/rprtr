@@ -38,11 +38,6 @@ function isCurrentArtifact(image: Images | undefined): boolean {
 
 function isReusablePassingImage(image: Images): boolean {
   const source = image.source ?? classifyImage(image)
-
-  if (source === 'comparison') {
-    return image.actual !== undefined && image.diff === undefined
-  }
-
   return source === 'baseline-only'
 }
 
