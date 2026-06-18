@@ -1018,6 +1018,15 @@ describe('GET /file', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff')
   })
+
+  test('returns 404 for a foreign-OS absolute path that cannot resolve locally', async () => {
+    const foreignAbs = process.platform === 'win32' ? '/Users/ki/x.png' : 'C:\\Users\\ki\\x.png'
+    const ctx = { ...createContext({}), artifactRoots: [TMP_DIR] }
+
+    const res = await handleHttpRequest(ctx, new Request(`http://localhost/file/${encodeURIComponent(foreignAbs)}`))
+
+    expect(res.status).toBe(404)
+  })
 })
 
 describe('createServerApp artifact serving', () => {

@@ -2,6 +2,7 @@ import { existsSync } from 'fs'
 import { realpath } from 'fs/promises'
 import { dirname, resolve } from 'path'
 
+import { isForeignAbsolutePath } from '../path-utils.ts'
 import { resolveBaselineTargets } from '../snapshot-path-resolver.ts'
 import type { TestData } from '../types.ts'
 import { respondWithFile } from './file-utils.ts'
@@ -30,6 +31,11 @@ export async function handleFile(ctx: RoutesContext, req: Request): Promise<Resp
   // resolve() is lexical, but readFile would follow a symlink out of an allowed root.
   const realTarget = await realpathOrNull(decodedPath)
   if (realTarget === null) {
+    if (isForeignAbsolutePath(decodedPath, process.platform)) {
+      console.warn(
+        `[Crvy Rprtr] /file request resolved to a foreign-OS absolute path that cannot be served on ${process.platform}: ${decodedPath}`,
+      )
+    }
     return notFound()
   }
 
