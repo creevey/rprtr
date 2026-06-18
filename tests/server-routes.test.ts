@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdir, readFile, rm, symlink, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 
@@ -1023,9 +1023,24 @@ describe('GET /file', () => {
     const foreignAbs = process.platform === 'win32' ? '/Users/ki/x.png' : 'C:\\Users\\ki\\x.png'
     const ctx = { ...createContext({}), artifactRoots: [TMP_DIR] }
 
+    using warnSpy = spyOn(console, 'warn')
     const res = await handleHttpRequest(ctx, new Request(`http://localhost/file/${encodeURIComponent(foreignAbs)}`))
 
     expect(res.status).toBe(404)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0]?.[0]).toContain('foreign-OS absolute path')
+    expect(warnSpy.mock.calls[0]?.[0]).toContain(foreignAbs)
+  })
+
+  test('does not log a foreign-OS warning for a same-OS missing file', async () => {
+    const sameOsMissing = join(TMP_DIR, 'definitely-not-present.png')
+    const ctx = { ...createContext({}), artifactRoots: [TMP_DIR] }
+
+    using warnSpy = spyOn(console, 'warn')
+    const res = await handleHttpRequest(ctx, new Request(`http://localhost/file/${encodeURIComponent(sameOsMissing)}`))
+
+    expect(res.status).toBe(404)
+    expect(warnSpy).not.toHaveBeenCalled()
   })
 })
 

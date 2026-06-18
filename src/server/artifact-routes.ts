@@ -20,9 +20,11 @@ async function realpathOrNull(path: string): Promise<string | null> {
 export async function handleFile(ctx: RoutesContext, req: Request): Promise<Response> {
   const notFound = (): Response => new Response('Not Found', { status: 404 })
 
+  let rawDecoded: string
   let decodedPath: string
   try {
-    decodedPath = resolve(decodeURIComponent(new URL(req.url).pathname.slice('/file/'.length)))
+    rawDecoded = decodeURIComponent(new URL(req.url).pathname.slice('/file/'.length))
+    decodedPath = resolve(rawDecoded)
   } catch {
     return notFound()
   }
@@ -31,9 +33,11 @@ export async function handleFile(ctx: RoutesContext, req: Request): Promise<Resp
   // resolve() is lexical, but readFile would follow a symlink out of an allowed root.
   const realTarget = await realpathOrNull(decodedPath)
   if (realTarget === null) {
-    if (isForeignAbsolutePath(decodedPath, process.platform)) {
+    // Check the pre-resolve string: resolve() normalizes foreign-OS paths
+    // (e.g. "C:\\..." on POSIX) into host-OS form, hiding the foreign origin.
+    if (isForeignAbsolutePath(rawDecoded, process.platform)) {
       console.warn(
-        `[Crvy Rprtr] /file request resolved to a foreign-OS absolute path that cannot be served on ${process.platform}: ${decodedPath}`,
+        `[Crvy Rprtr] /file request resolved to a foreign-OS absolute path that cannot be served on ${process.platform}: ${rawDecoded}`,
       )
     }
     return notFound()
