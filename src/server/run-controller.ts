@@ -92,6 +92,7 @@ export class RunController {
 
   stop(): StopResult {
     if (this.child === null) return { ok: false, reason: 'not-running' }
+    if (this.sigkillTimer !== null) this.deps.timers.clearTimeout(this.sigkillTimer)
     this.child.kill('SIGTERM')
     this.sigkillTimer = this.deps.timers.setTimeout(() => {
       if (this.child !== null) this.child.kill('SIGKILL')
@@ -107,6 +108,7 @@ export class RunController {
   }
 
   private handleChildExit(code: number | null): void {
+    if (this.child === null) return
     if (this.sigkillTimer !== null) {
       this.deps.timers.clearTimeout(this.sigkillTimer)
       this.sigkillTimer = null

@@ -185,6 +185,16 @@ describe('RunController child exit', () => {
     expect(f.controller.isRunning).toBe(false)
     expect(f.broadcasts).toContainEqual({ type: 'run-status', data: { running: false } })
   })
+
+  test('cleans up exactly once when error is followed by exit', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.child.errorEmitters.forEach((cb) => cb(new Error('ENOENT')))
+    f.child.exitEmitters.forEach((cb) => cb(1))
+    expect(f.runningFlag.value).toBe(false)
+    expect(f.controller.isRunning).toBe(false)
+    expect(f.broadcasts.filter((m) => m.type === 'run-status' && !m.data.running)).toHaveLength(1)
+  })
 })
 
 describe('RunController.stop', () => {
