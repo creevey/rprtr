@@ -107,13 +107,11 @@ export class CrvyRprtr implements Reporter {
       this.enableOfflineMode()
     }
   }
-
   private enableOfflineMode(): void {
     if (this.isOfflineMode) return
     this.isOfflineMode = true
     log('[CrvyRprtr] Offline mode enabled - events will be queued to file')
   }
-
   private sendRegister(config: FullConfig): void {
     const snapshotDir = this.playwrightSnapshotDir ?? config.projects[0]?.snapshotDir
     const testDir = this.playwrightSnapshotDir === undefined ? config.projects[0]?.testDir : undefined
@@ -124,6 +122,8 @@ export class CrvyRprtr implements Reporter {
         playwrightTestDir: typeof testDir === 'string' ? testDir : undefined,
         playwrightSnapshotPathTemplate: this.playwrightSnapshotPathTemplate,
         playwrightToHaveScreenshotPathTemplate: this.playwrightToHaveScreenshotPathTemplate,
+        configFile: config.configFile,
+        cwd: config.rootDir ?? process.cwd(),
       },
     })
   }
