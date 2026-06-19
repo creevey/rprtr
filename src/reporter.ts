@@ -57,7 +57,7 @@ export class CrvyRprtr implements Reporter {
   private pendingArtifacts: PendingPortableArtifact[] = []
 
   constructor(options: CrvyRprtrOptions = {}) {
-    this.serverUrl = options.serverUrl ?? 'ws://localhost:3000'
+    this.serverUrl = options.serverUrl ?? process.env.CRVY_RPRTR_SERVER_URL ?? 'ws://localhost:3000'
     this.screenshotDir = options.screenshotDir ?? './screenshots'
     this.workerIndex = parseInt(process.env.TEST_WORKER_INDEX ?? '0', 10) || 0
     this.offlineReportPath = options.offlineReportPath ?? `./crvy-rprtr-${this.workerIndex}.json`

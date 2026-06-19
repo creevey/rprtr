@@ -27,7 +27,7 @@ async function handleApiRun(runController: RunController, req: Request): Promise
   }
   const parsed = safeParse(RunRequestBodySchema, body)
   if (parsed === null) {
-    return Response.json({ ok: false, reason: 'no-config' }, { status: 400 })
+    return Response.json({ ok: false, error: 'Invalid request body' }, { status: 400 })
   }
   const result = runController.start(parsed)
   if (result.ok) return Response.json(result)
