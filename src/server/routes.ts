@@ -23,6 +23,7 @@ export interface RoutesContext {
     playwrightSnapshotPathTemplate?: string
     playwrightToHaveScreenshotPathTemplate?: string
   }
+  runContext?: { configFile: string; cwd: string }
 }
 
 export { isPathWithinRoots, isWebSocketUpgradeRequest, LIVE_UPDATES_WEBSOCKET_PATH } from './utils.ts'

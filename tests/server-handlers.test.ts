@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 
 import { createMutableReportState, applyTestBeginEvent } from '../src/report-state'
 import { WebSocketMessageSchema } from '../src/schemas'
-import { handleRunEnd, handleSync, handleTestBegin, handleTestEnd, type HandlerContext } from '../src/server/handlers'
+import {
+  handleRunEnd,
+  handleSync,
+  handleTestBegin,
+  handleTestEnd,
+  handleRegister,
+  type HandlerContext,
+} from '../src/server/handlers'
 import type { RuntimeWebSocket } from '../src/server/ws'
 
 class MockWebSocket implements RuntimeWebSocket {
@@ -198,5 +205,36 @@ describe('server broadcast payloads', () => {
     expect(data).not.toHaveProperty('screenshotDir')
     expect(data).not.toHaveProperty('browsers')
     expect(data).not.toHaveProperty('isRunning')
+  })
+})
+
+describe('handleRegister runContext persistence', () => {
+  let ctx: HandlerContext
+
+  beforeEach(() => {
+    const created = createContext()
+    ctx = created.ctx
+  })
+
+  test('persists configFile and cwd onto routesContext', () => {
+    handleRegister(ctx, {
+      configFile: '/proj/playwright.config.ts',
+      cwd: '/proj',
+    })
+    expect(ctx.routesContext.runContext).toEqual({
+      configFile: '/proj/playwright.config.ts',
+      cwd: '/proj',
+    })
+  })
+
+  test('does not overwrite runContext when payload omits the fields', () => {
+    ctx.routesContext.runContext = { configFile: '/existing.ts', cwd: '/existing' }
+    handleRegister(ctx, { playwrightSnapshotDir: '/snapshots' })
+    expect(ctx.routesContext.runContext).toEqual({ configFile: '/existing.ts', cwd: '/existing' })
+  })
+
+  test('does not set runContext when only one of configFile/cwd is present', () => {
+    handleRegister(ctx, { configFile: '/proj/playwright.config.ts' })
+    expect(ctx.routesContext.runContext).toBeUndefined()
   })
 })

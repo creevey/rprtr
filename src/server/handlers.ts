@@ -139,6 +139,10 @@ export function handleRegister(ctx: HandlerContext, data: RegisterData): void {
     }
   }
 
+  if (data.configFile !== undefined && data.cwd !== undefined) {
+    ctx.routesContext.runContext = { configFile: data.configFile, cwd: data.cwd }
+  }
+
   console.log('[Server] Reporter registered with config:', {
     playwrightSnapshotDir: data.playwrightSnapshotDir,
     playwrightTestDir: data.playwrightTestDir,
