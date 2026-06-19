@@ -36,15 +36,19 @@
     liveUpdates: boolean;
     approvalEnabled: boolean;
     approvalMessage?: string;
+    runEnabled: boolean;
+    isRunning: boolean;
     onApprove: (id: string, retry: number, image: string) => Promise<ApprovalResult>;
     onApproveAll: () => Promise<BulkApprovalResult>;
   }
 
-  let { initialTests, isReport, isUpdateMode, liveUpdates, approvalEnabled, approvalMessage, onApprove, onApproveAll }: Props = $props();
+  let { initialTests, isReport, isUpdateMode, liveUpdates, approvalEnabled, approvalMessage, runEnabled, isRunning: initialIsRunning, onApprove, onApproveAll }: Props = $props();
 
   // svelte-ignore state_referenced_locally — intentionally capture initial value for local mutation
   let tests = $state(initialTests);
-  let isRunning = $state(false);
+  // svelte-ignore state_referenced_locally — intentionally capture initial value for local mutation
+  let isRunning = $state(initialIsRunning);
+  let runMessage = $state<string | null>(null);
   let openedTestPath = $state<string[]>([]);
   let filter = $state<CrvyRprtrViewFilter>({ status: null, subStrings: [] });
   let viewMode = $state<ImagesViewMode>(getViewMode());
@@ -276,8 +280,24 @@
     recalcAllSuiteStatuses(tests);
   }
 
-  function handleStart(): void {}
-  function handleStop(): void {}
+  async function handleStart(): Promise<void> {
+    const res = await fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (res.status === 409) {
+      const body = (await res.json().catch(() => null)) as { reason?: string } | null;
+      runMessage =
+        body?.reason === 'already-running'
+          ? 'A run is already in progress'
+          : 'Connect a Playwright reporter to enable running';
+    }
+  }
+
+  async function handleStop(): Promise<void> {
+    await fetch('/api/stop', { method: 'POST' });
+  }
 
   function handleImageChange(name: string): void {
     imageName = name;
@@ -348,6 +368,11 @@
         case 'approve':
           // No-op: approvals go through HTTP /api/approve.
           break;
+        case 'run-status': {
+          isRunning = msg.data.running;
+          runMessage = null;
+          break;
+        }
       }
     };
 
@@ -369,6 +394,8 @@
     {isUpdateMode}
     {approvalEnabled}
     {approvalMessage}
+    {runEnabled}
+    {runMessage}
     {filter}
     {canApprove}
     onFilterChange={(f) => filter = f}

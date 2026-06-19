@@ -13,6 +13,8 @@
     isUpdateMode: boolean;
     approvalEnabled: boolean;
     approvalMessage?: string;
+    runEnabled: boolean;
+    runMessage?: string | null;
     filter: CrvyRprtrViewFilter;
     canApprove: boolean;
     onFilterChange: (filter: CrvyRprtrViewFilter) => void;
@@ -27,7 +29,7 @@
   }
 
   let {
-    tests, selectedId, focusedPath, isReport, isRunning, isUpdateMode, approvalEnabled, approvalMessage, filter, canApprove,
+    tests, selectedId, focusedPath, isReport, isRunning, isUpdateMode, approvalEnabled, approvalMessage, runEnabled, runMessage, filter, canApprove,
     onFilterChange, onSelect, onOpen, onToggle, onStart, onStop, onApprove, onNext, onApproveAll
   }: Props = $props();
 
@@ -117,7 +119,7 @@
           {/if}
         </div>
       </div>
-      {#if !isReport && !isUpdateMode}
+      {#if runEnabled}
         <div class="mt-1">
           {#if isRunning}
             <button
@@ -144,6 +146,9 @@
       value={filterInput}
       oninput={handleFilterInput}
     />
+    {#if runMessage}
+      <div class="mt-2 text-center text-xs text-fg-muted">{runMessage}</div>
+    {/if}
   </div>
 
   <!-- Tree -->

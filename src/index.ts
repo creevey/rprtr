@@ -14,6 +14,8 @@ interface InitialState {
   liveUpdates: boolean
   approvalEnabled: boolean
   approvalMessage?: string
+  runEnabled: boolean
+  isRunning: boolean
 }
 
 function loadBootstrapData(): InitialState | null {
@@ -40,6 +42,8 @@ function loadBootstrapData(): InitialState | null {
     liveUpdates: parsed.liveUpdates,
     approvalEnabled: parsed.approvalEnabled,
     approvalMessage: parsed.approvalMessage,
+    runEnabled: parsed.runEnabled ?? false,
+    isRunning: parsed.report.isRunning ?? false,
   }
 }
 
@@ -58,6 +62,8 @@ async function loadReportData(): Promise<InitialState> {
     isUpdateMode: parsed.isUpdateMode ?? false,
     liveUpdates: true,
     approvalEnabled: true,
+    runEnabled: parsed.runEnabled ?? false,
+    isRunning: parsed.isRunning ?? false,
   }
 }
 
@@ -91,6 +97,8 @@ mount(App, {
     liveUpdates: initialState.liveUpdates,
     approvalEnabled: initialState.approvalEnabled,
     approvalMessage: initialState.approvalMessage,
+    runEnabled: initialState.runEnabled,
+    isRunning: initialState.isRunning,
     onApprove: handleApprove,
     onApproveAll: handleApproveAll,
   },
