@@ -39,10 +39,13 @@ function createContext(tests: Record<string, TestData>): Parameters<typeof handl
   }
 }
 
-function createStubRunController(): RunController {
+function createStubRunController(
+  startResult: { ok: true } | { ok: false; reason: 'no-config' | 'already-running' } = { ok: true },
+  stopResult: { ok: true } | { ok: false; reason: 'not-running' } = { ok: true },
+): RunController {
   return {
-    start: () => ({ ok: true }),
-    stop: () => ({ ok: true }),
+    start: () => startResult,
+    stop: () => stopResult,
     dispose: () => {},
     isRunning: false,
   } as unknown as RunController
@@ -1628,5 +1631,87 @@ describe('register message', () => {
     const image = body.tests['test-1']?.results?.[0]?.images?.['shot']
     expect(image?.source).toBe('baseline-only')
     expect(image?.expect).toBe(`/baseline/${encodeURIComponent('test-1')}/0/${encodeURIComponent('shot')}`)
+  })
+})
+
+describe('run endpoints', () => {
+  test('POST /api/run returns 200 on accepted start', async () => {
+    const ctx = createContext({})
+    const stub = createStubRunController({ ok: true })
+    const res = await handleHttpRequest(
+      ctx,
+      new Request('http://localhost/api/run', { method: 'POST', body: '{}' }),
+      stub,
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+  })
+
+  test('POST /api/run returns 409 with reason when refused', async () => {
+    const ctx = createContext({})
+    const stub = createStubRunController({ ok: false, reason: 'already-running' })
+    const res = await handleHttpRequest(
+      ctx,
+      new Request('http://localhost/api/run', { method: 'POST', body: '{}' }),
+      stub,
+    )
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ ok: false, reason: 'already-running' })
+  })
+
+  test('POST /api/run passes parsed files and project through', async () => {
+    const ctx = createContext({})
+    let captured: unknown = null
+    const stub = {
+      start: (filters: unknown) => {
+        captured = filters
+        return { ok: true }
+      },
+      stop: () => ({ ok: true }),
+      dispose: () => {},
+      isRunning: false,
+    } as unknown as RunController
+    await handleHttpRequest(
+      ctx,
+      new Request('http://localhost/api/run', {
+        method: 'POST',
+        body: JSON.stringify({ files: ['a.spec.ts:10'], project: 'chromium' }),
+      }),
+      stub,
+    )
+    expect(captured).toEqual({ files: ['a.spec.ts:10'], project: 'chromium' })
+  })
+
+  test('POST /api/stop returns 200 on accepted stop', async () => {
+    const ctx = createContext({})
+    const stub = createStubRunController({ ok: true }, { ok: true })
+    const res = await handleHttpRequest(ctx, new Request('http://localhost/api/stop', { method: 'POST' }), stub)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+  })
+
+  test('POST /api/stop returns 409 when not running', async () => {
+    const ctx = createContext({})
+    const stub = createStubRunController({ ok: true }, { ok: false, reason: 'not-running' })
+    const res = await handleHttpRequest(ctx, new Request('http://localhost/api/stop', { method: 'POST' }), stub)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ ok: false, reason: 'not-running' })
+  })
+
+  test('GET /api/report includes runEnabled=false when no runContext set', async () => {
+    const ctx = createContext({})
+    const stub = createStubRunController({ ok: true })
+    const res = await handleHttpRequest(ctx, new Request('http://localhost/api/report'), stub)
+    const body = (await res.json()) as { runEnabled: boolean }
+    expect(body.runEnabled).toBe(false)
+  })
+
+  test('GET /api/report includes runEnabled=true when runContext is set', async () => {
+    const ctx = createContext({})
+    ctx.runContext = { configFile: '/proj/playwright.config.ts', cwd: '/proj' }
+    const stub = createStubRunController({ ok: true })
+    const res = await handleHttpRequest(ctx, new Request('http://localhost/api/report'), stub)
+    const body = (await res.json()) as { runEnabled: boolean }
+    expect(body.runEnabled).toBe(true)
   })
 })

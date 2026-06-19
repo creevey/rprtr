@@ -5,6 +5,7 @@ import type { TestData } from '../types.ts'
 import { handleArtifactRoute, resolveBaselineSnapshotPath } from './artifact-routes.ts'
 import { copyFilePortable, respondWithFile } from './file-utils.ts'
 import type { RunController } from './run-controller.ts'
+import { handleRunRoutes } from './run-routes.ts'
 
 export interface RoutesContext {
   reportData: {
@@ -53,7 +54,10 @@ async function handleSrcFiles(req: Request): Promise<Response> {
 }
 
 function handleApiReport(ctx: RoutesContext): Response {
-  return Response.json(ctx.reportData)
+  return Response.json({
+    ...ctx.reportData,
+    runEnabled: ctx.runContext !== undefined,
+  })
 }
 
 const APPROVAL_TARGET_ERROR = 'Could not resolve approval target'
@@ -224,7 +228,7 @@ async function handleDist(ctx: RoutesContext, req: Request): Promise<Response> {
   return file ?? new Response('Not Found', { status: 404 })
 }
 
-export function handleHttpRequest(ctx: RoutesContext, req: Request, _runController: RunController): Promise<Response> {
+export function handleHttpRequest(ctx: RoutesContext, req: Request, runController: RunController): Promise<Response> {
   const pathname = new URL(req.url).pathname
 
   if (pathname === '/') {
@@ -249,6 +253,10 @@ export function handleHttpRequest(ctx: RoutesContext, req: Request, _runControll
 
   if (pathname === '/api/approve-all' && req.method === 'POST') {
     return handleApiApproveAll(ctx)
+  }
+  const runResponse = handleRunRoutes(pathname, req.method, runController, req)
+  if (runResponse !== null) {
+    return runResponse
   }
 
   if (pathname.startsWith('/api/images/')) {
