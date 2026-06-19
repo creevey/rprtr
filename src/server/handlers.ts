@@ -5,6 +5,7 @@ import type { RegisterData, TestBeginData, TestEndData } from '../schemas.ts'
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
 import { resolveBaselineSnapshotPath, type ApprovalRouting } from './artifact-routes.ts'
 import type { RoutesContext } from './routes.ts'
+import type { RunController } from './run-controller.ts'
 import { broadcastToBrowsers } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
@@ -21,6 +22,7 @@ export interface HandlerContext {
   saveReport: () => Promise<void>
   approvalRouting?: ApprovalRouting
   routesContext: RoutesContext
+  runController: RunController
 }
 
 export function handleTestBegin(ctx: HandlerContext, data: TestBeginData): void {

@@ -4,6 +4,7 @@ import { dirname, join } from 'path'
 
 import { createServerApp } from '../src/server/app'
 import { handleHttpRequest, isPathWithinRoots } from '../src/server/routes'
+import type { RunController } from '../src/server/run-controller'
 import type { TestData } from '../src/types'
 
 const TMP_DIR = join(process.cwd(), 'test-approval-routing')
@@ -36,6 +37,15 @@ function createContext(tests: Record<string, TestData>): Parameters<typeof handl
       playwrightToHaveScreenshotPathTemplate: CUSTOM_TEMPLATE,
     },
   }
+}
+
+function createStubRunController(): RunController {
+  return {
+    start: () => ({ ok: true }),
+    stop: () => ({ ok: true }),
+    dispose: () => {},
+    isRunning: false,
+  } as unknown as RunController
 }
 
 afterEach(async () => {
@@ -92,6 +102,7 @@ describe('approval routing', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: 'test-1', retry: 0, image: 'header' }),
       }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(200)
@@ -150,6 +161,7 @@ describe('approval routing', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: 'test-nested', retry: 0, image: 'header' }),
       }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(200)
@@ -290,6 +302,7 @@ describe('approval routing', () => {
           image: '__unnamed-screenshot-1',
         }),
       }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(200)
@@ -358,6 +371,7 @@ describe('approval routing', () => {
           image: 'header-1',
         }),
       }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(200)
@@ -419,6 +433,7 @@ describe('approval routing', () => {
           image: 'dir/header',
         }),
       }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(200)
@@ -478,6 +493,7 @@ describe('approval routing', () => {
           image: 'dir/header',
         }),
       }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(409)
@@ -540,6 +556,7 @@ describe('approval routing', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: 'test-1', retry: 0, image: 'header' }),
       }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(200)
@@ -601,6 +618,7 @@ describe('approval routing', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ id: testId, retry: 0, image: 'header' }),
         }),
+        createStubRunController(),
       )
 
       expect(response.status).toBe(404)
@@ -653,6 +671,7 @@ describe('approval routing', () => {
     const response = await handleHttpRequest(
       createContext(tests),
       new Request('http://localhost/api/approve-all', { method: 'GET' }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(404)
@@ -789,6 +808,7 @@ describe('approval routing', () => {
     const response = await handleHttpRequest(
       createContext(tests),
       new Request('http://localhost/api/approve-all', { method: 'POST' }),
+      createStubRunController(),
     )
 
     expect(response.status).toBe(200)
@@ -853,24 +873,40 @@ describe('GET /baseline', () => {
       },
     }
 
-    const res = await handleHttpRequest(createContext(tests), new Request('http://localhost/baseline/test-1/0/header'))
+    const res = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/baseline/test-1/0/header'),
+      createStubRunController(),
+    )
 
     expect(res.status).toBe(200)
     expect(await res.text()).toBe('baseline image')
   })
 
   test('returns 404 when the test is unknown', async () => {
-    const res = await handleHttpRequest(createContext({}), new Request('http://localhost/baseline/missing/0/header'))
+    const res = await handleHttpRequest(
+      createContext({}),
+      new Request('http://localhost/baseline/missing/0/header'),
+      createStubRunController(),
+    )
     expect(res.status).toBe(404)
   })
 
   test('returns 404 for malformed percent-encoding in the visual name', async () => {
-    const res = await handleHttpRequest(createContext({}), new Request('http://localhost/baseline/test-1/0/%GG'))
+    const res = await handleHttpRequest(
+      createContext({}),
+      new Request('http://localhost/baseline/test-1/0/%GG'),
+      createStubRunController(),
+    )
     expect(res.status).toBe(404)
   })
 
   test('returns 404 for a non-numeric retry segment', async () => {
-    const res = await handleHttpRequest(createContext({}), new Request('http://localhost/baseline/test-1/abc/header'))
+    const res = await handleHttpRequest(
+      createContext({}),
+      new Request('http://localhost/baseline/test-1/abc/header'),
+      createStubRunController(),
+    )
     expect(res.status).toBe(404)
   })
 
@@ -906,7 +942,11 @@ describe('GET /baseline', () => {
       },
     }
 
-    const res = await handleHttpRequest(createContext(tests), new Request('http://localhost/baseline/test-1/0/'))
+    const res = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/baseline/test-1/0/'),
+      createStubRunController(),
+    )
     expect(res.status).toBe(404)
   })
 
@@ -943,7 +983,11 @@ describe('GET /baseline', () => {
     }
 
     // Double slash => empty retry segment. Must be rejected, not treated as retry 0.
-    const res = await handleHttpRequest(createContext(tests), new Request('http://localhost/baseline/test-1//header'))
+    const res = await handleHttpRequest(
+      createContext(tests),
+      new Request('http://localhost/baseline/test-1//header'),
+      createStubRunController(),
+    )
     expect(res.status).toBe(404)
   })
 })
@@ -959,6 +1003,7 @@ describe('GET /file', () => {
     const res = await handleHttpRequest(
       ctx,
       new Request(`http://localhost/file/${encodeURIComponent(join(ROOT, 'a.png'))}`),
+      createStubRunController(),
     )
 
     expect(res.status).toBe(200)
@@ -973,6 +1018,7 @@ describe('GET /file', () => {
     const res = await handleHttpRequest(
       ctx,
       new Request(`http://localhost/file/${encodeURIComponent(join(TMP_DIR, 'secret.png'))}`),
+      createStubRunController(),
     )
 
     expect(res.status).toBe(404)
@@ -985,6 +1031,7 @@ describe('GET /file', () => {
     const res = await handleHttpRequest(
       ctx,
       new Request(`http://localhost/file/${encodeURIComponent(join(ROOT, 'does-not-exist.png'))}`),
+      createStubRunController(),
     )
 
     expect(res.status).toBe(404)
@@ -999,7 +1046,11 @@ describe('GET /file', () => {
     await symlink(join(TMP_DIR, 'outside-secret.png'), symlinkPath)
     const ctx = { ...createContext({}), artifactRoots: [ROOT] }
 
-    const res = await handleHttpRequest(ctx, new Request(`http://localhost/file/${encodeURIComponent(symlinkPath)}`))
+    const res = await handleHttpRequest(
+      ctx,
+      new Request(`http://localhost/file/${encodeURIComponent(symlinkPath)}`),
+      createStubRunController(),
+    )
 
     expect(res.status).toBe(404)
   })
@@ -1013,6 +1064,7 @@ describe('GET /file', () => {
     const res = await handleHttpRequest(
       ctx,
       new Request(`http://localhost/file/${encodeURIComponent(join(root, 'h.png'))}`),
+      createStubRunController(),
     )
 
     expect(res.status).toBe(200)
@@ -1024,7 +1076,11 @@ describe('GET /file', () => {
     const ctx = { ...createContext({}), artifactRoots: [TMP_DIR] }
 
     using warnSpy = spyOn(console, 'warn')
-    const res = await handleHttpRequest(ctx, new Request(`http://localhost/file/${encodeURIComponent(foreignAbs)}`))
+    const res = await handleHttpRequest(
+      ctx,
+      new Request(`http://localhost/file/${encodeURIComponent(foreignAbs)}`),
+      createStubRunController(),
+    )
 
     expect(res.status).toBe(404)
     expect(warnSpy).toHaveBeenCalledTimes(1)
@@ -1037,7 +1093,11 @@ describe('GET /file', () => {
     const ctx = { ...createContext({}), artifactRoots: [TMP_DIR] }
 
     using warnSpy = spyOn(console, 'warn')
-    const res = await handleHttpRequest(ctx, new Request(`http://localhost/file/${encodeURIComponent(sameOsMissing)}`))
+    const res = await handleHttpRequest(
+      ctx,
+      new Request(`http://localhost/file/${encodeURIComponent(sameOsMissing)}`),
+      createStubRunController(),
+    )
 
     expect(res.status).toBe(404)
     expect(warnSpy).not.toHaveBeenCalled()

@@ -32,6 +32,7 @@ function createContext(): { ctx: HandlerContext; clients: Set<MockWebSocket> } {
       staticDir: './dist',
       saveReport: async (): Promise<void> => {},
     },
+    runController: null as unknown as HandlerContext['runController'],
   }
   return { ctx, clients }
 }

@@ -26,7 +26,10 @@ import {
   handleRegister,
   type HandlerContext,
 } from './handlers.ts'
+import { createRoutesContext } from './routes-context.ts'
 import { handleHttpRequest, type RoutesContext } from './routes.ts'
+import { RunController, createRealSpawn, createRealTimers, type RunContext } from './run-controller.ts'
+import { broadcastToBrowsers } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
 const MAX_CONCURRENT_FILE_OPS = 5
@@ -235,31 +238,24 @@ async function resolveReportPath(reportPath: string): Promise<{ reportFile: stri
   return { reportFile: reportPath, offlineReportDir: dirname(reportPath) }
 }
 
-function createRoutesContext(
+function createServerRunController(
+  routesContext: RoutesContext,
+  wsClients: Set<RuntimeWebSocket>,
   reportData: ReportData,
-  staticDir: string,
-  saveReport: () => Promise<void>,
-  options: ServerOptions,
-): RoutesContext {
-  // Artifact directories only — NOT the test source tree. Failure artifacts come from
-  // outputDir; baselines are served via the /baseline route, not this allowlist.
-  const artifactRoots = [reportData.screenshotDir, options.outputDir, options.playwrightSnapshotDir].filter(
-    (root): root is string => root !== undefined && root !== '',
-  )
-
-  return {
-    reportData,
-    staticDir,
-    saveReport,
-    artifactRoots,
-    approvalRouting: {
-      configDir: options.configDir ?? process.cwd(),
-      playwrightTestDir: options.playwrightTestDir,
-      playwrightSnapshotDir: options.playwrightSnapshotDir,
-      playwrightSnapshotPathTemplate: options.playwrightSnapshotPathTemplate,
-      playwrightToHaveScreenshotPathTemplate: options.playwrightToHaveScreenshotPathTemplate,
+  port: number,
+): RunController {
+  return new RunController({
+    getRunContext: (): RunContext | null => routesContext.runContext ?? null,
+    port,
+    broadcast: (message): void => {
+      broadcastToBrowsers(wsClients, message)
     },
-  }
+    setReportRunning: (running): void => {
+      reportData.isRunning = running
+    },
+    spawn: createRealSpawn(),
+    timers: createRealTimers(),
+  })
 }
 
 export async function createServerApp(options: ServerOptions = {}): Promise<ServerApp> {
@@ -271,11 +267,12 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const wsClients = new Set<RuntimeWebSocket>()
   const currentRunIds = new Set<string>()
 
-  async function saveReport(): Promise<void> {
-    await writeJsonFile(reportFile, reportData)
-  }
+  const saveReport = (): Promise<void> => writeJsonFile(reportFile, reportData)
 
   const routesContext = createRoutesContext(reportData, staticDir, saveReport, options)
+
+  const runController = createServerRunController(routesContext, wsClients, reportData, port)
+
   const getHandlerContext = (): HandlerContext => ({
     reportData,
     wsClients,
@@ -283,8 +280,9 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
     saveReport,
     approvalRouting: routesContext.approvalRouting,
     routesContext,
+    runController,
   })
-  const handleRequest = (req: Request): Promise<Response> => handleHttpRequest(routesContext, req)
+  const handleRequest = (req: Request): Promise<Response> => handleHttpRequest(routesContext, req, runController)
   const handleWebSocketMessage = createWebSocketMessageHandler(getHandlerContext)
 
   await loadReport(reportFile, reportData)
@@ -293,7 +291,9 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   return {
     port,
     wsClients,
-    close: () => {},
+    close: (): void => {
+      runController.dispose()
+    },
     handleRequest,
     handleWebSocketMessage,
   }
