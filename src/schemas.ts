@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export * from './schemas/http.ts'
+
 // Location schema
 export const LocationSchema = z.object({
   file: z.string(),
@@ -148,6 +150,12 @@ export const WebSocketMessageSchema = z.discriminatedUnion('type', [
     }),
   }),
   z.object({ type: z.literal('approve'), data: z.unknown() }),
+  z.object({
+    type: z.literal('run-status'),
+    data: z.object({
+      running: z.boolean(),
+    }),
+  }),
 ])
 
 export type WebSocketMessage = z.infer<typeof WebSocketMessageSchema>
@@ -192,6 +200,8 @@ export const RegisterDataSchema = z.object({
   playwrightTestDir: z.string().optional(),
   playwrightSnapshotPathTemplate: z.string().optional(),
   playwrightToHaveScreenshotPathTemplate: z.string().optional(),
+  configFile: z.string().optional(),
+  cwd: z.string().optional(),
 })
 export type RegisterData = z.infer<typeof RegisterDataSchema>
 
@@ -234,19 +244,12 @@ export const OfflineReportSchema = z.object({
 
 export type OfflineReport = z.infer<typeof OfflineReportSchema>
 
-// Approve request body schema
-export const ApproveRequestBodySchema = z.object({
-  id: z.string(),
-  retry: z.number(),
-  image: z.string(),
-})
-
-export type ApproveRequestBody = z.infer<typeof ApproveRequestBodySchema>
-
 // Report API response schema
 export const ReportApiResponseSchema = z.object({
   tests: z.record(z.string(), TestDataSchema),
   isUpdateMode: z.boolean().optional(),
+  isRunning: z.boolean().optional(),
+  runEnabled: z.boolean().optional(),
 })
 
 export type ReportApiResponse = z.infer<typeof ReportApiResponseSchema>
@@ -258,6 +261,8 @@ export const ClientBootstrapDataSchema = z.object({
   liveUpdates: z.boolean(),
   approvalEnabled: z.boolean(),
   approvalMessage: z.string().optional(),
+  runEnabled: z.boolean().optional(),
+  isRunning: z.boolean().optional(),
 })
 
 export type ClientBootstrapData = z.infer<typeof ClientBootstrapDataSchema>
