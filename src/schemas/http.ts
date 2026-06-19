@@ -16,7 +16,7 @@ export const RunRequestBodySchema = z.object({
 
 export type RunRequestBody = z.infer<typeof RunRequestBodySchema>
 
-export const RunResponseSchema = z.union([
+export const RunResponseSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true) }),
   z.object({
     ok: z.literal(false),
@@ -26,7 +26,7 @@ export const RunResponseSchema = z.union([
 
 export type RunResponse = z.infer<typeof RunResponseSchema>
 
-export const StopResponseSchema = z.union([
+export const StopResponseSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true) }),
   z.object({
     ok: z.literal(false),
