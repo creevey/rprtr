@@ -23,6 +23,7 @@
     onToggle: (path: string[], checked: boolean) => void;
     onStart: () => void;
     onStop: () => void;
+    onRun: (item: CrvyRprtrSuite | CrvyRprtrTest) => void;
     onApprove: () => void;
     onNext: () => void;
     onApproveAll: () => void;
@@ -30,7 +31,7 @@
 
   let {
     tests, selectedId, focusedPath, isReport, isRunning, isUpdateMode, approvalEnabled, approvalMessage, runEnabled, runMessage, filter, canApprove,
-    onFilterChange, onSelect, onOpen, onToggle, onStart, onStop, onApprove, onNext, onApproveAll
+    onFilterChange, onSelect, onOpen, onToggle, onStart, onStop, onRun, onApprove, onNext, onApproveAll
   }: Props = $props();
 
   let filterInput = $state('');
@@ -160,9 +161,12 @@
         {selectedId}
         {focusedPath}
         {isUpdateMode}
+        {runEnabled}
+        {isRunning}
         {onSelect}
         {onOpen}
         {onToggle}
+        {onRun}
       />
     {/each}
     {#if visibleChildren.length === 0}

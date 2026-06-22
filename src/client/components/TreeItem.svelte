@@ -10,12 +10,15 @@
     selectedId?: string;
     focusedPath: string[] | null;
     isUpdateMode: boolean;
+    runEnabled: boolean;
+    isRunning: boolean;
     onSelect: (test: CrvyRprtrTest) => void;
     onOpen: (path: string[], opened: boolean) => void;
     onToggle: (path: string[], checked: boolean) => void;
+    onRun: (item: CrvyRprtrSuite | CrvyRprtrTest) => void;
   }
 
-  let { item, level, selectedId, focusedPath, isUpdateMode, onSelect, onOpen, onToggle }: Props = $props();
+  let { item, level, selectedId, focusedPath, isUpdateMode, runEnabled, isRunning, onSelect, onOpen, onToggle, onRun }: Props = $props();
 
   let itemIsTest = $derived(isTest(item));
   let suiteItem = $derived(item as CrvyRprtrSuite);
@@ -47,7 +50,7 @@
 <div
   bind:this={rowEl}
   class={cn(
-    'flex items-center py-1 cursor-pointer transition-colors select-none gap-1 hover:bg-surface-hover',
+    'group flex items-center py-1 cursor-pointer transition-colors select-none gap-1 hover:bg-surface-hover',
     isSelected && 'bg-surface-selected',
     isFocused && 'outline outline-1 outline-accent -outline-offset-1',
   )}
@@ -65,6 +68,15 @@
   <span class="flex-1 text-ui whitespace-nowrap overflow-hidden text-ellipsis">
     {itemIsTest ? (testItem.browser ?? testItem.title) : suiteItem.path[suiteItem.path.length - 1] ?? 'Tests'}
   </span>
+  {#if runEnabled && !isRunning}
+    <button
+      class="opacity-0 group-hover:opacity-100 focus:opacity-100 size-5 flex items-center justify-center text-success text-[10px] hover:bg-surface-hover rounded transition-opacity focus-visible:ring-2 focus-visible:ring-accent"
+      aria-label="Run {itemIsTest ? 'this test' : 'this suite'}"
+      title="Run {itemIsTest ? 'this test' : 'this suite'}"
+      onclick={(e) => { e.stopPropagation(); onRun(item); }}
+      onkeydown={(e) => e.stopPropagation()}
+    >&#9654;</button>
+  {/if}
   {#if item.status}
     <span class={cn('size-2 rounded-full inline-block shrink-0', statusDotClass(item.status))}></span>
   {/if}
@@ -78,9 +90,12 @@
       {selectedId}
       {focusedPath}
       {isUpdateMode}
+      {runEnabled}
+      {isRunning}
       {onSelect}
       {onOpen}
       {onToggle}
+      {onRun}
     />
   {/each}
 {/if}

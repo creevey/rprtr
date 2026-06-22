@@ -29,6 +29,11 @@
   import ResultsPage from './components/ResultsPage.svelte';
   import Toggle from './components/Toggle.svelte';
 
+  interface RunFilters {
+    files?: string[];
+    project?: string;
+  }
+
   interface Props {
     initialTests: CrvyRprtrSuite;
     isReport: boolean;
@@ -280,11 +285,11 @@
     recalcAllSuiteStatuses(tests);
   }
 
-  async function handleStart(): Promise<void> {
+  async function handleStart(filters?: RunFilters): Promise<void> {
     const res = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(filters ?? {}),
     });
     if (res.status === 409) {
       const body = (await res.json().catch(() => null)) as { reason?: string } | null;
@@ -292,6 +297,27 @@
         body?.reason === 'already-running'
           ? 'A run is already in progress'
           : 'Connect a Playwright reporter to enable running';
+    }
+  }
+
+  function handleRunItem(item: CrvyRprtrSuite | CrvyRprtrTest): void {
+    if (isTest(item)) {
+      const file = item.location?.file;
+      const line = item.location?.line;
+      if (file !== undefined && line !== undefined) {
+        handleStart({ files: [`${file}:${line}`] });
+      }
+      return;
+    }
+    const locations = getAllTests(item)
+      .map((t) => {
+        const file = t.location?.file;
+        const line = t.location?.line;
+        return file !== undefined && line !== undefined ? `${file}:${line}` : null;
+      })
+      .filter((loc): loc is string => loc !== null);
+    if (locations.length > 0) {
+      handleStart({ files: locations });
     }
   }
 
@@ -404,6 +430,7 @@
     onToggle={handleSuiteToggle}
     onStart={handleStart}
     onStop={handleStop}
+    onRun={handleRunItem}
     onApprove={handleApproveAndGoNext}
     onNext={handleGoToNextFailed}
     onApproveAll={handleApproveAllTests}
