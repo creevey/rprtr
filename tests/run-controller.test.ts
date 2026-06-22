@@ -42,7 +42,10 @@ interface Fixture {
   setRunContext: (ctx: RunContext | null) => void
 }
 
-function createFixture(initialCtx: RunContext | null = null): Fixture {
+function createFixture(
+  initialCtx: RunContext | null = null,
+  resolveReporter?: (cwd: string) => string | null,
+): Fixture {
   let runCtx: RunContext | null = initialCtx
   const broadcasts: ClientWebSocketMessage[] = []
   const runningFlag = { value: false }
@@ -74,6 +77,7 @@ function createFixture(initialCtx: RunContext | null = null): Fixture {
         if (i >= 0) pendingTimers.splice(i, 1)
       },
     },
+    resolveReporter,
   }
   const controller = new RunController(deps)
   return {
@@ -116,10 +120,32 @@ describe('RunController.start', () => {
     expect(cmd).toBe('npx')
     expect(args).toEqual(['playwright', 'test', '--config', '/proj/playwright.config.ts'])
     expect(opts.cwd).toBe('/proj')
-    expect((opts.env as Record<string, string>).CRVY_RPRTR_SERVER_URL).toBe('ws://localhost:3000')
+    const env = opts.env as Record<string, string | undefined>
+    expect(env.CRVY_RPRTR_SERVER_URL).toBe('ws://localhost:3000')
+    expect(env.CI).toBeUndefined()
+    expect(env.PLAYWRIGHT_HTML_OPEN).toBe('never')
     expect(f.runningFlag.value).toBe(true)
     expect(f.broadcasts).toEqual([{ type: 'run-status', data: { running: true } }])
     expect(f.controller.isRunning).toBe(true)
+  })
+
+  test('adds --reporter when resolveReporter returns a path', () => {
+    const f = createFixture(SAMPLE_CTX, () => '/abs/path/to/reporter.js')
+    f.controller.start({})
+    expect(f.spawnCalls[0]!.args).toEqual([
+      'playwright',
+      'test',
+      '--config',
+      '/proj/playwright.config.ts',
+      '--reporter',
+      '/abs/path/to/reporter.js',
+    ])
+  })
+
+  test('omits --reporter when resolveReporter returns null', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.controller.start({})
+    expect(f.spawnCalls[0]!.args).toEqual(['playwright', 'test', '--config', '/proj/playwright.config.ts'])
   })
 
   test('refuses when already running', () => {

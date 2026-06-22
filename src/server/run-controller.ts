@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
 
 import type { ClientWebSocketMessage } from '../types.ts'
 
@@ -36,6 +38,7 @@ export interface RunControllerDeps {
     setTimeout: (fn: () => void, ms?: number) => unknown
     clearTimeout: (handle: unknown) => void
   }
+  resolveReporter?: (cwd: string) => string | null
 }
 
 const STOP_GRACE_MS = 5000
@@ -49,11 +52,32 @@ function resolveBin(_cwd: string): { cmd: string; argsPrefix: string[] } {
   return { cmd: 'npx', argsPrefix: ['playwright'] }
 }
 
-function toArgs(filters: RunFilters, configFile: string): string[] {
+function toArgs(filters: RunFilters, configFile: string, reporterModule: string | null): string[] {
   const args = ['test', '--config', configFile]
+  if (reporterModule !== null) args.push('--reporter', reporterModule)
   if (filters.project !== undefined) args.push('--project', filters.project)
   if (filters.files !== undefined) args.push(...filters.files)
   return args
+}
+
+function resolveReporterModule(cwd: string): string | null {
+  try {
+    const req = createRequire(join(cwd, 'package.json'))
+    return req.resolve('@crvy/rprtr')
+  } catch {
+    return null
+  }
+}
+
+function buildSpawnEnv(port: number): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key === 'CI') continue
+    env[key] = value
+  }
+  env.CRVY_RPRTR_SERVER_URL = `ws://localhost:${port}`
+  env.PLAYWRIGHT_HTML_OPEN = 'never'
+  return env
 }
 
 export class RunController {
@@ -71,11 +95,13 @@ export class RunController {
     if (ctx === null) return { ok: false, reason: 'no-config' }
     if (this.child !== null) return { ok: false, reason: 'already-running' }
 
+    const resolveReporter = this.deps.resolveReporter ?? resolveReporterModule
+    const reporterModule = resolveReporter(ctx.cwd)
     const { cmd, argsPrefix } = resolveBin(ctx.cwd)
-    const args = [...argsPrefix, ...toArgs(filters, ctx.configFile)]
+    const args = [...argsPrefix, ...toArgs(filters, ctx.configFile, reporterModule)]
     const child = this.deps.spawn(cmd, args, {
       cwd: ctx.cwd,
-      env: { ...process.env, CRVY_RPRTR_SERVER_URL: `ws://localhost:${this.deps.port}` },
+      env: buildSpawnEnv(this.deps.port),
       stdio: 'inherit',
     })
     this.child = child
