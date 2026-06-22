@@ -1,7 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
 
 const isPlaywright = (): boolean =>
-  process.env.PLAYWRIGHT_WORKER_INDEX !== undefined || process.env.PW_TEST !== undefined
+  process.env.PLAYWRIGHT_WORKER_INDEX !== undefined ||
+  process.env.PW_TEST !== undefined ||
+  process.env.PLAYWRIGHT_TEST !== undefined
 
 if (isPlaywright()) {
   const BASE = 'http://localhost:3001/tests/e2e/ui-controls.html'

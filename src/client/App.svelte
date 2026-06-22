@@ -20,6 +20,7 @@
     recalcAllSuiteStatuses,
     syncTreeState,
     collectTestsById,
+    markTestsPending,
     type CrvyRprtrViewFilter,
   } from './helpers';  
   import type { ClientWebSocketMessage, TestData } from '../types';
@@ -286,6 +287,10 @@
   }
 
   async function handleStart(filters?: RunFilters): Promise<void> {
+    if (!filters || (!filters.files && !filters.project)) {
+      markTestsPending(tests);
+      recalcAllSuiteStatuses(tests);
+    }
     const res = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,11 +306,16 @@
   }
 
   function handleRunItem(item: CrvyRprtrSuite | CrvyRprtrTest): void {
+    markTestsPending(item);
+    recalcAllSuiteStatuses(tests);
+
     if (isTest(item)) {
       const file = item.location?.file;
       const line = item.location?.line;
+      const column = item.location?.column;
       if (file !== undefined && line !== undefined) {
-        handleStart({ files: [`${file}:${line}`] });
+        const loc = column === undefined ? `${file}:${line}` : `${file}:${line}:${column}`;
+        handleStart({ files: [loc], project: item.projectName || undefined });
       }
       return;
     }
@@ -313,7 +323,9 @@
       .map((t) => {
         const file = t.location?.file;
         const line = t.location?.line;
-        return file !== undefined && line !== undefined ? `${file}:${line}` : null;
+        const column = t.location?.column;
+        if (file === undefined || line === undefined) return null;
+        return column === undefined ? `${file}:${line}` : `${file}:${line}:${column}`;
       })
       .filter((loc): loc is string => loc !== null);
     if (locations.length > 0) {

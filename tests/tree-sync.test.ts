@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { collectTestsById, syncTreeState, treeifyTests } from '../src/client/helpers'
+import { collectTestsById, markTestsPending, syncTreeState, treeifyTests } from '../src/client/helpers'
 import type { CrvyRprtrSuite, TestData } from '../src/types'
 
 function makeTest(overrides: Partial<TestData> = {}): TestData {
@@ -220,5 +220,30 @@ describe('collectTestsById', () => {
 
     syncTreeState(tree, { 'test-1': makeTest({ id: 'test-1', status: 'failed' }) })
     expect(collectTestsById(tree)['test-1']?.status).toBe('failed')
+  })
+})
+
+describe('markTestsPending', () => {
+  test('sets all tests in a suite tree to pending', () => {
+    const tree = treeifyTests({
+      'test-1': makeTest({ id: 'test-1', status: 'success' }),
+      'test-2': makeTest({ id: 'test-2', status: 'failed', browser: 'firefox' }),
+    })
+
+    markTestsPending(tree)
+
+    expect(collectTestsById(tree)['test-1']?.status).toBe('pending')
+    expect(collectTestsById(tree)['test-2']?.status).toBe('pending')
+  })
+
+  test('sets a single test to pending', () => {
+    const tree = treeifyTests({
+      'test-1': makeTest({ id: 'test-1', status: 'success' }),
+    })
+    const found = findTest(tree, 'test-1')
+    expect(found).not.toBeNull()
+
+    markTestsPending(found!.test)
+    expect(found!.test.status).toBe('pending')
   })
 })

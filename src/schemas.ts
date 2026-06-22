@@ -6,6 +6,7 @@ export * from './schemas/http.ts'
 export const LocationSchema = z.object({
   file: z.string(),
   line: z.number(),
+  column: z.number().optional(),
 })
 
 export type Location = z.infer<typeof LocationSchema>

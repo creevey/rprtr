@@ -168,7 +168,7 @@ export class CrvyRprtr implements Reporter {
         titlePath: this.describeTitlePath(test),
         browser: this.resolveBrowserLabel(project),
         projectName: project?.name ?? '',
-        location: { file: test.location.file, line: test.location.line },
+        location: { file: test.location.file, line: test.location.line, column: test.location.column },
       },
     })
   }

@@ -182,6 +182,14 @@ export function recalcAllSuiteStatuses(suite: CrvyRprtrSuite): void {
     .reduce(calcStatus)
 }
 
+export function markTestsPending(node: CrvyRprtrSuite | CrvyRprtrTest): void {
+  if (isTest(node)) {
+    node.status = 'pending'
+    return
+  }
+  getChildrenArray(node.children).forEach(markTestsPending)
+}
+
 export function removeTests(suite: CrvyRprtrSuite, path: string[]): void {
   const title = path.shift()
   if (title === undefined) return

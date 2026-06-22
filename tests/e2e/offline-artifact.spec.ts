@@ -6,7 +6,9 @@ import { pathToFileURL } from 'url'
 import { expect, test } from '@playwright/test'
 
 const isPlaywright = (): boolean =>
-  process.env.PLAYWRIGHT_WORKER_INDEX !== undefined || process.env.PW_TEST !== undefined
+  process.env.PLAYWRIGHT_WORKER_INDEX !== undefined ||
+  process.env.PW_TEST !== undefined ||
+  process.env.PLAYWRIGHT_TEST !== undefined
 
 if (isPlaywright()) {
   const TINY_PNG = Buffer.from(

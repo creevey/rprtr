@@ -186,6 +186,20 @@ describe('RunController.start', () => {
       'chromium',
     ])
   })
+
+  test('passes both files and project together', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({ files: ['tests/foo.spec.ts:42:11'], project: 'chromium' })
+    expect(f.spawnCalls[0]!.args).toEqual([
+      'playwright',
+      'test',
+      '--config',
+      '/proj/playwright.config.ts',
+      '--project',
+      'chromium',
+      'tests/foo.spec.ts:42:11',
+    ])
+  })
 })
 
 describe('RunController.start run scope signaling', () => {

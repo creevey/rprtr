@@ -31,6 +31,7 @@ export {
   updateTestStatus,
   recalcSuiteStatuses,
   recalcAllSuiteStatuses,
+  markTestsPending,
   removeTests,
 } from './helpers/suite'
 

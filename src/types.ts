@@ -22,6 +22,7 @@ export interface Attachment {
 export interface Location {
   file: string
   line: number
+  column?: number
 }
 
 export type TestStatus = 'unknown' | 'pending' | 'running' | 'failed' | 'approved' | 'success' | 'retrying'

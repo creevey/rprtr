@@ -80,8 +80,11 @@ const patchedFiles = await Promise.all(
 )
 await Promise.all(patchedFiles.map(({ file, content }) => Bun.write(file, content)))
 
-// Generate .d.ts files via tsc
-const tsc = Bun.spawn(['bunx', 'tsc', '--project', 'tsconfig.build.json'], {
+// Generate .d.ts files via tsc.
+// Run the tsc.js entry directly under the current runtime instead of `bunx tsc`:
+// `bunx` does not exit after tsc completes (hangs even on `bunx tsc --version`),
+// which deadlocks `await tsc.exited`. Invoking the tsc binary directly avoids the wrapper.
+const tsc = Bun.spawn([process.execPath, 'node_modules/typescript/bin/tsc', '--project', 'tsconfig.build.json'], {
   stdout: 'inherit',
   stderr: 'inherit',
 })
