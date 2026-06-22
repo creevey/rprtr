@@ -19,6 +19,9 @@ export interface HandlerContext {
   }
   wsClients: Set<RuntimeWebSocket>
   currentRunIds: Set<string>
+  // True when the in-progress run was started with a filter (a subset of tests),
+  // so run-end must NOT cull tests that were not part of this run.
+  isFilteredRun: boolean
   saveReport: () => Promise<void>
   approvalRouting?: ApprovalRouting
   routesContext: RoutesContext
@@ -78,8 +81,10 @@ export async function handleRunEnd(
   ctx: HandlerContext,
   data: { status: 'passed' | 'failed' | 'skipped' },
 ): Promise<void> {
-  const removedTestIds = Object.keys(ctx.reportData.tests).filter((id) => !ctx.currentRunIds.has(id))
-  const { passed, failed, pending } = finalizeRunEvent(ctx)
+  const removedTestIds = ctx.isFilteredRun
+    ? []
+    : Object.keys(ctx.reportData.tests).filter((id) => !ctx.currentRunIds.has(id))
+  const { passed, failed, pending } = finalizeRunEvent(ctx, { preserveNonCurrent: ctx.isFilteredRun })
   await ctx.saveReport()
   console.log(`\nRun complete — ${passed} passed, ${failed} failed, ${pending} skipped`)
   const message: ClientWebSocketMessage = {

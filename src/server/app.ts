@@ -1,9 +1,7 @@
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
-import pLimit from 'p-limit'
-
-import { findOfflineReportPaths, mergeOfflineReportsIntoTests, parseOfflineReport } from '../offline-reports.ts'
+import { loadOfflineReports } from '../offline-reports.ts'
 import {
   IncomingWebSocketMessageSchema,
   LoadedReportDataSchema,
@@ -13,7 +11,6 @@ import {
   TestEndDataSchema,
   safeParse,
   type IncomingWebSocketMessage,
-  type OfflineReport,
 } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { fileExists, isDirectory, readJsonFile, writeJsonFile } from './file-utils.ts'
@@ -26,13 +23,12 @@ import {
   handleRegister,
   type HandlerContext,
 } from './handlers.ts'
+import { resolvePlaywrightConfig } from './playwright-config.ts'
 import { createRoutesContext } from './routes-context.ts'
 import { handleHttpRequest, type RoutesContext } from './routes.ts'
 import { RunController, createRealSpawn, createRealTimers, type RunContext } from './run-controller.ts'
 import { broadcastToBrowsers } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
-
-const MAX_CONCURRENT_FILE_OPS = 5
 
 export interface ServerOptions {
   port?: number
@@ -40,6 +36,12 @@ export interface ServerOptions {
   reportPath?: string
   /** Absolute path to the built web UI assets directory, or its parent directory */
   staticDir?: string
+  /**
+   * Playwright config path used to seed run support before any reporter
+   * registers. When omitted, the server discovers `playwright.config.*` in the
+   * working directory. A registering reporter always overrides this.
+   */
+  playwrightConfig?: string
   configDir?: string
   /**
    * Playwright's outputDir (test-results), where failure artifacts are written. Used as a root in
@@ -95,44 +97,6 @@ async function loadReport(reportPath: string, reportData: ReportData): Promise<v
   } catch {
     console.log('No report.json found, using empty state')
   }
-}
-
-async function readOfflineReport(filePath: string): Promise<OfflineReport | null> {
-  try {
-    const raw = await readJsonFile(filePath)
-    if (raw === null) {
-      return null
-    }
-
-    const parsed = parseOfflineReport(raw)
-    if (parsed !== null) {
-      console.log(`[Server] Loading offline report: ${filePath}`)
-      return parsed
-    }
-  } catch {
-    // Skip invalid files
-  }
-
-  return null
-}
-
-async function loadOfflineReports(offlineReportDir: string, reportData: ReportData): Promise<void> {
-  const offlineReportPaths = await findOfflineReportPaths(offlineReportDir)
-  if (offlineReportPaths.length === 0) {
-    return
-  }
-
-  const limit = pLimit(MAX_CONCURRENT_FILE_OPS)
-  const reports = await Promise.all(offlineReportPaths.map((filePath) => limit(() => readOfflineReport(filePath))))
-  const validReports = reports.filter((report): report is OfflineReport => report !== null)
-  if (validReports.length === 0) {
-    return
-  }
-
-  reportData.tests = mergeOfflineReportsIntoTests(reportData.tests, validReports, {
-    screenshotDir: reportData.screenshotDir,
-    screenshotsBaseUrl: '/screenshots/',
-  })
 }
 
 async function handleParsedWebSocketMessage(ctx: HandlerContext, msg: IncomingWebSocketMessage): Promise<void> {
@@ -238,11 +202,22 @@ async function resolveReportPath(reportPath: string): Promise<{ reportFile: stri
   return { reportFile: reportPath, offlineReportDir: dirname(reportPath) }
 }
 
+async function seedRunContext(routesContext: RoutesContext, options: ServerOptions): Promise<void> {
+  if (routesContext.runContext !== undefined) {
+    return
+  }
+  const configFile = options.playwrightConfig ?? (await resolvePlaywrightConfig(process.cwd()))
+  if (configFile !== null) {
+    routesContext.runContext = { configFile, cwd: process.cwd() }
+  }
+}
+
 function createServerRunController(
   routesContext: RoutesContext,
   wsClients: Set<RuntimeWebSocket>,
   reportData: ReportData,
   port: number,
+  setRunFiltered: (filtered: boolean) => void,
 ): RunController {
   return new RunController({
     getRunContext: (): RunContext | null => routesContext.runContext ?? null,
@@ -253,6 +228,7 @@ function createServerRunController(
     setReportRunning: (running): void => {
       reportData.isRunning = running
     },
+    setRunFiltered,
     spawn: createRealSpawn(),
     timers: createRealTimers(),
   })
@@ -271,12 +247,19 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
 
   const routesContext = createRoutesContext(reportData, staticDir, saveReport, options)
 
-  const runController = createServerRunController(routesContext, wsClients, reportData, port)
+  // Seed runContext so the UI can trigger runs before any reporter registers.
+  await seedRunContext(routesContext, options)
+
+  let isFilteredRun = false
+  const runController = createServerRunController(routesContext, wsClients, reportData, port, (filtered) => {
+    isFilteredRun = filtered
+  })
 
   const getHandlerContext = (): HandlerContext => ({
     reportData,
     wsClients,
     currentRunIds,
+    isFilteredRun,
     saveReport,
     approvalRouting: routesContext.approvalRouting,
     routesContext,
@@ -286,7 +269,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const handleWebSocketMessage = createWebSocketMessageHandler(getHandlerContext)
 
   await loadReport(reportFile, reportData)
-  await loadOfflineReports(offlineReportDir, reportData)
+  await loadOfflineReports(reportData, offlineReportDir)
 
   return {
     port,

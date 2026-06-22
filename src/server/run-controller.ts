@@ -33,6 +33,8 @@ export interface RunControllerDeps {
   port: number
   broadcast(message: ClientWebSocketMessage): void
   setReportRunning(running: boolean): void
+  /** Records whether the in-progress run is filtered, so run-end can preserve unrelated tests. */
+  setRunFiltered?(filtered: boolean): void
   spawn: SpawnLike
   timers: {
     setTimeout: (fn: () => void, ms?: number) => unknown
@@ -112,6 +114,7 @@ export class RunController {
       this.handleChildExit(null)
     })
     this.deps.setReportRunning(true)
+    this.deps.setRunFiltered?.(filters.files !== undefined || filters.project !== undefined)
     this.deps.broadcast({ type: 'run-status', data: { running: true } })
     return { ok: true }
   }

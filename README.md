@@ -79,8 +79,9 @@ Explicit flags override the paths derived from `artifact-dir`.
 | `--port`           | `-p`  | `3000`          | Server port                                                                               |
 | `--screenshot-dir` | `-s`  | `./screenshots` | Screenshot directory path                                                                 |
 | `--report-path`    | `-r`  | `./report.json` | Report JSON file path or directory containing `report.json` and `crvy-rprtr-*.json` files |
+| `--config`         | `-c`  | auto-detect     | Playwright config path used to enable the run buttons at startup. When omitted, the server discovers `playwright.config.*` in the working directory. A registering reporter always overrides this. |
 
-The CLI currently exposes only these flags. Approval-routing resolver overrides are available through the programmatic server API, not additional CLI flags.
+When the server can resolve a Playwright config (via `--config` or auto-discovery, or once a reporter registers), the sidebar shows Start/Stop and per-test run buttons that trigger `playwright test` without leaving the browser. Approval-routing resolver overrides are available through the programmatic server API, not additional CLI flags.
 
 ## How It Works
 

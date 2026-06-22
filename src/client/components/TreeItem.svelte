@@ -68,11 +68,17 @@
   <span class="flex-1 text-ui whitespace-nowrap overflow-hidden text-ellipsis">
     {itemIsTest ? (testItem.browser ?? testItem.title) : suiteItem.path[suiteItem.path.length - 1] ?? 'Tests'}
   </span>
-  {#if runEnabled && !isRunning}
+  {#if runEnabled}
     <button
-      class="opacity-0 group-hover:opacity-100 focus:opacity-100 size-5 flex items-center justify-center text-success text-[10px] hover:bg-surface-hover rounded transition-opacity focus-visible:ring-2 focus-visible:ring-accent"
+      class={cn(
+        'size-5 flex items-center justify-center text-success text-[10px] rounded transition-opacity',
+        isRunning
+          ? 'opacity-0 pointer-events-none'
+          : 'opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent',
+      )}
       aria-label="Run {itemIsTest ? 'this test' : 'this suite'}"
       title="Run {itemIsTest ? 'this test' : 'this suite'}"
+      disabled={isRunning}
       onclick={(e) => { e.stopPropagation(); onRun(item); }}
       onkeydown={(e) => e.stopPropagation()}
     >&#9654;</button>

@@ -1714,4 +1714,14 @@ describe('run endpoints', () => {
     const body = (await res.json()) as { runEnabled: boolean }
     expect(body.runEnabled).toBe(true)
   })
+
+  test('createServerApp seeds runEnabled from an explicit playwrightConfig', async () => {
+    const app = await createServerApp({
+      reportPath: join(TMP_DIR, 'report.json'),
+      playwrightConfig: '/proj/playwright.config.ts',
+    })
+    const res = await app.handleRequest(new Request('http://localhost/api/report'))
+    const body = (await res.json()) as { runEnabled: boolean }
+    expect(body.runEnabled).toBe(true)
+  })
 })

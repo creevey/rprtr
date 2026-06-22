@@ -26,6 +26,7 @@ function createContext(): { ctx: HandlerContext; clients: Set<MockWebSocket> } {
     reportData: state.reportData,
     wsClients: clients as unknown as Set<RuntimeWebSocket>,
     currentRunIds: state.currentRunIds,
+    isFilteredRun: false,
     saveReport: async (): Promise<void> => {},
     routesContext: {
       reportData: state.reportData,
@@ -75,6 +76,39 @@ describe('server broadcast payloads', () => {
     expect(parsed.data.data.id).toBe('test-1')
     expect(parsed.data.data.status).toBe('running')
     expect(parsed.data.data.results).toBeUndefined()
+  })
+
+  test('handleTestBegin flips an existing test back to running on re-run', () => {
+    applyTestBeginEvent(ctx, {
+      id: 'test-1',
+      title: 'renders header',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+    handleTestEnd(ctx, {
+      id: 'test-1',
+      status: 'passed',
+      attachments: [],
+      visualNames: [],
+    })
+    clients.forEach((c) => (c.sent = []))
+
+    handleTestBegin(ctx, {
+      id: 'test-1',
+      title: 'renders header',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+
+    const messages = readMessages(clients)
+    expect(messages).toHaveLength(1)
+    const parsed = WebSocketMessageSchema.safeParse(messages[0])
+    if (!(parsed.success && parsed.data.type === 'test-begin')) {
+      throw new Error('expected test-begin message')
+    }
+    expect(parsed.data.data.status).toBe('running')
   })
 
   test('handleTestEnd broadcasts the resolved test with status, results, and images', () => {
@@ -179,6 +213,37 @@ describe('server broadcast payloads', () => {
     }
     expect(parsed.data.data.removedTestIds).toEqual([])
     expect(ctx.reportData.tests['test-1']).toBeDefined()
+  })
+
+  test('handleRunEnd preserves non-current tests and sends no removedTestIds for a filtered run', async () => {
+    applyTestBeginEvent(ctx, {
+      id: 'test-1',
+      title: 'in this run',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'a.ts', line: 1 },
+    })
+    applyTestBeginEvent(ctx, {
+      id: 'test-2',
+      title: 'from a previous run',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'a.ts', line: 2 },
+    })
+    // test-2 is a leftover that the filtered run did not touch.
+    ctx.currentRunIds.delete('test-2')
+    ctx.isFilteredRun = true
+    clients.forEach((c) => (c.sent = []))
+
+    await handleRunEnd(ctx, { status: 'passed' })
+
+    const parsed = WebSocketMessageSchema.safeParse(readMessages(clients)[0])
+    if (!(parsed.success && parsed.data.type === 'run-end')) {
+      throw new Error('expected run-end message')
+    }
+    expect(parsed.data.data.removedTestIds).toEqual([])
+    expect(ctx.reportData.tests['test-1']).toBeDefined()
+    expect(ctx.reportData.tests['test-2']).toBeDefined()
   })
 
   test('handleSync broadcasts { tests, isUpdateMode } (no full reportData leakage)', () => {

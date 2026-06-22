@@ -26,6 +26,7 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
       'screenshot-dir': { type: 'string', short: 's' },
       'report-path': { type: 'string', short: 'r' },
       'output-dir': { type: 'string', short: 'o' },
+      config: { type: 'string', short: 'c' },
     },
   })
 
@@ -44,6 +45,7 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
     screenshotDir,
     reportPath,
     outputDir: values['output-dir'] ?? DEFAULT_OUTPUT_DIR,
+    playwrightConfig: values.config,
   }
 }
 

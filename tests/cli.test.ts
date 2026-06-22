@@ -70,4 +70,16 @@ describe('resolveCliOptions', () => {
   test('outputDir defaults to ./test-results when omitted', () => {
     expect(resolveCliOptions([]).outputDir).toBe('./test-results')
   })
+
+  test('--config sets playwrightConfig', () => {
+    expect(resolveCliOptions(['--config', './pw.config.ts']).playwrightConfig).toBe('./pw.config.ts')
+  })
+
+  test('-c short flag sets playwrightConfig', () => {
+    expect(resolveCliOptions(['-c', './pw.config.ts']).playwrightConfig).toBe('./pw.config.ts')
+  })
+
+  test('playwrightConfig is undefined when omitted', () => {
+    expect(resolveCliOptions([]).playwrightConfig).toBeUndefined()
+  })
 })

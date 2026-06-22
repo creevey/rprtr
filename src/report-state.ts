@@ -99,7 +99,16 @@ export function createMutableReportState(screenshotDir = './screenshots'): Mutab
 export function applyTestBeginEvent(state: MutableReportState, data: TestBeginData): TestData {
   const { id, title, titlePath, browser, projectName, location } = data
   state.currentRunIds.add(id)
-  state.reportData.tests[id] ??= {
+  const existing = state.reportData.tests[id]
+  if (existing !== undefined) {
+    // A re-run reuses the same id; flip it back to 'running' so the UI shows
+    // the in-progress state instead of the previous run's status. Prior results
+    // stay intact until the new run's test-end arrives.
+    existing.status = 'running'
+    return existing
+  }
+
+  const created: TestData = {
     id,
     titlePath: titlePath ?? [],
     browser: browser ?? '',
@@ -111,8 +120,8 @@ export function applyTestBeginEvent(state: MutableReportState, data: TestBeginDa
     location,
     status: 'running',
   }
-
-  return state.reportData.tests[id]
+  state.reportData.tests[id] = created
+  return created
 }
 
 export function applyTestEndEvent(
@@ -162,11 +171,18 @@ export function applyTestEndEvent(
   }
 }
 
-export function finalizeRunEvent(state: MutableReportState): { passed: number; failed: number; pending: number } {
+export function finalizeRunEvent(
+  state: MutableReportState,
+  options: { preserveNonCurrent?: boolean } = {},
+): { passed: number; failed: number; pending: number } {
   state.reportData.isRunning = false
-  state.reportData.tests = Object.fromEntries(
-    Object.entries(state.reportData.tests).filter(([id]) => state.currentRunIds.has(id)),
-  )
+  // A filtered run only covers a subset of tests; tests it did not touch must be
+  // retained. Full runs cull anything not seen this run (handles deleted tests).
+  if (options.preserveNonCurrent !== true) {
+    state.reportData.tests = Object.fromEntries(
+      Object.entries(state.reportData.tests).filter(([id]) => state.currentRunIds.has(id)),
+    )
+  }
   state.currentRunIds.clear()
 
   const runTests = Object.values(state.reportData.tests).filter((test): test is TestData => test !== undefined)

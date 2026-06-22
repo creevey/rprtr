@@ -245,6 +245,41 @@ describe('report-state visual classification', () => {
   })
 })
 
+describe('report-state re-run status', () => {
+  test('applyTestBeginEvent flips an existing test back to running', () => {
+    const state = createMutableReportState('./screenshots')
+
+    applyTestBeginEvent(state, {
+      id: 't-rerun',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+    applyTestEndEvent(state, {
+      id: 't-rerun',
+      status: 'passed',
+      attachments: [],
+      visualNames: [],
+    })
+    expect(state.reportData.tests['t-rerun']?.status).toBe('success')
+
+    // A second run re-uses the same id; begin must flip it to 'running' so the
+    // UI reflects the in-progress state instead of the stale 'success'.
+    applyTestBeginEvent(state, {
+      id: 't-rerun',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+
+    expect(state.reportData.tests['t-rerun']?.status).toBe('running')
+    // Prior results remain visible until the new run's test-end arrives.
+    expect(state.reportData.tests['t-rerun']?.results).toHaveLength(1)
+  })
+})
+
 describe('report-state approval metadata', () => {
   test('falls back to visualNames for older parsed payloads without visualDeclarations', () => {
     const state = createMutableReportState('./screenshots')

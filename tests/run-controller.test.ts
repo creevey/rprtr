@@ -37,6 +37,7 @@ interface Fixture {
   child: ReturnType<typeof createStubChild>
   broadcasts: ClientWebSocketMessage[]
   runningFlag: { value: boolean }
+  filteredCalls: boolean[]
   spawnCalls: Array<{ cmd: string; args: string[]; opts: Record<string, unknown> }>
   advanceTimer: (ms: number) => void
   setRunContext: (ctx: RunContext | null) => void
@@ -49,6 +50,7 @@ function createFixture(
   let runCtx: RunContext | null = initialCtx
   const broadcasts: ClientWebSocketMessage[] = []
   const runningFlag = { value: false }
+  const filteredCalls: boolean[] = []
   const spawnCalls: Array<{ cmd: string; args: string[]; opts: Record<string, unknown> }> = []
   const pendingTimers: Array<{ fireAt: number; fn: () => void }> = []
   let now = 0
@@ -61,6 +63,9 @@ function createFixture(
     },
     setReportRunning: (running): void => {
       runningFlag.value = running
+    },
+    setRunFiltered: (filtered): void => {
+      filteredCalls.push(filtered)
     },
     spawn: (cmd, args, opts): ChildProcessLike => {
       spawnCalls.push({ cmd, args, opts })
@@ -85,6 +90,7 @@ function createFixture(
     child,
     broadcasts,
     runningFlag,
+    filteredCalls,
     spawnCalls,
     advanceTimer: (ms): void => {
       now += ms
@@ -179,6 +185,26 @@ describe('RunController.start', () => {
       '--project',
       'chromium',
     ])
+  })
+})
+
+describe('RunController.start run scope signaling', () => {
+  test('signals an unfiltered run when no filters are provided', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    expect(f.filteredCalls).toEqual([false])
+  })
+
+  test('signals a filtered run when files are provided', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({ files: ['tests/foo.spec.ts:42'] })
+    expect(f.filteredCalls).toEqual([true])
+  })
+
+  test('signals a filtered run when a project is provided', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({ project: 'chromium' })
+    expect(f.filteredCalls).toEqual([true])
   })
 })
 
