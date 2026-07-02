@@ -9,9 +9,18 @@ export const ApproveRequestBodySchema = z.object({
 
 export type ApproveRequestBody = z.infer<typeof ApproveRequestBodySchema>
 
+export const RunTestDescriptorSchema = z.object({
+  file: z.string(),
+  line: z.number(),
+  column: z.number().optional(),
+  projectName: z.string().optional(),
+  titlePath: z.array(z.string()),
+})
+
+export type RunTestDescriptor = z.infer<typeof RunTestDescriptorSchema>
+
 export const RunRequestBodySchema = z.object({
-  files: z.array(z.string()).optional(),
-  project: z.string().optional(),
+  tests: z.array(RunTestDescriptorSchema).optional(),
 })
 
 export type RunRequestBody = z.infer<typeof RunRequestBodySchema>
@@ -20,7 +29,7 @@ export const RunResponseSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true) }),
   z.object({
     ok: z.literal(false),
-    reason: z.enum(['no-config', 'already-running']),
+    reason: z.enum(['no-config', 'already-running', 'no-tests']),
   }),
 ])
 

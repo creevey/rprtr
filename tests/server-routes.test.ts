@@ -40,7 +40,7 @@ function createContext(tests: Record<string, TestData>): Parameters<typeof handl
 }
 
 function createStubRunController(
-  startResult: { ok: true } | { ok: false; reason: 'no-config' | 'already-running' } = { ok: true },
+  startResult: { ok: true } | { ok: false; reason: 'no-config' | 'already-running' | 'no-tests' } = { ok: true },
   stopResult: { ok: true } | { ok: false; reason: 'not-running' } = { ok: true },
 ): RunController {
   return {
@@ -1659,7 +1659,7 @@ describe('run endpoints', () => {
     expect(await res.json()).toEqual({ ok: false, reason: 'already-running' })
   })
 
-  test('POST /api/run passes parsed files and project through', async () => {
+  test('POST /api/run passes parsed tests through', async () => {
     const ctx = createContext({})
     let captured: unknown = null
     const stub = {
@@ -1675,11 +1675,26 @@ describe('run endpoints', () => {
       ctx,
       new Request('http://localhost/api/run', {
         method: 'POST',
-        body: JSON.stringify({ files: ['a.spec.ts:10'], project: 'chromium' }),
+        body: JSON.stringify({
+          tests: [{ file: 'a.spec.ts', line: 5, column: 3, projectName: 'chromium', titlePath: ['t'] }],
+        }),
       }),
       stub,
     )
-    expect(captured).toEqual({ files: ['a.spec.ts:10'], project: 'chromium' })
+    expect(captured).toEqual({
+      tests: [{ file: 'a.spec.ts', line: 5, column: 3, projectName: 'chromium', titlePath: ['t'] }],
+    })
+  })
+
+  test('POST /api/run returns 400 for empty tests array', async () => {
+    const ctx = createContext({})
+    const stub = createStubRunController({ ok: false, reason: 'no-tests' })
+    const res = await handleHttpRequest(
+      ctx,
+      new Request('http://localhost/api/run', { method: 'POST', body: '{"tests":[]}' }),
+      stub,
+    )
+    expect(res.status).toBe(400)
   })
 
   test('POST /api/stop returns 200 on accepted stop', async () => {

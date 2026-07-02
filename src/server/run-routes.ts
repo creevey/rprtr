@@ -31,7 +31,8 @@ async function handleApiRun(runController: RunController, req: Request): Promise
   }
   const result = runController.start(parsed)
   if (result.ok) return Response.json(result)
-  return Response.json(result, { status: 409 })
+  const status = result.reason === 'no-tests' ? 400 : 409
+  return Response.json(result, { status })
 }
 
 function handleApiStop(runController: RunController): Response {

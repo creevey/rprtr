@@ -179,34 +179,13 @@ describe('RunController.start', () => {
     expect(f.spawnCalls).toHaveLength(1)
   })
 
-  test('passes files as positional file:line args', () => {
-    const f = createFixture(SAMPLE_CTX)
-    f.controller.start({ files: ['tests/foo.spec.ts:42'] })
-    expect(f.spawnCalls[0]!.args).toEqual([
-      'playwright',
-      'test',
-      '--config',
-      '/proj/playwright.config.ts',
-      'tests/foo.spec.ts:42',
-    ])
-  })
-
-  test('passes project as --project arg', () => {
-    const f = createFixture(SAMPLE_CTX)
-    f.controller.start({ project: 'chromium' })
-    expect(f.spawnCalls[0]!.args).toEqual([
-      'playwright',
-      'test',
-      '--config',
-      '/proj/playwright.config.ts',
-      '--project',
-      'chromium',
-    ])
-  })
-
-  test('passes both files and project together', () => {
-    const f = createFixture(SAMPLE_CTX)
-    f.controller.start({ files: ['tests/foo.spec.ts:42:11'], project: 'chromium' })
+  test('single descriptor becomes positional file:line:column with --project', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.controller.start({
+      tests: [
+        { file: 'tests/foo.spec.ts', line: 42, column: 11, projectName: 'chromium', titlePath: ['suite', 'foo'] },
+      ],
+    })
     expect(f.spawnCalls[0]!.args).toEqual([
       'playwright',
       'test',
@@ -217,24 +196,64 @@ describe('RunController.start', () => {
       'tests/foo.spec.ts:42:11',
     ])
   })
+
+  test('multiple descriptors become positional args with shared --project', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.controller.start({
+      tests: [
+        { file: 'a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+        { file: 'b.spec.ts', line: 2, column: 3, projectName: 'chromium', titlePath: ['t2'] },
+      ],
+    })
+    expect(f.spawnCalls[0]!.args).toEqual([
+      'playwright',
+      'test',
+      '--config',
+      '/proj/playwright.config.ts',
+      '--project',
+      'chromium',
+      'a.spec.ts:1',
+      'b.spec.ts:2:3',
+    ])
+  })
+
+  test('multiple descriptors with mixed projects omit --project', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.controller.start({
+      tests: [
+        { file: 'a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+        { file: 'b.spec.ts', line: 2, projectName: 'firefox', titlePath: ['t2'] },
+      ],
+    })
+    expect(f.spawnCalls[0]!.args).toEqual([
+      'playwright',
+      'test',
+      '--config',
+      '/proj/playwright.config.ts',
+      'a.spec.ts:1',
+      'b.spec.ts:2',
+    ])
+  })
+
+  test('empty tests array returns no-tests without spawning', () => {
+    const f = createFixture(SAMPLE_CTX)
+    const result = f.controller.start({ tests: [] })
+    expect(result).toEqual({ ok: false, reason: 'no-tests' })
+    expect(f.spawnCalls).toHaveLength(0)
+    expect(f.broadcasts).toHaveLength(0)
+  })
 })
 
 describe('RunController.start run scope signaling', () => {
-  test('signals an unfiltered run when no filters are provided', () => {
+  test('signals an unfiltered run when tests is absent', () => {
     const f = createFixture(SAMPLE_CTX)
     f.controller.start({})
     expect(f.filteredCalls).toEqual([false])
   })
 
-  test('signals a filtered run when files are provided', () => {
+  test('signals a filtered run when tests is provided', () => {
     const f = createFixture(SAMPLE_CTX)
-    f.controller.start({ files: ['tests/foo.spec.ts:42'] })
-    expect(f.filteredCalls).toEqual([true])
-  })
-
-  test('signals a filtered run when a project is provided', () => {
-    const f = createFixture(SAMPLE_CTX)
-    f.controller.start({ project: 'chromium' })
+    f.controller.start({ tests: [{ file: 'a.spec.ts', line: 1, titlePath: ['t'] }] })
     expect(f.filteredCalls).toEqual([true])
   })
 })

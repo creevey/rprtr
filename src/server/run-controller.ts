@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { resolveCommand } from 'package-manager-detector/commands'
 import { getUserAgent } from 'package-manager-detector/detect'
 
+import type { RunTestDescriptor } from '../schemas.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
 
 export interface RunContext {
@@ -13,11 +14,10 @@ export interface RunContext {
 }
 
 export interface RunFilters {
-  files?: string[]
-  project?: string
+  tests?: RunTestDescriptor[]
 }
 
-export type StartResult = { ok: true } | { ok: false; reason: 'no-config' | 'already-running' }
+export type StartResult = { ok: true } | { ok: false; reason: 'no-config' | 'already-running' | 'no-tests' }
 
 export type StopResult = { ok: true } | { ok: false; reason: 'not-running' }
 
@@ -69,11 +69,27 @@ export function resolvePlaywrightLaunch(cwd: string, playwrightArgs: string[]): 
   return { cmd: 'npx', args: ['playwright', ...playwrightArgs] }
 }
 
+function descriptorLocation(d: RunTestDescriptor): string {
+  return d.column === undefined ? `${d.file}:${d.line}` : `${d.file}:${d.line}:${d.column}`
+}
+
+function sharedProject(tests: RunTestDescriptor[]): string | undefined {
+  const names = new Set(tests.map((t) => t.projectName ?? ''))
+  if (names.size === 1) {
+    const name = [...names][0]
+    return name === '' ? undefined : name
+  }
+  return undefined
+}
+
 function toArgs(filters: RunFilters, configFile: string, reporterModule: string | null): string[] {
   const args = ['test', '--config', configFile]
   if (reporterModule !== null) args.push('--reporter', reporterModule)
-  if (filters.project !== undefined) args.push('--project', filters.project)
-  if (filters.files !== undefined) args.push(...filters.files)
+  const tests = filters.tests
+  if (tests === undefined) return args
+  const project = sharedProject(tests)
+  if (project !== undefined) args.push('--project', project)
+  for (const d of tests) args.push(descriptorLocation(d))
   return args
 }
 
@@ -115,6 +131,9 @@ export class RunController {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: false, reason: 'no-config' }
     if (this.child !== null) return { ok: false, reason: 'already-running' }
+    if (filters.tests !== undefined && filters.tests.length === 0) {
+      return { ok: false, reason: 'no-tests' }
+    }
 
     const resolveReporter = this.deps.resolveReporter ?? resolveReporterDefault
     const reporterModule = resolveReporter(ctx.cwd)
@@ -134,7 +153,7 @@ export class RunController {
       this.handleChildExit(null)
     })
     this.deps.setReportRunning(true)
-    this.deps.setRunFiltered?.(filters.files !== undefined || filters.project !== undefined)
+    this.deps.setRunFiltered?.(filters.tests !== undefined)
     this.deps.broadcast({ type: 'run-status', data: { running: true } })
     return { ok: true }
   }
