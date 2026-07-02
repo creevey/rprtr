@@ -30,9 +30,16 @@
   import ResultsPage from './components/ResultsPage.svelte';
   import Toggle from './components/Toggle.svelte';
 
+  interface RunTestDescriptor {
+    file: string
+    line: number
+    column?: number
+    projectName?: string
+    titlePath: string[]
+  }
+
   interface RunFilters {
-    files?: string[];
-    project?: string;
+    tests?: RunTestDescriptor[]
   }
 
   interface Props {
@@ -287,50 +294,55 @@
   }
 
   async function handleStart(filters?: RunFilters): Promise<void> {
-    if (!filters || (!filters.files && !filters.project)) {
-      markTestsPending(tests);
-      recalcAllSuiteStatuses(tests);
+    if (isRunning) {
+      runMessage = 'A run is already in progress'
+      return
+    }
+    if (!filters || !filters.tests) {
+      markTestsPending(tests)
+      recalcAllSuiteStatuses(tests)
     }
     const res = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(filters ?? {}),
-    });
-    if (res.status === 409) {
-      const body = (await res.json().catch(() => null)) as { reason?: string } | null;
+    })
+    if (res.status === 409 || res.status === 400) {
+      const body = (await res.json().catch(() => null)) as { reason?: string } | null
       runMessage =
         body?.reason === 'already-running'
           ? 'A run is already in progress'
-          : 'Connect a Playwright reporter to enable running';
+          : body?.reason === 'no-tests'
+            ? 'No tests selected'
+            : 'Connect a Playwright reporter to enable running'
+    }
+  }
+
+  function toDescriptor(test: CrvyRprtrTest): RunTestDescriptor | null {
+    const file = test.location?.file
+    const line = test.location?.line
+    if (file === undefined || line === undefined) return null
+    return {
+      file,
+      line,
+      column: test.location?.column,
+      projectName: test.projectName,
+      titlePath: [...(test.titlePath ?? []), test.title],
     }
   }
 
   function handleRunItem(item: CrvyRprtrSuite | CrvyRprtrTest): void {
-    markTestsPending(item);
-    recalcAllSuiteStatuses(tests);
+    const descriptors = (isTest(item) ? [item] : getAllTests(item))
+      .map(toDescriptor)
+      .filter((d): d is RunTestDescriptor => d !== null)
 
-    if (isTest(item)) {
-      const file = item.location?.file;
-      const line = item.location?.line;
-      const column = item.location?.column;
-      if (file !== undefined && line !== undefined) {
-        const loc = column === undefined ? `${file}:${line}` : `${file}:${line}:${column}`;
-        handleStart({ files: [loc], project: item.projectName || undefined });
-      }
-      return;
+    if (descriptors.length === 0) {
+      runMessage = 'Cannot run: no source location for the selected test(s)'
+      return
     }
-    const locations = getAllTests(item)
-      .map((t) => {
-        const file = t.location?.file;
-        const line = t.location?.line;
-        const column = t.location?.column;
-        if (file === undefined || line === undefined) return null;
-        return column === undefined ? `${file}:${line}` : `${file}:${line}:${column}`;
-      })
-      .filter((loc): loc is string => loc !== null);
-    if (locations.length > 0) {
-      handleStart({ files: locations });
-    }
+    markTestsPending(item)
+    recalcAllSuiteStatuses(tests)
+    handleStart({ tests: descriptors })
   }
 
   async function handleStop(): Promise<void> {
