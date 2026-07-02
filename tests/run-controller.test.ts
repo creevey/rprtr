@@ -5,6 +5,7 @@ import {
   type ChildProcessLike,
   type RunContext,
   type RunControllerDeps,
+  resolvePlaywrightLaunch,
 } from '../src/server/run-controller'
 import type { ClientWebSocketMessage } from '../src/types'
 
@@ -311,5 +312,19 @@ describe('RunController.dispose', () => {
     f.controller.start({})
     f.controller.dispose()
     expect(f.child.killed).toEqual(['SIGKILL'])
+  })
+})
+
+describe('resolvePlaywrightLaunch', () => {
+  test('falls back to npx when no package manager is detectable', () => {
+    const saved = process.env.npm_config_user_agent
+    try {
+      delete process.env.npm_config_user_agent
+      const result = resolvePlaywrightLaunch('/any/cwd', ['test', '--config', 'x.ts'])
+      expect(result.cmd).toBe('npx')
+      expect(result.args).toEqual(['playwright', 'test', '--config', 'x.ts'])
+    } finally {
+      if (saved !== undefined) process.env.npm_config_user_agent = saved
+    }
   })
 })

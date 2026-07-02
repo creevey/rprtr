@@ -55,6 +55,13 @@ const KNOWN_SIGNALS: Record<string, NodeJS.Signals> = {
   SIGKILL: 'SIGKILL',
 }
 
+/**
+ * Resolves the `playwright` launch command for the project's package manager.
+ * `cwd` is reserved for future cwd-based detection (`package-manager-detector`'s
+ * `detect` is async in v1.x and cannot run in the synchronous `start()` path),
+ * so today detection uses the synchronous `getUserAgent()`, matching Creevey's
+ * spawn pattern. Falls back to `npx` when no agent is detectable.
+ */
 export function resolvePlaywrightLaunch(cwd: string, playwrightArgs: string[]): { cmd: string; args: string[] } {
   const agent = getUserAgent()
   const resolved = agent === null ? null : resolveCommand(agent, 'execute-local', ['playwright', ...playwrightArgs])
