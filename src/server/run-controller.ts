@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { resolveCommand } from 'package-manager-detector/commands'
@@ -46,6 +48,10 @@ export interface RunControllerDeps {
   resolveReporter?: (cwd: string) => string | null
   /** Resolves the package-manager-aware command used to launch `playwright`. Falls back to `npx`. */
   resolveLaunch?: (cwd: string, playwrightArgs: string[]) => { cmd: string; args: string[] }
+  /** Injectable seams for the version-gated `--test-list` path (Playwright >= 1.56). */
+  getPlaywrightVersion?: (cwd: string) => string | null
+  writeTempFile?: (content: string) => string
+  deleteTempFile?: (path: string) => void
 }
 
 const STOP_GRACE_MS = 5000
@@ -82,15 +88,54 @@ function sharedProject(tests: RunTestDescriptor[]): string | undefined {
   return undefined
 }
 
-function toArgs(filters: RunFilters, configFile: string, reporterModule: string | null): string[] {
-  const args = ['test', '--config', configFile]
-  if (reporterModule !== null) args.push('--reporter', reporterModule)
-  const tests = filters.tests
-  if (tests === undefined) return args
-  const project = sharedProject(tests)
-  if (project !== undefined) args.push('--project', project)
-  for (const d of tests) args.push(descriptorLocation(d))
-  return args
+/** `MAJOR.MINOR` threshold check using only leading digits; ignores pre-release suffixes. False for unparseable input. */
+export function gteMinor(version: string, major: number, minor: number): boolean {
+  const match = /^(\d+)\.(\d+)/.exec(version.trim())
+  if (match === null) return false
+  const maj = parseInt(match[1]!, 10)
+  const min = parseInt(match[2]!, 10)
+  if (maj !== major) return maj > major
+  return min >= minor
+}
+
+/** Reads the installed `@playwright/test` version from cwd; null when unresolvable (→ positional fallback). */
+function resolvePlaywrightVersion(cwd: string): string | null {
+  try {
+    const req = createRequire(join(cwd, 'package.json'))
+    const pkgPath = req.resolve('@playwright/test/package.json')
+    const raw: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'))
+    if (typeof raw === 'object' && raw !== null && 'version' in raw && typeof raw.version === 'string') {
+      return raw.version
+    }
+    return null
+  } catch {
+    // @playwright/test not resolvable from cwd; treat as pre-1.56.
+    return null
+  }
+}
+
+/** Builds `--test-list` lines mirroring `playwright test --list`: `[project] › file:line:column › title path`. */
+export function buildTestListEntries(tests: RunTestDescriptor[]): string[] {
+  return tests.map((d) => {
+    const loc = descriptorLocation(d)
+    const title = d.titlePath.join(' \u203a ')
+    const prefix = d.projectName !== undefined && d.projectName !== '' ? `[${d.projectName}] \u203a ` : ''
+    return `${prefix}${loc} \u203a ${title}`
+  })
+}
+
+function defaultWriteTempFile(content: string): string {
+  const path = join(tmpdir(), `crvy-rprtr-test-list-${process.pid}-${Date.now()}.txt`)
+  writeFileSync(path, content, 'utf8')
+  return path
+}
+
+function defaultDeleteTempFile(path: string): void {
+  try {
+    unlinkSync(path)
+  } catch {
+    // Ignore — the file may already be removed (e.g. double exit/error).
+  }
 }
 
 export function resolveReporterDefault(cwd: string): string | null {
@@ -120,11 +165,26 @@ function buildSpawnEnv(port: number): Record<string, string | undefined> {
 export class RunController {
   private child: ChildProcessLike | null = null
   private sigkillTimer: unknown = null
+  private testListPath: string | null = null
 
   constructor(private readonly deps: RunControllerDeps) {}
 
   get isRunning(): boolean {
     return this.child !== null
+  }
+
+  private supportsTestList(cwd: string): boolean {
+    const getVersion = this.deps.getPlaywrightVersion ?? resolvePlaywrightVersion
+    const version = getVersion(cwd)
+    return version !== null && gteMinor(version, 1, 56)
+  }
+
+  private cleanupTempFile(): void {
+    if (this.testListPath !== null) {
+      const del = this.deps.deleteTempFile ?? defaultDeleteTempFile
+      del(this.testListPath)
+      this.testListPath = null
+    }
   }
 
   start(filters: RunFilters): StartResult {
@@ -137,10 +197,26 @@ export class RunController {
 
     const resolveReporter = this.deps.resolveReporter ?? resolveReporterDefault
     const reporterModule = resolveReporter(ctx.cwd)
+    const tests = filters.tests
+    const useTestList = tests !== undefined && tests.length > 1 && this.supportsTestList(ctx.cwd)
+
+    const args = ['test', '--config', ctx.configFile]
+    if (reporterModule !== null) args.push('--reporter', reporterModule)
+
+    if (useTestList && tests !== undefined) {
+      const content = buildTestListEntries(tests).join('\n')
+      const writeTemp = this.deps.writeTempFile ?? defaultWriteTempFile
+      this.testListPath = writeTemp(content)
+      args.push('--test-list', this.testListPath)
+    } else if (tests !== undefined && tests.length > 0) {
+      const project = sharedProject(tests)
+      if (project !== undefined) args.push('--project', project)
+      for (const d of tests) args.push(descriptorLocation(d))
+    }
+
     const resolveLaunch = this.deps.resolveLaunch ?? resolvePlaywrightLaunch
-    const playwrightArgs = toArgs(filters, ctx.configFile, reporterModule)
-    const { cmd, args } = resolveLaunch(ctx.cwd, playwrightArgs)
-    const child = this.deps.spawn(cmd, args, {
+    const { cmd, args: launchArgs } = resolveLaunch(ctx.cwd, args)
+    const child = this.deps.spawn(cmd, launchArgs, {
       cwd: ctx.cwd,
       env: buildSpawnEnv(this.deps.port),
       stdio: 'inherit',
@@ -173,6 +249,7 @@ export class RunController {
     if (this.sigkillTimer !== null) this.deps.timers.clearTimeout(this.sigkillTimer)
     this.sigkillTimer = null
     this.child.kill('SIGKILL')
+    this.cleanupTempFile()
   }
 
   private handleChildExit(code: number | null): void {
@@ -182,6 +259,7 @@ export class RunController {
       this.sigkillTimer = null
     }
     this.child = null
+    this.cleanupTempFile()
     if (code !== null && code !== 0) {
       console.warn(`[RunController] playwright test exited with code ${code}`)
     }

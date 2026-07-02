@@ -1,0 +1,20 @@
+Listing tests:
+  [chromium] › offline-artifact.spec.ts:19:3 › opens the generated report artifact directly from disk
+  [chromium] › ui-controls.spec.ts:33:7 › UI Controls Fixture › dark theme › full page
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › view-mode-switcher
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › status-indicators
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › status-filter-buttons
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › filter-input
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › tree-items
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › action-buttons
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › image-name-tabs
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › toggle-switch
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › update-mode-badge
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › empty-states
+  [chromium] › ui-controls.spec.ts:39:9 › UI Controls Fixture › dark theme › sidebar-panel
+  [chromium] › ui-controls.spec.ts:48:7 › UI Controls Fixture › light theme › full page
+  [chromium] › ui-controls.spec.ts:54:9 › UI Controls Fixture › light theme › view-mode-switcher
+  [chromium] › ui-controls.spec.ts:54:9 › UI Controls Fixture › light theme › status-indicators
+  [chromium] › ui-controls.spec.ts:54:9 › UI Controls Fixture › light theme › status-filter-buttons
+  [chromium] › ui-controls.spec.ts:54:9 › UI Controls Fixture › light theme › filter-input
+  [chromium] › ui-controls.spec.ts:54:9 › UI Controls Fixture › light theme › tree-items

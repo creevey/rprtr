@@ -7,6 +7,8 @@ import {
   type RunControllerDeps,
   resolvePlaywrightLaunch,
   resolveReporterDefault,
+  gteMinor,
+  buildTestListEntries,
 } from '../src/server/run-controller'
 import type { ClientWebSocketMessage } from '../src/types'
 
@@ -44,6 +46,9 @@ interface Fixture {
   setResolveLaunch: (fn: ((cwd: string, args: string[]) => { cmd: string; args: string[] }) | null) => void
   advanceTimer: (ms: number) => void
   setRunContext: (ctx: RunContext | null) => void
+  writtenTempFiles: Array<{ path: string; content: string }>
+  deletedTempFiles: string[]
+  setPlaywrightVersion: (version: string | null) => void
 }
 
 function createFixture(
@@ -58,6 +63,9 @@ function createFixture(
   const pendingTimers: Array<{ fireAt: number; fn: () => void }> = []
   let now = 0
   let resolveLaunch: ((cwd: string, args: string[]) => { cmd: string; args: string[] }) | null = null
+  const writtenTempFiles: Array<{ path: string; content: string }> = []
+  const deletedTempFiles: string[] = []
+  let playwrightVersion: string | null = null
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -89,6 +97,15 @@ function createFixture(
     resolveReporter,
     resolveLaunch: (cwd: string, args: string[]): { cmd: string; args: string[] } =>
       resolveLaunch?.(cwd, args) ?? { cmd: 'npx', args: ['playwright', ...args] },
+    writeTempFile: (content: string): string => {
+      const path = `/tmp/crvy-rprtr-test-list-${writtenTempFiles.length}.txt`
+      writtenTempFiles.push({ path, content })
+      return path
+    },
+    deleteTempFile: (path: string): void => {
+      deletedTempFiles.push(path)
+    },
+    getPlaywrightVersion: (): string | null => playwrightVersion,
   }
   const controller = new RunController(deps)
   return {
@@ -110,6 +127,11 @@ function createFixture(
     },
     setRunContext: (ctx): void => {
       runCtx = ctx
+    },
+    writtenTempFiles,
+    deletedTempFiles,
+    setPlaywrightVersion: (version): void => {
+      playwrightVersion = version
     },
   }
 }
@@ -367,5 +389,101 @@ describe('resolveReporterDefault', () => {
     // A cwd with no resolvable @crvy/rprtr should still resolve via import.meta.url
     // because the server IS @crvy/rprtr.
     expect(resolveReporterDefault('/nonexistent/project/path')).not.toBeNull()
+  })
+})
+
+// The expected line below is a real line from
+// tests/fixtures/playwright-list-sample.txt (captured via
+// `playwright test --list --reporter=list`). It pins the entry format so that
+// `buildTestListEntries` stays aligned with Playwright's own `--list` output —
+// which is what `--test-list` matches against. The file path in the sample is
+// relative to the Playwright `testDir` (here the spec basename).
+describe('gteMinor', () => {
+  test('true when version meets the threshold', () => {
+    expect(gteMinor('1.56.0', 1, 56)).toBe(true)
+    expect(gteMinor('1.59.0-beta', 1, 56)).toBe(true)
+    expect(gteMinor('2.0.0', 1, 56)).toBe(true)
+  })
+  test('false when version is below the threshold', () => {
+    expect(gteMinor('1.55.0', 1, 56)).toBe(false)
+    expect(gteMinor('1.40.1', 1, 56)).toBe(false)
+  })
+  test('false for unparseable input', () => {
+    expect(gteMinor('', 1, 56)).toBe(false)
+    expect(gteMinor('not-a-version', 1, 56)).toBe(false)
+  })
+})
+
+describe('buildTestListEntries', () => {
+  test('formats one line per descriptor matching playwright --list shape', () => {
+    const entries = buildTestListEntries([
+      {
+        file: 'offline-artifact.spec.ts',
+        line: 19,
+        column: 3,
+        projectName: 'chromium',
+        titlePath: ['opens the generated report artifact directly from disk'],
+      },
+    ])
+    // Exactly matches line 2 of playwright-list-sample.txt (minus leading spaces):
+    //   [chromium] › offline-artifact.spec.ts:19:3 › opens the generated report artifact directly from disk
+    expect(entries).toEqual([
+      '[chromium] \u203a offline-artifact.spec.ts:19:3 \u203a opens the generated report artifact directly from disk',
+    ])
+  })
+
+  test('omits the project prefix when projectName is empty/absent', () => {
+    const entries = buildTestListEntries([{ file: 'tests/foo.spec.ts', line: 10, titlePath: ['does a thing'] }])
+    expect(entries).toEqual(['tests/foo.spec.ts:10 \u203a does a thing'])
+  })
+})
+
+describe('RunController --test-list path', () => {
+  test('suite uses --test-list on Playwright >= 1.56 and cleans up on exit', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.setPlaywrightVersion('1.56.0')
+    const descriptors = [
+      { file: 'a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+      { file: 'b.spec.ts', line: 2, projectName: 'chromium', titlePath: ['t2'] },
+    ]
+    const result = f.controller.start({ tests: descriptors })
+    expect(result).toEqual({ ok: true })
+    expect(f.spawnCalls[0]!.args).toContain('--test-list')
+    const listPath = f.spawnCalls[0]!.args[f.spawnCalls[0]!.args.indexOf('--test-list') + 1]!
+    expect(f.writtenTempFiles).toHaveLength(1)
+    expect(f.writtenTempFiles[0]!.path).toBe(listPath)
+    expect(f.writtenTempFiles[0]!.content).toBe(
+      '[chromium] \u203a a.spec.ts:1 \u203a t1\n[chromium] \u203a b.spec.ts:2 \u203a t2',
+    )
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect(f.deletedTempFiles).toContain(listPath)
+  })
+
+  test('suite falls back to positional args on Playwright < 1.56', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.setPlaywrightVersion('1.55.0')
+    f.controller.start({
+      tests: [
+        { file: 'a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+        { file: 'b.spec.ts', line: 2, projectName: 'chromium', titlePath: ['t2'] },
+      ],
+    })
+    expect(f.spawnCalls[0]!.args).not.toContain('--test-list')
+    expect(f.writtenTempFiles).toHaveLength(0)
+    expect(f.spawnCalls[0]!.args).toContain('a.spec.ts:1')
+  })
+
+  test('temp file is deleted on dispose', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.setPlaywrightVersion('1.59.0')
+    f.controller.start({
+      tests: [
+        { file: 'a.spec.ts', line: 1, titlePath: ['t1'] },
+        { file: 'b.spec.ts', line: 2, titlePath: ['t2'] },
+      ],
+    })
+    const listPath = f.spawnCalls[0]!.args[f.spawnCalls[0]!.args.indexOf('--test-list') + 1]!
+    f.controller.dispose()
+    expect(f.deletedTempFiles).toContain(listPath)
   })
 })
