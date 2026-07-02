@@ -74,11 +74,11 @@ If `artifact-dir` is provided, the CLI treats it as the directory containing:
 
 Explicit flags override the paths derived from `artifact-dir`.
 
-| Option             | Short | Default         | Description                                                                               |
-| ------------------ | ----- | --------------- | ----------------------------------------------------------------------------------------- |
-| `--port`           | `-p`  | `3000`          | Server port                                                                               |
-| `--screenshot-dir` | `-s`  | `./screenshots` | Screenshot directory path                                                                 |
-| `--report-path`    | `-r`  | `./report.json` | Report JSON file path or directory containing `report.json` and `crvy-rprtr-*.json` files |
+| Option             | Short | Default         | Description                                                                                                                                                                                        |
+| ------------------ | ----- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--port`           | `-p`  | `3000`          | Server port                                                                                                                                                                                        |
+| `--screenshot-dir` | `-s`  | `./screenshots` | Screenshot directory path                                                                                                                                                                          |
+| `--report-path`    | `-r`  | `./report.json` | Report JSON file path or directory containing `report.json` and `crvy-rprtr-*.json` files                                                                                                          |
 | `--config`         | `-c`  | auto-detect     | Playwright config path used to enable the run buttons at startup. When omitted, the server discovers `playwright.config.*` in the working directory. A registering reporter always overrides this. |
 
 When the server can resolve a Playwright config (via `--config` or auto-discovery, or once a reporter registers), the sidebar shows Start/Stop and per-test run buttons that trigger `playwright test` without leaving the browser. Approval-routing resolver overrides are available through the programmatic server API, not additional CLI flags.
