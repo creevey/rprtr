@@ -2,6 +2,9 @@ import { spawn, type ChildProcess } from 'child_process'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
+import { resolveCommand } from 'package-manager-detector/commands'
+import { getUserAgent } from 'package-manager-detector/detect'
+
 import type { ClientWebSocketMessage } from '../types.ts'
 
 export interface RunContext {
@@ -41,6 +44,8 @@ export interface RunControllerDeps {
     clearTimeout: (handle: unknown) => void
   }
   resolveReporter?: (cwd: string) => string | null
+  /** Resolves the package-manager-aware command used to launch `playwright`. Falls back to `npx`. */
+  resolveLaunch?: (cwd: string, playwrightArgs: string[]) => { cmd: string; args: string[] }
 }
 
 const STOP_GRACE_MS = 5000
@@ -50,8 +55,11 @@ const KNOWN_SIGNALS: Record<string, NodeJS.Signals> = {
   SIGKILL: 'SIGKILL',
 }
 
-function resolveBin(_cwd: string): { cmd: string; argsPrefix: string[] } {
-  return { cmd: 'npx', argsPrefix: ['playwright'] }
+export function resolvePlaywrightLaunch(cwd: string, playwrightArgs: string[]): { cmd: string; args: string[] } {
+  const agent = getUserAgent()
+  const resolved = agent === null ? null : resolveCommand(agent, 'execute-local', ['playwright', ...playwrightArgs])
+  if (resolved !== null) return { cmd: resolved.command, args: resolved.args }
+  return { cmd: 'npx', args: ['playwright', ...playwrightArgs] }
 }
 
 function toArgs(filters: RunFilters, configFile: string, reporterModule: string | null): string[] {
@@ -99,8 +107,9 @@ export class RunController {
 
     const resolveReporter = this.deps.resolveReporter ?? resolveReporterModule
     const reporterModule = resolveReporter(ctx.cwd)
-    const { cmd, argsPrefix } = resolveBin(ctx.cwd)
-    const args = [...argsPrefix, ...toArgs(filters, ctx.configFile, reporterModule)]
+    const resolveLaunch = this.deps.resolveLaunch ?? resolvePlaywrightLaunch
+    const playwrightArgs = toArgs(filters, ctx.configFile, reporterModule)
+    const { cmd, args } = resolveLaunch(ctx.cwd, playwrightArgs)
     const child = this.deps.spawn(cmd, args, {
       cwd: ctx.cwd,
       env: buildSpawnEnv(this.deps.port),

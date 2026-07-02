@@ -39,6 +39,7 @@ interface Fixture {
   runningFlag: { value: boolean }
   filteredCalls: boolean[]
   spawnCalls: Array<{ cmd: string; args: string[]; opts: Record<string, unknown> }>
+  setResolveLaunch: (fn: ((cwd: string, args: string[]) => { cmd: string; args: string[] }) | null) => void
   advanceTimer: (ms: number) => void
   setRunContext: (ctx: RunContext | null) => void
 }
@@ -54,6 +55,7 @@ function createFixture(
   const spawnCalls: Array<{ cmd: string; args: string[]; opts: Record<string, unknown> }> = []
   const pendingTimers: Array<{ fireAt: number; fn: () => void }> = []
   let now = 0
+  let resolveLaunch: ((cwd: string, args: string[]) => { cmd: string; args: string[] }) | null = null
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -83,6 +85,8 @@ function createFixture(
       },
     },
     resolveReporter,
+    resolveLaunch: (cwd: string, args: string[]): { cmd: string; args: string[] } =>
+      resolveLaunch?.(cwd, args) ?? { cmd: 'npx', args: ['playwright', ...args] },
   }
   const controller = new RunController(deps)
   return {
@@ -92,6 +96,9 @@ function createFixture(
     runningFlag,
     filteredCalls,
     spawnCalls,
+    setResolveLaunch: (fn): void => {
+      resolveLaunch = fn
+    },
     advanceTimer: (ms): void => {
       now += ms
       for (const t of pendingTimers.splice(0)) {
@@ -152,6 +159,14 @@ describe('RunController.start', () => {
     const f = createFixture(SAMPLE_CTX, () => null)
     f.controller.start({})
     expect(f.spawnCalls[0]!.args).toEqual(['playwright', 'test', '--config', '/proj/playwright.config.ts'])
+  })
+
+  test('uses the injected package-manager launcher when provided', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setResolveLaunch((_cwd, args) => ({ cmd: 'pnpm', args: ['exec', 'playwright', ...args] }))
+    f.controller.start({})
+    expect(f.spawnCalls[0]!.cmd).toBe('pnpm')
+    expect(f.spawnCalls[0]!.args).toEqual(['exec', 'playwright', 'test', '--config', '/proj/playwright.config.ts'])
   })
 
   test('refuses when already running', () => {
