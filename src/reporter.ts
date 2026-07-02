@@ -69,10 +69,9 @@ export class CrvyRprtr implements Reporter {
     if (this.ci) this.isOfflineMode = true
   }
 
-  async onBegin(config: FullConfig, suite: Suite): Promise<void> {
+  onBegin(config: FullConfig, suite: Suite): void {
     this.configDir = config.configFile === undefined ? config.rootDir : dirname(config.configFile)
     log(`[CrvyRprtr] Starting run with ${suite.allTests().length} tests`)
-    await mkdir(this.screenshotDir, { recursive: true })
     if (!this.ci) {
       this.connect()
       this.sendRegister(config)
@@ -248,6 +247,7 @@ export class CrvyRprtr implements Reporter {
   async onEnd(result: FullResult): Promise<void> {
     this.send({ type: 'run-end', data: { status: result.status } })
     if (this.ci) {
+      await mkdir(this.screenshotDir, { recursive: true })
       const limit = pLimit(10)
       await Promise.all(
         this.pendingArtifacts.map((pending) =>
