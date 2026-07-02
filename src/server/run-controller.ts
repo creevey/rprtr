@@ -103,13 +103,11 @@ function resolvePlaywrightVersion(cwd: string): string | null {
   try {
     const req = createRequire(join(cwd, 'package.json'))
     const pkgPath = req.resolve('@playwright/test/package.json')
-    const raw: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'))
-    if (typeof raw === 'object' && raw !== null && 'version' in raw && typeof raw.version === 'string') {
-      return raw.version
-    }
-    return null
+    const pkg: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'))
+    return typeof pkg === 'object' && pkg !== null && 'version' in pkg && typeof pkg.version === 'string'
+      ? pkg.version
+      : null
   } catch {
-    // @playwright/test not resolvable from cwd; treat as pre-1.56.
     return null
   }
 }
@@ -216,11 +214,13 @@ export class RunController {
 
     const resolveLaunch = this.deps.resolveLaunch ?? resolvePlaywrightLaunch
     const { cmd, args: launchArgs } = resolveLaunch(ctx.cwd, args)
-    const child = this.deps.spawn(cmd, launchArgs, {
-      cwd: ctx.cwd,
-      env: buildSpawnEnv(this.deps.port),
-      stdio: 'inherit',
-    })
+    let child: ChildProcessLike
+    try {
+      child = this.deps.spawn(cmd, launchArgs, { cwd: ctx.cwd, env: buildSpawnEnv(this.deps.port), stdio: 'inherit' })
+    } catch (err) {
+      this.cleanupTempFile()
+      throw err
+    }
     this.child = child
     child.on('exit', (code) => {
       this.handleChildExit(code)

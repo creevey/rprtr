@@ -49,6 +49,7 @@ interface Fixture {
   writtenTempFiles: Array<{ path: string; content: string }>
   deletedTempFiles: string[]
   setPlaywrightVersion: (version: string | null) => void
+  setSpawnThrows: (flag: boolean) => void
 }
 
 function createFixture(
@@ -66,6 +67,7 @@ function createFixture(
   const writtenTempFiles: Array<{ path: string; content: string }> = []
   const deletedTempFiles: string[] = []
   let playwrightVersion: string | null = null
+  let spawnThrows = false
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -81,6 +83,7 @@ function createFixture(
     },
     spawn: (cmd, args, opts): ChildProcessLike => {
       spawnCalls.push({ cmd, args, opts })
+      if (spawnThrows) throw new Error('spawn failed synchronously')
       return child
     },
     timers: {
@@ -132,6 +135,9 @@ function createFixture(
     deletedTempFiles,
     setPlaywrightVersion: (version): void => {
       playwrightVersion = version
+    },
+    setSpawnThrows: (flag): void => {
+      spawnThrows = flag
     },
   }
 }
@@ -485,5 +491,20 @@ describe('RunController --test-list path', () => {
     const listPath = f.spawnCalls[0]!.args[f.spawnCalls[0]!.args.indexOf('--test-list') + 1]!
     f.controller.dispose()
     expect(f.deletedTempFiles).toContain(listPath)
+  })
+
+  test('cleans up the temp file and propagates when spawn throws synchronously', () => {
+    const f = createFixture(SAMPLE_CTX, () => null)
+    f.setPlaywrightVersion('1.56.0')
+    f.setSpawnThrows(true)
+    const descriptors = [
+      { file: 'a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+      { file: 'b.spec.ts', line: 2, projectName: 'chromium', titlePath: ['t2'] },
+    ]
+    expect(() => f.controller.start({ tests: descriptors })).toThrow('spawn failed synchronously')
+    expect(f.writtenTempFiles).toHaveLength(1)
+    expect(f.deletedTempFiles).toContain(f.writtenTempFiles[0]!.path)
+    expect(f.controller.isRunning).toBe(false)
+    expect(f.broadcasts).not.toContainEqual({ type: 'run-status', data: { running: true } })
   })
 })
