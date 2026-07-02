@@ -6,6 +6,7 @@ import {
   type RunContext,
   type RunControllerDeps,
   resolvePlaywrightLaunch,
+  resolveReporterDefault,
 } from '../src/server/run-controller'
 import type { ClientWebSocketMessage } from '../src/types'
 
@@ -47,7 +48,7 @@ interface Fixture {
 
 function createFixture(
   initialCtx: RunContext | null = null,
-  resolveReporter?: (cwd: string) => string | null,
+  resolveReporter: (cwd: string) => string | null = () => null,
 ): Fixture {
   let runCtx: RunContext | null = initialCtx
   const broadcasts: ClientWebSocketMessage[] = []
@@ -326,5 +327,26 @@ describe('resolvePlaywrightLaunch', () => {
     } finally {
       if (saved !== undefined) process.env.npm_config_user_agent = saved
     }
+  })
+})
+
+// `resolveReporterDefault` has two branches: (1) resolve `@crvy/rprtr` from the
+// project cwd, (2) fall back to `import.meta.url` (the server's own module, which
+// IS @crvy/rprtr). In the bun test environment branch 1 throws for cwds where the
+// package isn't resolvable (verified: `/proj` and nonexistent paths throw), so the
+// two tests below cover both branches: test 1 uses a real in-repo cwd where branch 1
+// succeeds via package self-referencing; test 2 uses a nonexistent cwd so branch 1
+// throws and resolution succeeds only via the import.meta.url fallback.
+describe('resolveReporterDefault', () => {
+  test('resolves from the project cwd when installed there', () => {
+    // `process.cwd()` is the tests/ dir during `cd tests && bun test`; it sits inside
+    // the repo where @crvy/rprtr is the self-published package, so branch 1 resolves it.
+    expect(resolveReporterDefault(process.cwd())).not.toBeNull()
+  })
+
+  test('falls back to the server module location when the project cwd throws', () => {
+    // A cwd with no resolvable @crvy/rprtr should still resolve via import.meta.url
+    // because the server IS @crvy/rprtr.
+    expect(resolveReporterDefault('/nonexistent/project/path')).not.toBeNull()
   })
 })

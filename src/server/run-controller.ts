@@ -77,10 +77,14 @@ function toArgs(filters: RunFilters, configFile: string, reporterModule: string 
   return args
 }
 
-function resolveReporterModule(cwd: string): string | null {
+export function resolveReporterDefault(cwd: string): string | null {
   try {
-    const req = createRequire(join(cwd, 'package.json'))
-    return req.resolve('@crvy/rprtr')
+    return createRequire(join(cwd, 'package.json')).resolve('@crvy/rprtr')
+  } catch {
+    // Not installed in the project; fall through to the server's own package.
+  }
+  try {
+    return createRequire(import.meta.url).resolve('@crvy/rprtr')
   } catch {
     return null
   }
@@ -112,7 +116,7 @@ export class RunController {
     if (ctx === null) return { ok: false, reason: 'no-config' }
     if (this.child !== null) return { ok: false, reason: 'already-running' }
 
-    const resolveReporter = this.deps.resolveReporter ?? resolveReporterModule
+    const resolveReporter = this.deps.resolveReporter ?? resolveReporterDefault
     const reporterModule = resolveReporter(ctx.cwd)
     const resolveLaunch = this.deps.resolveLaunch ?? resolvePlaywrightLaunch
     const playwrightArgs = toArgs(filters, ctx.configFile, reporterModule)
