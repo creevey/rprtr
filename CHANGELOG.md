@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-03
+
+### Added
+
+- **types:** Add run-status variant to ClientWebSocketMessage
+- **reporter:** Include configFile and cwd in register message
+- **server:** Add RunController for spawning playwright test
+- **server:** Persist register payload configFile and cwd as runContext
+- **server:** Instantiate RunController in createServerApp and dispose on close
+- **server:** Add POST /api/run and /api/stop, surface runEnabled in /api/report
+- **client:** Wire Start/Stop buttons to /api/run and /api/stop
+- **client:** Add per-test and per-suite run buttons to sidebar tree
+- **run-controller:** Resolve playwright via project package manager
+- **run-controller:** Descriptor-based filter with positional translation
+- **run-controller:** --test-list for suites with version fallback
+- **client:** Descriptor filters, no-location feedback, isRunning guard
+- **client:** Add captureTestStatuses/restoreTestStatuses helpers
+- **client:** Revert orphaned pending on no-event run
+
+### Changed
+
+- **schemas:** Extract HTTP request schemas to schemas/http.ts
+- **schemas:** Use discriminatedUnion for Run/Stop responses
+- **run-controller:** Document cwd param and test launch fallback
+- **reporter:** Make onBegin synchronous and defer screenshotDir creation
+- **client:** Reset runEventIds on rejected-start path
+
+### Documentation
+
+- **spec:** Run tests from UI design
+- **plan:** Run tests from UI implementation plan
+- **spec:** Run-from-UI robustness design
+- **plan:** Run-from-UI robustness implementation plan
+- **spec:** Stuck-pending run recovery design
+- **plan:** Stuck-pending run recovery implementation plan
+
+### Fixed
+
+- **run-controller:** Guard against duplicate exit/error cleanup
+- **reporter:** Honor CRVY_RPRTR_SERVER_URL env as fallback serverUrl
+- **run-controller:** Override reporters and strip CI env for UI-triggered runs
+- **run-from-ui:** Row height, re-run status, filtered-run scope, startup config
+- **run-from-ui:** Mark tests pending on start, use file:line:column for precise re-runs
+- **run-controller:** Resolve @crvy/rprtr from project cwd then server module
+- **run-controller:** Clean up test-list temp file on spawn throw
+- **knip:** Enable production-mode analysis in strict checks
+
+### Styling
+
+- **client:** Match semicolon convention and destructure location
+- **docs:** Reformat CLI options table
+
+### Testing
+
+- **client:** Cover undefined-restore and empty/bare-root edge cases
 ## [0.1.4] - 2026-06-19
 
 ### Added
