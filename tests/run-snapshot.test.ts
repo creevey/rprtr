@@ -27,13 +27,13 @@ describe('captureTestStatuses', () => {
   })
 
   test('is scoped to the given subtree', () => {
-    const target = makeSuite({
-      group: makeSuite({ a: makeTest('a', 'failed') }),
-    })
-    const _tree = makeSuite({ other: makeTest('other', 'success'), target })
+    const target = makeSuite({ a: makeTest('a', 'failed') })
+    const tree = makeSuite({ other: makeTest('other', 'success'), target })
     const snapshot = captureTestStatuses(target)
     expect(snapshot.has('a')).toBe(true)
     expect(snapshot.has('other')).toBe(false)
+    // sanity: capturing the full tree would include the sibling
+    expect(captureTestStatuses(tree).has('other')).toBe(true)
   })
 
   test('captures undefined status as undefined', () => {
@@ -77,5 +77,28 @@ describe('restoreTestStatuses', () => {
     recalcAllSuiteStatuses(tree)
     // 'a' reverted to failed, 'b' untouched (success); suite rolls up to failed
     expect(group.status).toBe('failed')
+  })
+
+  test('restores undefined status when snapshot maps id -> undefined', () => {
+    const t = makeTest('a', 'failed')
+    const tree = makeSuite({ a: t })
+    restoreTestStatuses(tree, new Map([['a', undefined]]), new Set())
+    expect(t.status).toBeUndefined()
+  })
+})
+
+describe('empty / single-test roots', () => {
+  test('captureTestStatuses on an empty suite returns an empty map', () => {
+    expect(captureTestStatuses(makeSuite({})).size).toBe(0)
+  })
+
+  test('restoreTestStatuses on an empty suite restores nothing', () => {
+    expect(restoreTestStatuses(makeSuite({}), new Map([['x', 'failed']]), new Set())).toBe(0)
+  })
+
+  test('captureTestStatuses accepts a bare test as the root', () => {
+    const snapshot = captureTestStatuses(makeTest('solo', 'success'))
+    expect(snapshot.get('solo')).toBe('success')
+    expect(snapshot.size).toBe(1)
   })
 })
