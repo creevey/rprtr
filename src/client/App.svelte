@@ -1,7 +1,7 @@
 <script lang="ts">
   import { isBulkApprovalOptimisticSafe } from '../approval-api';
   import type { ApprovalResult, BulkApprovalResult } from '../approval-api';
-  import type { CrvyRprtrSuite, CrvyRprtrTest, ImagesViewMode } from '../types';
+  import type { CrvyRprtrSuite, CrvyRprtrTest, ImagesViewMode, TestStatus } from '../types';
   import { isTest, isDefined } from '../types';
   import {
     openSuite,
@@ -22,7 +22,8 @@
     collectTestsById,
     markTestsPending,
     type CrvyRprtrViewFilter,
-  } from './helpers';  
+  } from './helpers';
+  import { captureTestStatuses, restoreTestStatuses } from './helpers/run-snapshot';
   import type { ClientWebSocketMessage, TestData } from '../types';
   import { WebSocketMessageSchema, safeParse } from '../schemas';
   import { getViewMode } from './viewMode';
@@ -62,6 +63,8 @@
   // svelte-ignore state_referenced_locally — intentionally capture initial value for local mutation
   let isRunning = $state(initialIsRunning);
   let runMessage = $state<string | null>(null);
+  let runSnapshot: Map<string, TestStatus | undefined> | null = null;
+  let runEventIds: Set<string> = new Set();
   let openedTestPath = $state<string[]>([]);
   let filter = $state<CrvyRprtrViewFilter>({ status: null, subStrings: [] });
   let viewMode = $state<ImagesViewMode>(getViewMode());
@@ -293,21 +296,27 @@
     recalcAllSuiteStatuses(tests);
   }
 
-  async function handleStart(filters?: RunFilters): Promise<void> {
-    if (isRunning) {
+  async function handleStart(filters?: RunFilters, target?: CrvyRprtrSuite | CrvyRprtrTest): Promise<void> {
+    if (isRunning || runSnapshot !== null) {
       runMessage = 'A run is already in progress';
       return;
     }
-    if (!filters || !filters.tests) {
-      markTestsPending(tests);
-      recalcAllSuiteStatuses(tests);
-    }
+    const markTarget = target ?? tests;
+    runSnapshot = captureTestStatuses(markTarget);
+    runEventIds = new Set();
+    markTestsPending(markTarget);
+    recalcAllSuiteStatuses(tests);
     const res = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(filters ?? {}),
     });
     if (res.status === 409 || res.status === 400) {
+      if (runSnapshot !== null) {
+        restoreTestStatuses(tests, runSnapshot, runEventIds);
+        recalcAllSuiteStatuses(tests);
+        runSnapshot = null;
+      }
       const body = (await res.json().catch(() => null)) as { reason?: string } | null;
       runMessage =
         body?.reason === 'already-running'
@@ -316,6 +325,17 @@
             ? 'No tests selected'
             : 'Connect a Playwright reporter to enable running';
     }
+  }
+
+  function finalizeRunSnapshot(): void {
+    if (runSnapshot === null) return;
+    restoreTestStatuses(tests, runSnapshot, runEventIds);
+    recalcAllSuiteStatuses(tests);
+    if (runEventIds.size === 0) {
+      runMessage = 'Run produced no results — see the server terminal for details.';
+    }
+    runSnapshot = null;
+    runEventIds = new Set();
   }
 
   function toDescriptor(test: CrvyRprtrTest): RunTestDescriptor | null {
@@ -339,9 +359,7 @@
       runMessage = 'Cannot run: no source location for the selected test(s)';
       return;
     }
-    markTestsPending(item);
-    recalcAllSuiteStatuses(tests);
-    handleStart({ tests: descriptors });
+    handleStart({ tests: descriptors }, item);
   }
 
   async function handleStop(): Promise<void> {
@@ -397,6 +415,7 @@
           const current = collectTestsById(tests);
           current[msg.data.id] = msg.data;
           syncTreeState(tests, current);
+          if (runSnapshot !== null) runEventIds.add(msg.data.id);
           break;
         }
         case 'run-end': {
@@ -418,8 +437,13 @@
           // No-op: approvals go through HTTP /api/approve.
           break;
         case 'run-status': {
-          isRunning = msg.data.running;
-          runMessage = null;
+          if (msg.data.running) {
+            isRunning = true;
+            runMessage = null;
+          } else {
+            isRunning = false;
+            finalizeRunSnapshot();
+          }
           break;
         }
       }
