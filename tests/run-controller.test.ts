@@ -50,6 +50,7 @@ interface Fixture {
   deletedTempFiles: string[]
   setPlaywrightVersion: (version: string | null) => void
   setSpawnThrows: (flag: boolean) => void
+  saveReportCalls: { value: number }
 }
 
 function createFixture(
@@ -68,6 +69,7 @@ function createFixture(
   const deletedTempFiles: string[] = []
   let playwrightVersion: string | null = null
   let spawnThrows = false
+  const saveReportCalls = { value: 0 }
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -109,6 +111,10 @@ function createFixture(
       deletedTempFiles.push(path)
     },
     getPlaywrightVersion: (): string | null => playwrightVersion,
+    saveReport: (): Promise<void> => {
+      saveReportCalls.value++
+      return Promise.resolve()
+    },
   }
   const controller = new RunController(deps)
   return {
@@ -139,6 +145,7 @@ function createFixture(
     setSpawnThrows: (flag): void => {
       spawnThrows = flag
     },
+    saveReportCalls,
   }
 }
 
@@ -324,6 +331,37 @@ describe('RunController child exit', () => {
     expect(f.runningFlag.value).toBe(false)
     expect(f.controller.isRunning).toBe(false)
     expect(f.broadcasts.filter((m) => m.type === 'run-status' && !m.data.running)).toHaveLength(1)
+  })
+
+  test('flushes the report on exit so an interrupted run still persists', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.saveReportCalls.value = 0
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    // The exit handler fire-and-forgets the save; let it resolve.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(f.saveReportCalls.value).toBe(1)
+  })
+
+  test('flushes the report on spawn error event', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.saveReportCalls.value = 0
+    f.child.errorEmitters.forEach((cb) => cb(new Error('ENOENT')))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(f.saveReportCalls.value).toBe(1)
+  })
+
+  test('does not double-flush when error is followed by exit', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.child.errorEmitters.forEach((cb) => cb(new Error('ENOENT')))
+    f.child.exitEmitters.forEach((cb) => cb(1))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(f.saveReportCalls.value).toBe(1)
   })
 })
 

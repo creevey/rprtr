@@ -40,6 +40,8 @@ export interface RunControllerDeps {
   setReportRunning(running: boolean): void
   /** Records whether the in-progress run is filtered, so run-end can preserve unrelated tests. */
   setRunFiltered?(filtered: boolean): void
+  /** Flushes pending report writes on child exit so an interrupted run still persists. */
+  saveReport?: () => Promise<void>
   spawn: SpawnLike
   timers: {
     setTimeout: (fn: () => void, ms?: number) => unknown
@@ -265,6 +267,7 @@ export class RunController {
     }
     this.deps.setReportRunning(false)
     this.deps.broadcast({ type: 'run-status', data: { running: false } })
+    void this.deps.saveReport?.()
   }
 }
 
@@ -272,9 +275,7 @@ export function createRealSpawn(): SpawnLike {
   return (cmd, args, opts): ChildProcessLike => {
     const cp = spawn(cmd, args, opts)
     return {
-      on: (event, cb) => {
-        cp.on(event, cb)
-      },
+      on: (event, cb) => cp.on(event, cb),
       kill: (signal) => {
         const sig = KNOWN_SIGNALS[signal]
         if (sig !== undefined) cp.kill(sig)

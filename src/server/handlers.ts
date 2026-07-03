@@ -23,6 +23,9 @@ export interface HandlerContext {
   // so run-end must NOT cull tests that were not part of this run.
   isFilteredRun: boolean
   saveReport: () => Promise<void>
+  /** Debounced persistence; used after in-memory mutations so a crash or
+   * interrupted run (no `run-end`) still leaves the latest state on disk. */
+  scheduleReportSave: () => void
   approvalRouting?: ApprovalRouting
   routesContext: RoutesContext
   runController: RunController
@@ -31,6 +34,7 @@ export interface HandlerContext {
 export function handleTestBegin(ctx: HandlerContext, data: TestBeginData): void {
   const test = applyTestBeginEvent(ctx, data)
   ctx.reportData.isRunning = true
+  ctx.scheduleReportSave()
   console.log(`  ▶ [${test.browser ?? '?'}] ${test.title}`)
   const message: ClientWebSocketMessage = { type: 'test-begin', data: test }
   broadcastToBrowsers(ctx.wsClients, message)
@@ -73,6 +77,7 @@ export function handleTestEnd(ctx: HandlerContext, data: TestEndData): void {
   const diffNote = diffCount > 0 ? ` [${diffCount} diff(s)]` : ''
   const errNote = data.error !== null && data.error !== undefined ? `\n    Error: ${data.error}` : ''
   console.log(`  ${icon} [${test.browser}] ${test.title}${dur}${diffNote}${errNote}`)
+  ctx.scheduleReportSave()
   const message: ClientWebSocketMessage = { type: 'test-update', data: test }
   broadcastToBrowsers(ctx.wsClients, message)
 }

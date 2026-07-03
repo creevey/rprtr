@@ -19,15 +19,28 @@ class MockWebSocket implements RuntimeWebSocket {
   }
 }
 
-function createContext(): { ctx: HandlerContext; clients: Set<MockWebSocket> } {
+function createContext(): {
+  ctx: HandlerContext
+  clients: Set<MockWebSocket>
+  scheduleCalls: { value: number }
+  flushCalls: { value: number }
+} {
   const clients = new Set<MockWebSocket>()
   const state = createMutableReportState('./screenshots')
+  const scheduleCalls = { value: 0 }
+  const flushCalls = { value: 0 }
   const ctx: HandlerContext = {
     reportData: state.reportData,
     wsClients: clients as unknown as Set<RuntimeWebSocket>,
     currentRunIds: state.currentRunIds,
     isFilteredRun: false,
-    saveReport: async (): Promise<void> => {},
+    saveReport: (): Promise<void> => {
+      flushCalls.value++
+      return Promise.resolve()
+    },
+    scheduleReportSave: (): void => {
+      scheduleCalls.value++
+    },
     routesContext: {
       reportData: state.reportData,
       staticDir: './dist',
@@ -35,7 +48,7 @@ function createContext(): { ctx: HandlerContext; clients: Set<MockWebSocket> } {
     },
     runController: null as unknown as HandlerContext['runController'],
   }
-  return { ctx, clients }
+  return { ctx, clients, scheduleCalls, flushCalls }
 }
 
 function readMessages(clients: Set<MockWebSocket>): unknown[] {
@@ -49,11 +62,15 @@ function readMessages(clients: Set<MockWebSocket>): unknown[] {
 describe('server broadcast payloads', () => {
   let clients: Set<MockWebSocket>
   let ctx: HandlerContext
+  let scheduleCalls: { value: number }
+  let flushCalls: { value: number }
 
   beforeEach(() => {
     const created = createContext()
     ctx = created.ctx
     clients = created.clients
+    scheduleCalls = created.scheduleCalls
+    flushCalls = created.flushCalls
     clients.add(new MockWebSocket())
   })
 
@@ -152,6 +169,38 @@ describe('server broadcast payloads', () => {
     expect(result?.images?.['header']?.diff).toBe('/screenshots/test-1/header-diff')
   })
 
+  test('handleTestEnd schedules a debounced report save', () => {
+    applyTestBeginEvent(ctx, {
+      id: 'test-1',
+      title: 'renders header',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+    scheduleCalls.value = 0
+
+    handleTestEnd(ctx, {
+      id: 'test-1',
+      status: 'passed',
+      attachments: [],
+      visualNames: [],
+    })
+
+    expect(scheduleCalls.value).toBe(1)
+  })
+
+  test('handleTestBegin schedules a debounced report save', () => {
+    handleTestBegin(ctx, {
+      id: 'test-1',
+      title: 'renders header',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+
+    expect(scheduleCalls.value).toBe(1)
+  })
+
   test('handleTestEnd does not broadcast for unknown test ids', () => {
     handleTestEnd(ctx, {
       id: 'unknown-test',
@@ -161,6 +210,21 @@ describe('server broadcast payloads', () => {
     })
 
     expect(readMessages(clients)).toHaveLength(0)
+  })
+
+  test('handleRunEnd flushes the debounced save', async () => {
+    applyTestBeginEvent(ctx, {
+      id: 'test-1',
+      title: 'keeps',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'a.ts', line: 1 },
+    })
+    flushCalls.value = 0
+
+    await handleRunEnd(ctx, { status: 'passed' })
+
+    expect(flushCalls.value).toBe(1)
   })
 
   test('handleRunEnd broadcasts removedTestIds computed from currentRunIds', async () => {

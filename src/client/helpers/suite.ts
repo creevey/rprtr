@@ -153,7 +153,7 @@ export function updateTestStatus(suite: CrvyRprtrSuite, path: string[], update: 
     .every(Boolean)
   suite.status = getChildrenArray(suite.children)
     .map(({ status }) => status)
-    .reduce(calcStatus)
+    .reduce(calcStatus, undefined)
 }
 
 export function recalcSuiteStatuses(root: CrvyRprtrSuite, testPath: string[]): void {
@@ -163,12 +163,12 @@ export function recalcSuiteStatuses(root: CrvyRprtrSuite, testPath: string[]): v
     if (parentSuite && !isTest(parentSuite)) {
       parentSuite.status = getChildrenArray(parentSuite.children)
         .map(({ status }) => status)
-        .reduce(calcStatus)
+        .reduce(calcStatus, undefined)
     }
   }
   root.status = getChildrenArray(root.children)
     .map(({ status }) => status)
-    .reduce(calcStatus)
+    .reduce(calcStatus, undefined)
 }
 
 export function recalcAllSuiteStatuses(suite: CrvyRprtrSuite): void {
@@ -179,7 +179,7 @@ export function recalcAllSuiteStatuses(suite: CrvyRprtrSuite): void {
   }
   suite.status = getChildrenArray(suite.children)
     .map(({ status }) => status)
-    .reduce(calcStatus)
+    .reduce(calcStatus, undefined)
 }
 
 export function markTestsPending(node: CrvyRprtrSuite | CrvyRprtrTest): void {
@@ -206,5 +206,5 @@ export function removeTests(suite: CrvyRprtrSuite, path: string[]): void {
     .every(Boolean)
   suite.status = getChildrenArray(suite.children)
     .map(({ status }) => status)
-    .reduce(calcStatus)
+    .reduce(calcStatus, undefined)
 }

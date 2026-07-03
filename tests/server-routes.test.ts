@@ -254,7 +254,7 @@ describe('approval routing', () => {
       expect(await readFile(join(configuredSnapshotDir, 'header.png'), 'utf-8')).toBe('actual image')
       expect(await readFile(join(cwdSnapshotDir, 'header.png'), 'utf-8')).toBe('cwd baseline image')
     } finally {
-      app.close()
+      await app.close()
     }
   })
 

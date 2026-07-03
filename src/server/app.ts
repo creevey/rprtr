@@ -13,7 +13,7 @@ import {
   type IncomingWebSocketMessage,
 } from '../schemas.ts'
 import type { TestData } from '../types.ts'
-import { fileExists, isDirectory, readJsonFile, writeJsonFile } from './file-utils.ts'
+import { fileExists, isDirectory, readJsonFile } from './file-utils.ts'
 import {
   handleTestBegin,
   handleTestEnd,
@@ -24,6 +24,7 @@ import {
   type HandlerContext,
 } from './handlers.ts'
 import { resolvePlaywrightConfig } from './playwright-config.ts'
+import { createReportPersistence, type ReportPersistence } from './report-persistence.ts'
 import { createRoutesContext } from './routes-context.ts'
 import { handleHttpRequest, type RoutesContext } from './routes.ts'
 import { RunController, createRealSpawn, createRealTimers, type RunContext } from './run-controller.ts'
@@ -66,7 +67,8 @@ interface ReportData {
 export interface ServerApp {
   port: number
   wsClients: Set<RuntimeWebSocket>
-  close: () => void
+  /** Flushes pending report writes and disposes the run controller. */
+  close: () => Promise<void>
   handleRequest: (req: Request) => Promise<Response>
   handleWebSocketMessage: (message: string) => Promise<void>
 }
@@ -218,6 +220,7 @@ function createServerRunController(
   reportData: ReportData,
   port: number,
   setRunFiltered: (filtered: boolean) => void,
+  saveReport: () => Promise<void>,
 ): RunController {
   return new RunController({
     getRunContext: (): RunContext | null => routesContext.runContext ?? null,
@@ -229,6 +232,7 @@ function createServerRunController(
       reportData.isRunning = running
     },
     setRunFiltered,
+    saveReport,
     spawn: createRealSpawn(),
     timers: createRealTimers(),
   })
@@ -242,25 +246,29 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const staticDir = await resolveStaticDir(options.staticDir)
   const wsClients = new Set<RuntimeWebSocket>()
   const currentRunIds = new Set<string>()
-
-  const saveReport = (): Promise<void> => writeJsonFile(reportFile, reportData)
-
-  const routesContext = createRoutesContext(reportData, staticDir, saveReport, options)
-
+  const persistence = createReportPersistence(reportFile, reportData)
+  const routesContext = createRoutesContext(reportData, staticDir, persistence.saveReport, options)
   // Seed runContext so the UI can trigger runs before any reporter registers.
   await seedRunContext(routesContext, options)
 
   let isFilteredRun = false
-  const runController = createServerRunController(routesContext, wsClients, reportData, port, (filtered) => {
-    isFilteredRun = filtered
-  })
-
+  const runController = createServerRunController(
+    routesContext,
+    wsClients,
+    reportData,
+    port,
+    (filtered) => {
+      isFilteredRun = filtered
+    },
+    persistence.saveReport,
+  )
   const getHandlerContext = (): HandlerContext => ({
     reportData,
     wsClients,
     currentRunIds,
     isFilteredRun,
-    saveReport,
+    saveReport: persistence.saveReport,
+    scheduleReportSave: persistence.scheduleReportSave,
     approvalRouting: routesContext.approvalRouting,
     routesContext,
     runController,
@@ -274,10 +282,15 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   return {
     port,
     wsClients,
-    close: (): void => {
-      runController.dispose()
-    },
+    close: createCloseHandler(persistence, runController),
     handleRequest,
     handleWebSocketMessage,
+  }
+}
+
+function createCloseHandler(persistence: ReportPersistence, runController: RunController): () => Promise<void> {
+  return async (): Promise<void> => {
+    await persistence.dispose()
+    runController.dispose()
   }
 }

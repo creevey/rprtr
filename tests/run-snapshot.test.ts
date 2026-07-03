@@ -102,3 +102,17 @@ describe('empty / single-test roots', () => {
     expect(snapshot.size).toBe(1)
   })
 })
+
+describe('recalcAllSuiteStatuses on empty trees', () => {
+  test('does not throw on a suite with no children', () => {
+    const empty = makeSuite({})
+    expect(() => recalcAllSuiteStatuses(empty)).not.toThrow()
+    expect(empty.status).toBeUndefined()
+  })
+
+  test('does not throw when a child suite has no children', () => {
+    const root = makeSuite({ group: makeSuite({}) })
+    expect(() => recalcAllSuiteStatuses(root)).not.toThrow()
+    expect(root.status).toBeUndefined()
+  })
+})
