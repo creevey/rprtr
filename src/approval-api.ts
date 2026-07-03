@@ -60,6 +60,7 @@ export async function readApproveAllResult(response: Response): Promise<BulkAppr
   }
 }
 
+/** @public — used by Svelte components (knip does not trace .svelte imports) */
 export function isBulkApprovalOptimisticSafe(result: BulkApprovalResult): boolean {
   return result.success && result.unresolved === 0 && result.failed === 0
 }

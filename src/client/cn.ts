@@ -1,7 +1,9 @@
+/** @public — used by Svelte components (knip does not trace .svelte imports) */
 export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ')
 }
 
+/** @public — used by Svelte components (knip does not trace .svelte imports) */
 export function statusDotClass(status?: string): string {
   switch (status) {
     case 'success':

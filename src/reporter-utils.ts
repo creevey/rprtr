@@ -115,7 +115,3 @@ export function extractScreenshotDeclarations(steps: readonly TestStep[]): Scree
 
   return state.declarations
 }
-
-export function extractScreenshotNames(steps: readonly TestStep[]): string[] {
-  return extractScreenshotDeclarations(steps).map(({ visualName }) => visualName)
-}

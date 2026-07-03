@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn } from 'child_process'
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -296,5 +296,3 @@ export function createRealTimers(): RunControllerDeps['timers'] {
     },
   }
 }
-
-export type { ChildProcess }

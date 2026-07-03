@@ -1,6 +1,9 @@
 import { type CrvyRprtrSuite, type CrvyRprtrTest, type TestStatus, isTest, getChildrenArray } from '../../types'
 
-/** Captures testId -> current status for every test under `node` (including `undefined`). */
+/**
+ * Captures testId -> current status for every test under `node` (including `undefined`).
+ * @public — used by Svelte components (knip does not trace .svelte imports)
+ */
 export function captureTestStatuses(node: CrvyRprtrSuite | CrvyRprtrTest): Map<string, TestStatus | undefined> {
   const snapshot = new Map<string, TestStatus | undefined>()
   const walk = (n: CrvyRprtrSuite | CrvyRprtrTest): void => {
@@ -18,6 +21,7 @@ export function captureTestStatuses(node: CrvyRprtrSuite | CrvyRprtrTest): Map<s
  * Restores `test.status` for every test under `root` whose id is in `snapshot`
  * and NOT in `receivedIds`. Leaves tests that did receive an event untouched.
  * Returns the number of tests restored.
+ * @public — used by Svelte components (knip does not trace .svelte imports)
  */
 export function restoreTestStatuses(
   root: CrvyRprtrSuite,
