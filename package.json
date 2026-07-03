@@ -10,14 +10,14 @@
     "testing",
     "visual-regression"
   ],
-  "homepage": "https://github.com/creevey/crvy-rprtr",
+  "homepage": "https://github.com/creevey/rprtr",
   "bugs": {
-    "url": "https://github.com/creevey/crvy-rprtr/issues"
+    "url": "https://github.com/creevey/rprtr/issues"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/creevey/crvy-rprtr.git"
+    "url": "git+https://github.com/creevey/rprtr.git"
   },
   "bin": {
     "crvy-rprtr": "./dist/cli.js"
