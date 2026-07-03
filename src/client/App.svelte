@@ -316,6 +316,7 @@
         restoreTestStatuses(tests, runSnapshot, runEventIds);
         recalcAllSuiteStatuses(tests);
         runSnapshot = null;
+        runEventIds = new Set();
       }
       const body = (await res.json().catch(() => null)) as { reason?: string } | null;
       runMessage =
