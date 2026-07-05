@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { join } from 'path'
 
-import { resolveCliOptions } from '../src/cli'
+import { HELP_TEXT, printHelp, resolveCliOptions, wantsHelp } from '../src/cli'
 
 describe('resolveCliOptions', () => {
   test('keeps the current defaults without an artifact directory', () => {
@@ -81,5 +81,36 @@ describe('resolveCliOptions', () => {
 
   test('playwrightConfig is undefined when omitted', () => {
     expect(resolveCliOptions([]).playwrightConfig).toBeUndefined()
+  })
+})
+
+describe('help', () => {
+  test('HELP_TEXT documents every flag and the artifact-dir positional', () => {
+    expect(HELP_TEXT).toContain('Usage: crvy-rprtr')
+    expect(HELP_TEXT).toContain('artifact-dir')
+    for (const token of ['--port', '--screenshot-dir', '--report-path', '--output-dir', '--config', '--help']) {
+      expect(HELP_TEXT).toContain(token)
+    }
+  })
+
+  test('wantsHelp is true for --help and -h in any position', () => {
+    expect(wantsHelp(['--help'])).toBe(true)
+    expect(wantsHelp(['-h'])).toBe(true)
+    expect(wantsHelp(['./artifacts', '--port', '4100', '--help'])).toBe(true)
+  })
+
+  test('wantsHelp is false without a help flag', () => {
+    expect(wantsHelp([])).toBe(false)
+    expect(wantsHelp(['./artifacts', '--port', '4100'])).toBe(false)
+  })
+
+  test('printHelp writes the help text to stdout', () => {
+    const spy = spyOn(console, 'log')
+
+    printHelp()
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0]?.[0]).toBe(HELP_TEXT)
+    spy.mockRestore()
   })
 })

@@ -17,6 +17,32 @@ interface ResolvedCliOptions extends ServerOptions {
   outputDir: string
 }
 
+export const HELP_TEXT = `Usage: crvy-rprtr [artifact-dir] [options]
+
+Start the @crvy/rprtr visual regression report UI server.
+
+Arguments:
+  artifact-dir                Directory of downloaded CI test artifacts. When set,
+                              --report-path defaults to <dir>/report.json and
+                              --screenshot-dir defaults to <dir>/screenshots.
+
+Options:
+  -p, --port <number>           Server port (default: 3000)
+  -s, --screenshot-dir <dir>    Screenshot artifact directory (default: ./screenshots)
+  -r, --report-path <path>      Path to report.json (default: ./report.json)
+  -o, --output-dir <dir>        Playwright test output directory (default: ./test-results)
+  -c, --config <path>           Path to playwright.config.ts, used for approval routing
+  -h, --help                    Show this help message
+`
+
+export function printHelp(): void {
+  console.log(HELP_TEXT)
+}
+
+export function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h')
+}
+
 export function resolveCliOptions(args: string[]): ResolvedCliOptions {
   const { values, positionals } = parseArgs({
     args,
@@ -50,5 +76,11 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
 }
 
 if (isDirectExecution(import.meta.url)) {
-  await startServer(resolveCliOptions(process.argv.slice(2)))
+  const args = process.argv.slice(2)
+
+  if (wantsHelp(args)) {
+    printHelp()
+  } else {
+    await startServer(resolveCliOptions(args))
+  }
 }
