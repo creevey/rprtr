@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, relative } from 'node:path'
 
 import { resolveCommand } from 'package-manager-detector/commands'
 import { getUserAgent } from 'package-manager-detector/detect'
@@ -77,10 +77,6 @@ export function resolvePlaywrightLaunch(cwd: string, playwrightArgs: string[]): 
   return { cmd: 'npx', args: ['playwright', ...playwrightArgs] }
 }
 
-function descriptorLocation(d: RunTestDescriptor): string {
-  return d.column === undefined ? `${d.file}:${d.line}` : `${d.file}:${d.line}:${d.column}`
-}
-
 function sharedProject(tests: RunTestDescriptor[]): string | undefined {
   const names = new Set(tests.map((t) => t.projectName ?? ''))
   if (names.size === 1) {
@@ -114,10 +110,12 @@ function resolvePlaywrightVersion(cwd: string): string | null {
   }
 }
 
-/** Builds `--test-list` lines mirroring `playwright test --list`: `[project] › file:line:column › title path`. */
-export function buildTestListEntries(tests: RunTestDescriptor[]): string[] {
+// Builds `--test-list` lines mirroring `playwright test --list`. Pass `rootDir` (= RunContext.cwd)
+// to rewrite absolute paths from Playwright 1.59+ — `--test-list` matches `path.relative(rootDir, ...)`.
+export function buildTestListEntries(tests: RunTestDescriptor[], rootDir?: string): string[] {
   return tests.map((d) => {
-    const loc = descriptorLocation(d)
+    const file = rootDir !== undefined && isAbsolute(d.file) ? relative(rootDir, d.file) || d.file : d.file
+    const loc = d.column === undefined ? `${file}:${d.line}` : `${file}:${d.line}:${d.column}`
     const title = d.titlePath.join(' \u203a ')
     const prefix = d.projectName !== undefined && d.projectName !== '' ? `[${d.projectName}] \u203a ` : ''
     return `${prefix}${loc} \u203a ${title}`
@@ -191,9 +189,7 @@ export class RunController {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: false, reason: 'no-config' }
     if (this.child !== null) return { ok: false, reason: 'already-running' }
-    if (filters.tests !== undefined && filters.tests.length === 0) {
-      return { ok: false, reason: 'no-tests' }
-    }
+    if (filters.tests !== undefined && filters.tests.length === 0) return { ok: false, reason: 'no-tests' }
 
     const resolveReporter = this.deps.resolveReporter ?? resolveReporterDefault
     const reporterModule = resolveReporter(ctx.cwd)
@@ -204,14 +200,18 @@ export class RunController {
     if (reporterModule !== null) args.push('--reporter', reporterModule)
 
     if (useTestList && tests !== undefined) {
-      const content = buildTestListEntries(tests).join('\n')
+      const content = buildTestListEntries(tests, ctx.cwd).join('\n')
       const writeTemp = this.deps.writeTempFile ?? defaultWriteTempFile
       this.testListPath = writeTemp(content)
       args.push('--test-list', this.testListPath)
     } else if (tests !== undefined && tests.length > 0) {
       const project = sharedProject(tests)
-      if (project !== undefined) args.push('--project', project)
-      for (const d of tests) args.push(descriptorLocation(d))
+      // `--project=name` not `--project name`: --project is variadic, so the space form swallows
+      // the next positional filter as another project name ("Project not found").
+      if (project !== undefined) args.push(`--project=${project}`)
+      for (const d of tests) {
+        args.push(d.column === undefined ? `${d.file}:${d.line}` : `${d.file}:${d.line}:${d.column}`)
+      }
     }
 
     const resolveLaunch = this.deps.resolveLaunch ?? resolvePlaywrightLaunch

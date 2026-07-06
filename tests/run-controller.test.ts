@@ -226,8 +226,7 @@ describe('RunController.start', () => {
       'test',
       '--config',
       '/proj/playwright.config.ts',
-      '--project',
-      'chromium',
+      '--project=chromium',
       'tests/foo.spec.ts:42:11',
     ])
   })
@@ -245,8 +244,7 @@ describe('RunController.start', () => {
       'test',
       '--config',
       '/proj/playwright.config.ts',
-      '--project',
-      'chromium',
+      '--project=chromium',
       'a.spec.ts:1',
       'b.spec.ts:2:3',
     ])
@@ -480,6 +478,35 @@ describe('buildTestListEntries', () => {
     const entries = buildTestListEntries([{ file: 'tests/foo.spec.ts', line: 10, titlePath: ['does a thing'] }])
     expect(entries).toEqual(['tests/foo.spec.ts:10 \u203a does a thing'])
   })
+
+  test('converts absolute file paths to rootDir-relative when rootDir is provided', () => {
+    // Playwright 1.59+ reports test.location.file as an absolute path; --test-list matches
+    // against path.relative(config.rootDir, test.location.file), so absolute paths must be
+    // converted before being written to the temp file.
+    const entries = buildTestListEntries(
+      [
+        {
+          file: '/proj/tests/offline-artifact.spec.ts',
+          line: 19,
+          column: 3,
+          projectName: 'chromium',
+          titlePath: ['opens the generated report artifact directly from disk'],
+        },
+      ],
+      '/proj/tests',
+    )
+    expect(entries).toEqual([
+      '[chromium] \u203a offline-artifact.spec.ts:19:3 \u203a opens the generated report artifact directly from disk',
+    ])
+  })
+
+  test('leaves relative paths unchanged even when rootDir is provided', () => {
+    const entries = buildTestListEntries(
+      [{ file: 'a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] }],
+      '/proj/tests',
+    )
+    expect(entries).toEqual(['[chromium] \u203a a.spec.ts:1 \u203a t1'])
+  })
 })
 
 describe('RunController --test-list path', () => {
@@ -501,6 +528,25 @@ describe('RunController --test-list path', () => {
     )
     f.child.exitEmitters.forEach((cb) => cb(0))
     expect(f.deletedTempFiles).toContain(listPath)
+  })
+
+  test('suite --test-list rewrites absolute descriptor paths to ctx.cwd-relative entries', () => {
+    // Reproduces the silent "Run produced no results" failure on Playwright 1.59+:
+    // the reporter forwards test.location.file as absolute, but --test-list matches
+    // against path.relative(config.rootDir, test.location.file). The controller must
+    // pass ctx.cwd (= config.rootDir from the reporter's register message) through
+    // to buildTestListEntries so the temp file contains rootDir-relative paths.
+    const f = createFixture({ ...SAMPLE_CTX, cwd: '/proj/tests' }, () => null)
+    f.setPlaywrightVersion('1.59.0')
+    f.controller.start({
+      tests: [
+        { file: '/proj/tests/a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+        { file: '/proj/tests/b.spec.ts', line: 2, projectName: 'chromium', titlePath: ['t2'] },
+      ],
+    })
+    expect(f.writtenTempFiles[0]!.content).toBe(
+      '[chromium] \u203a a.spec.ts:1 \u203a t1\n[chromium] \u203a b.spec.ts:2 \u203a t2',
+    )
   })
 
   test('suite falls back to positional args on Playwright < 1.56', () => {
