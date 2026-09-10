@@ -1,5 +1,10 @@
 # Docker Screenshot Rendering Determinism: Investigation Report
 
+> Follow-up (2026-09-10): unifying the image is necessary but not sufficient — a second
+> browser with its own fontconfig re-splits the baselines. See
+> [text-antialiasing-determinism.md](./text-antialiasing-determinism.md), which pins the AA
+> mode explicitly in both crvy-rprtr's docker mode and the consumer's Playwright config.
+
 Date: 2026-08-24
 Status: verified end-to-end on a consumer project (104 screenshot tests)
 

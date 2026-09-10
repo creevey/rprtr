@@ -20,6 +20,7 @@
     "src/cli.ts!",
     "src/index.ts!",
     "src/schemas.ts!",
+    "src/rendering.ts!",
     "build.ts",
   ],
 

@@ -28,7 +28,7 @@ await build({
 
 // Build server-side JS (reporter, server, CLI)
 await build({
-  entryPoints: ['./src/reporter.ts', './src/server.ts', './src/cli.ts'],
+  entryPoints: ['./src/reporter.ts', './src/server.ts', './src/cli.ts', './src/rendering.ts'],
   bundle: true,
   splitting: true,
   outdir: './dist',
@@ -40,7 +40,7 @@ await build({
 
 // Build CJS versions of server-side entry points (for CJS require() resolution compatibility)
 await build({
-  entryPoints: ['./src/reporter.ts', './src/server.ts'],
+  entryPoints: ['./src/reporter.ts', './src/server.ts', './src/rendering.ts'],
   bundle: true,
   outdir: './dist',
   format: 'cjs',

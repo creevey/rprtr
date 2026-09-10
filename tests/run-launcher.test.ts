@@ -23,6 +23,25 @@ describe('buildSpawnEnv', () => {
     expect(env.PLAYWRIGHT_HTML_OPEN).toBe('never')
   })
 
+  test('exports the grayscale fontconfig override so browsers inherit it', () => {
+    const env = buildSpawnEnv(3000, {}, { platform: 'linux', exists: () => true, writeConfig: () => '/tmp/fonts.conf' })
+    expect(env.FONTCONFIG_FILE).toBe('/tmp/fonts.conf')
+  })
+
+  test('fontRendering: inherit leaves the environment rendering alone', () => {
+    const env = buildSpawnEnv(
+      3000,
+      {},
+      { fontRendering: 'inherit', platform: 'linux', exists: () => true, writeConfig: () => '/tmp/fonts.conf' },
+    )
+    expect(env.FONTCONFIG_FILE).toBeUndefined()
+  })
+
+  test('leaves the environment alone where fontconfig does not apply', () => {
+    const env = buildSpawnEnv(3000, {}, { platform: 'darwin', exists: () => true, writeConfig: () => '/tmp/f.conf' })
+    expect(env.FONTCONFIG_FILE).toBeUndefined()
+  })
+
   test('defaults to process.env', () => {
     const env = buildSpawnEnv(4100)
     expect(env.CRVY_RPRTR_SERVER_URL).toBe('ws://localhost:4100')

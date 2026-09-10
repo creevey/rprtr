@@ -13,6 +13,7 @@ import {
   type DockerExec,
   type Warn,
 } from './docker-support.ts'
+import { CONTAINER_FONTCONFIG_PATH, ensureGrayscaleFontconfig } from './fontconfig.ts'
 import type { RunContext } from './run-controller.ts'
 import { resolvePlaywrightVersion } from './run-controller.ts'
 import type { LaunchParams, LaunchSpec, RunLauncher } from './run-launcher.ts'
@@ -27,6 +28,17 @@ export interface DockerOptions {
   platform?: 'linux/amd64' | 'linux/arm64'
   command?: string[]
   extraArgs?: string[]
+  /**
+   * Text antialiasing inside the container. `'grayscale'` (default) mounts a fontconfig
+   * drop-in that switches Chromium to grayscale AA, so screenshots do not depend on the
+   * image's subpixel settings; `'inherit'` leaves the image as it is.
+   *
+   * Local run mode pins the same rendering through `FONTCONFIG_FILE`, and a consumer's own
+   * CI, which runs Playwright directly, matches both with `deterministicLaunchOptions()` from
+   * `@crvy/rprtr/rendering`. Baselines captured with subpixel AA have to be regenerated once
+   * after the switch.
+   */
+  fontRendering?: 'grayscale' | 'inherit'
 }
 
 export interface DockerLauncherOptions {
@@ -57,6 +69,11 @@ const ENV_DENYLIST = new Set([
   'LC_ALL',
   'PLAYWRIGHT_HTML_OPEN',
   'PATH',
+  // Host paths that do not exist in the container: fontconfig resolves them to nothing and
+  // the browser ends up with no font directories at all (blank text). The container gets its
+  // AA from the mounted drop-in instead.
+  'FONTCONFIG_FILE',
+  'FONTCONFIG_PATH',
 ])
 
 /** Windows host env noise: host paths/separators a Linux container can't use, or host-platform markers (`OS`, `PROCESSOR_ARCHITECTURE`) that mislead in-container platform detection. */
@@ -171,6 +188,9 @@ function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], deps: Lau
   args.push('-e', `CRVY_RPRTR_SERVER_URL=ws://${DOCKER_HOST_GATEWAY}:${deps.port}`)
   args.push('-e', 'CRVY_RPRTR_PORTABLE_ARTIFACTS=1', '-e', 'TZ=UTC', '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8')
   args.push('-e', 'PLAYWRIGHT_HTML_OPEN=never')
+  if (deps.docker?.fontRendering !== 'inherit') {
+    args.push('-v', `${ensureGrayscaleFontconfig()}:${CONTAINER_FONTCONFIG_PATH}:ro`)
+  }
   for (const [key, value] of Object.entries(deps.env)) {
     const upper = key.toUpperCase()
     if (ENV_DENYLIST.has(upper) || WINDOWS_ENV_NOISE.has(upper) || value === undefined) continue

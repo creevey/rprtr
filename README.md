@@ -147,8 +147,9 @@ The server still runs on your host; only `playwright test` executes in the conta
 | `--run-mode <mode>`            | `local`, `docker`, or `auto` (default: `auto`)                                                                                                                               |
 | `--docker-image <image>`       | Custom image. With a custom image, the container-side package manager is auto-detected from your lockfile (`npx` / `pnpm exec` / `yarn` / `bunx`); the image must contain it |
 | `--docker-platform <platform>` | `linux/amd64` or `linux/arm64` (default: host architecture)                                                                                                                  |
+| `--font-rendering <mode>`      | Text antialiasing for runs in either mode: `grayscale` (default, deterministic) or `inherit` (see [Text antialiasing](#text-antialiasing))                                   |
 
-Programmatic equivalents: `startServer({ runMode: 'docker', docker: { image, platform, command, extraArgs } })`. `docker.command` overrides the container-side invocation verbatim (e.g. `['pnpm', 'exec', 'playwright']`); `docker.extraArgs` appends raw `docker run` flags.
+Programmatic equivalents: `startServer({ runMode: 'docker', fontRendering: 'grayscale', docker: { image, platform, command, extraArgs } })`. `docker.command` overrides the container-side invocation verbatim (e.g. `['pnpm', 'exec', 'playwright']`); `docker.extraArgs` appends raw `docker run` flags.
 
 ### Windows
 
@@ -165,7 +166,44 @@ Notes:
 - Baselines are **not** architecture-specific for typical DOM/text pages: amd64 and arm64 variants of the same image render bit-identically in practice (verified: 100/103 tests byte-identical between an amd64 CI runner and Apple Silicon). Use the native architecture on every host — do **not** pin `--docker-platform` to force amd64 emulation on Apple Silicon (Rosetta/QEMU is slower and less stable, and buys nothing). Residual risk: canvas 2D / complex SVG / WebGL content can show tiny cross-arch anti-aliasing diffs; handle per-test with `maxDiffPixels`.
 - If your `playwright.config.ts` uses `webServer`, that server now starts inside the container: it must bind `0.0.0.0`, and hosts it references must resolve inside the container.
 - Timezone and locale are pinned (`TZ=UTC`, `LANG=C.UTF-8`, `LC_ALL=C.UTF-8`) so date/number rendering in screenshots is stable; override via `docker.extraArgs` if you need a different locale under test.
+- Text antialiasing is pinned too: a fontconfig drop-in mounted at `/etc/fonts/conf.d/99-crvy-rprtr-grayscale.conf` switches Chromium to grayscale AA, so screenshots no longer depend on whether the image enables subpixel (LCD) rendering. Opt out with `fontRendering: 'inherit'` (see [Text antialiasing](#text-antialiasing)).
 - The "Run & update baselines" button (▶↻) regenerates baselines inside the container, keeping generation and verification in the same image.
+
+### Text antialiasing
+
+Chromium on Linux takes its text AA mode from **fontconfig**, so screenshots change with the environment rather than with the page: a system Chromium passed via `executablePath`, an agent-provided binary or a second image renders the same text with colored subpixel fringes on every glyph. Glyph positions stay identical, so the diff is invisible by eye and fatal to the comparator — colored fringes on ~3% of a text-heavy page, channel deltas up to 100.
+
+crvy-rprtr therefore pins grayscale AA in **both** run modes, with no configuration:
+
+| run mode | mechanism                                                                                                                                                                                  |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| docker   | fontconfig drop-in mounted at `/etc/fonts/conf.d/99-crvy-rprtr-grayscale.conf`                                                                                                             |
+| local    | `FONTCONFIG_FILE` exported to the spawned `playwright test` process (a generated root config that includes the system one, then forces `rgba=none`); every browser it launches inherits it |
+
+Both were verified to produce byte-identical screenshots, so runs can be mixed freely. On macOS and Windows the local-mode override is skipped: fontconfig does not drive text rendering there (macOS has had no subpixel AA since Mojave, Windows uses DirectWrite).
+
+Turn it off with `fontRendering: 'inherit'` — as `startServer({ fontRendering: 'inherit' })` or `crvy-rprtr --font-rendering inherit` — when faithful "what a desktop user sees" text matters more than determinism. `docker: { fontRendering: 'inherit' }` still works and takes precedence in docker mode.
+
+#### Runs that crvy-rprtr does not launch
+
+Plain `npx playwright test` in CI is not covered by the above — it does not go through the launcher. Match it from the Playwright config:
+
+```ts
+import { defineConfig } from '@playwright/test'
+import { deterministicLaunchOptions } from '@crvy/rprtr/rendering'
+
+export default defineConfig({
+  use: { launchOptions: deterministicLaunchOptions() },
+})
+```
+
+The helper writes the same generated fontconfig root config and merges `FONTCONFIG_FILE` into `launchOptions.env`, keeping the inherited environment and the caller's own entries. It applies to every browser (`deterministicLaunchOptions(base, { fontRendering: 'inherit' })` opts out), needs no file committed to the repo, and produces screenshots byte-identical to both run modes. Outside Linux it returns the options unchanged.
+
+`deterministicChromiumLaunchOptions()`, which adds `--disable-lcd-text` instead, remains available for configs that cannot set browser env vars; it is byte-identical for Chromium but Chromium-only, since Firefox rejects unknown command-line flags.
+
+Firefox and WebKit need no equivalent: the Playwright builds never rasterize with subpixel AA — forcing `rgba=rgb` through fontconfig leaves their screenshots byte-identical — so a multi-browser suite is fully covered.
+
+Baselines captured with subpixel AA have to be regenerated once after adopting any of this. Full investigation: [docs/text-antialiasing-determinism.md](docs/text-antialiasing-determinism.md).
 
 ## Programmatic API
 

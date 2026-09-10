@@ -89,6 +89,16 @@ describe('resolveCliOptions', () => {
     expect(resolveCliOptions(['--run-mode', 'auto']).runMode).toBe('auto')
   })
 
+  test('--font-rendering accepts grayscale and inherit, defaults to unset', () => {
+    expect(resolveCliOptions(['--font-rendering', 'grayscale']).fontRendering).toBe('grayscale')
+    expect(resolveCliOptions(['--font-rendering', 'inherit']).fontRendering).toBe('inherit')
+    expect(resolveCliOptions([]).fontRendering).toBeUndefined()
+  })
+
+  test('--font-rendering rejects unknown values', () => {
+    expect(() => resolveCliOptions(['--font-rendering', 'lcd'])).toThrow('Invalid --font-rendering')
+  })
+
   test('--run-mode rejects unknown values', () => {
     expect(() => resolveCliOptions(['--run-mode', 'podman'])).toThrow('Invalid --run-mode')
   })
@@ -123,7 +133,7 @@ describe('help', () => {
   })
 
   test('HELP_TEXT documents the docker flags', () => {
-    for (const token of ['--run-mode', '--docker-image', '--docker-platform']) {
+    for (const token of ['--run-mode', '--docker-image', '--docker-platform', '--font-rendering']) {
       expect(HELP_TEXT).toContain(token)
     }
   })
