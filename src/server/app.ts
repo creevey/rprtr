@@ -2,6 +2,7 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 import { loadOfflineReports } from '../offline-reports.ts'
+import type { FontRendering } from '../rendering.ts'
 import {
   IncomingWebSocketMessageSchema,
   LoadedReportDataSchema,
@@ -61,6 +62,14 @@ export interface ServerOptions {
   runMode?: RunMode
   /** Docker backend settings; only used when the resolved mode is 'docker'. */
   docker?: DockerOptions
+  /**
+   * Text antialiasing for UI-triggered runs in either mode. `'grayscale'` (default) pins
+   * grayscale AA — a fontconfig drop-in in docker mode, a `FONTCONFIG_FILE` override in local
+   * mode — so screenshots do not depend on the machine's subpixel settings. `'inherit'`
+   * restores Playwright's default, i.e. whatever the environment renders, when faithful
+   * desktop text matters more than determinism.
+   */
+  fontRendering?: FontRendering
 }
 
 interface ReportData {
@@ -232,6 +241,7 @@ async function setupRoutesContext(
   const { launcher, routesContextOptions } = await resolveRunBackend({
     runMode: options.runMode,
     docker: options.docker,
+    fontRendering: options.fontRendering,
     port,
   })
   const routesContext = createRoutesContext(reportData, staticDir, saveReport, {

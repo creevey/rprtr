@@ -1,4 +1,5 @@
 import { isCI } from '../ci.ts'
+import type { FontRendering } from '../rendering.ts'
 import { createDockerLauncher, DOCKER_WORK_DIR, type DockerOptions } from './docker-launcher.ts'
 import { createDockerExec, probeDockerDaemon } from './docker-support.ts'
 import type { RoutesContextOptions } from './routes-context.ts'
@@ -14,6 +15,11 @@ interface ResolveRunBackendOptions {
   runMode?: RunMode
   docker?: DockerOptions
   port: number
+  /**
+   * Text antialiasing for UI-triggered runs, in either mode. Default `'grayscale'`;
+   * `docker.fontRendering` still wins for the docker backend when both are set.
+   */
+  fontRendering?: FontRendering
 }
 
 /**
@@ -35,8 +41,12 @@ export async function resolveRunBackend(options: ResolveRunBackendOptions): Prom
   })
   const launcher: RunLauncher =
     resolvedRunMode === 'docker'
-      ? createDockerLauncher({ port: options.port, docker: options.docker, exec: dockerExec })
-      : createLocalLauncher({ port: options.port })
+      ? createDockerLauncher({
+          port: options.port,
+          docker: { fontRendering: options.fontRendering, ...options.docker },
+          exec: dockerExec,
+        })
+      : createLocalLauncher({ port: options.port, fontRendering: options.fontRendering })
   return {
     launcher,
     routesContextOptions: {

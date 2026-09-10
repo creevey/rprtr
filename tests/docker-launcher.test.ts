@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { createDockerLauncher, DockerUnavailableError, DOCKER_WORK_DIR } from '../src/server/docker-launcher'
 import type { DockerExec, DockerExecResult } from '../src/server/docker-support'
+import { CONTAINER_FONTCONFIG_PATH, GRAYSCALE_FONTCONFIG_XML, hostFontconfigPath } from '../src/server/fontconfig'
 import type { RunContext } from '../src/server/run-controller'
 import type { RunLauncher } from '../src/server/run-launcher'
 
@@ -191,6 +192,8 @@ describe('DockerLauncher.launch', () => {
       'LC_ALL=C.UTF-8',
       '-e',
       'PLAYWRIGHT_HTML_OPEN=never',
+      '-v',
+      `${hostFontconfigPath()}:${CONTAINER_FONTCONFIG_PATH}:ro`,
       'mcr.microsoft.com/playwright:v1.59.0-noble',
       'npx',
       'playwright',
@@ -459,5 +462,26 @@ describe('DockerLauncher.onForceKill', () => {
     // fire-and-forget: give the promise a tick
     await Promise.resolve()
     expect(calls).toContainEqual(['rm', '-f', 'doomed'])
+  })
+})
+
+describe('DockerLauncher font rendering', () => {
+  test('mounts the grayscale fontconfig drop-in by default', async () => {
+    const { launcher } = makeLauncher()
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const spec = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] })
+    const mount = spec.args.find((arg) => arg.endsWith(`:${CONTAINER_FONTCONFIG_PATH}:ro`))
+    expect(mount).toBeDefined()
+    expect(mount!.startsWith(hostFontconfigPath())).toBe(true)
+    // Docker turns a missing bind source into a directory, which would mount garbage into
+    // conf.d instead of the drop-in.
+    expect(await Bun.file(hostFontconfigPath()).text()).toBe(GRAYSCALE_FONTCONFIG_XML)
+  })
+
+  test('leaves the image untouched with fontRendering: inherit', async () => {
+    const { launcher } = makeLauncher({ docker: { fontRendering: 'inherit' } })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const spec = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] })
+    expect(spec.args.some((arg) => arg.includes(CONTAINER_FONTCONFIG_PATH))).toBe(false)
   })
 })

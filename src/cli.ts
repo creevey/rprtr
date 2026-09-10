@@ -3,6 +3,7 @@ import { join } from 'path'
 import { parseArgs } from 'util'
 
 import { isDirectExecution } from './is-direct-execution.ts'
+import type { FontRendering } from './rendering.ts'
 import { startServer, type ServerOptions } from './server.ts'
 import type { DockerOptions } from './server/docker-launcher.ts'
 import type { RunMode } from './server/run-mode.ts'
@@ -19,6 +20,7 @@ interface ResolvedCliOptions extends ServerOptions {
   outputDir: string
   runMode?: RunMode
   docker?: DockerOptions
+  fontRendering?: FontRendering
 }
 
 export const HELP_TEXT = `Usage: crvy-rprtr [artifact-dir] [options]
@@ -39,6 +41,7 @@ Options:
   --run-mode <mode>             Test run backend: local, docker, or auto (default: auto)
   --docker-image <image>        Docker image for docker mode (default: official Playwright image matching the installed @playwright/test version)
   --docker-platform <platform>  Container platform: linux/amd64 or linux/arm64 (default: host architecture)
+  --font-rendering <mode>       Text antialiasing for runs: grayscale (default, deterministic) or inherit (the environment's own rendering)
   -h, --help                    Show this help message
 `
 
@@ -48,6 +51,30 @@ export function printHelp(): void {
 
 export function wantsHelp(args: string[]): boolean {
   return args.includes('--help') || args.includes('-h')
+}
+
+function parseRunMode(value: string | undefined): RunMode | undefined {
+  if (value === undefined) return undefined
+  if (value !== 'local' && value !== 'docker' && value !== 'auto') {
+    throw new TypeError(`Invalid --run-mode: ${value} (expected local, docker, or auto)`)
+  }
+  return value
+}
+
+function parseDockerPlatform(value: string | undefined): DockerOptions['platform'] {
+  if (value === undefined) return undefined
+  if (value !== 'linux/amd64' && value !== 'linux/arm64') {
+    throw new TypeError(`Invalid --docker-platform: ${value} (expected linux/amd64 or linux/arm64)`)
+  }
+  return value
+}
+
+function parseFontRendering(value: string | undefined): FontRendering | undefined {
+  if (value === undefined) return undefined
+  if (value !== 'grayscale' && value !== 'inherit') {
+    throw new TypeError(`Invalid --font-rendering: ${value} (expected grayscale or inherit)`)
+  }
+  return value
 }
 
 export function resolveCliOptions(args: string[]): ResolvedCliOptions {
@@ -63,6 +90,7 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
       'run-mode': { type: 'string' },
       'docker-image': { type: 'string' },
       'docker-platform': { type: 'string' },
+      'font-rendering': { type: 'string' },
     },
   })
 
@@ -76,14 +104,9 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
   const screenshotDir =
     values['screenshot-dir'] ?? (artifactDir === undefined ? DEFAULT_SCREENSHOT_DIR : join(artifactDir, 'screenshots'))
 
-  const runMode = values['run-mode']
-  if (runMode !== undefined && runMode !== 'local' && runMode !== 'docker' && runMode !== 'auto') {
-    throw new TypeError(`Invalid --run-mode: ${runMode} (expected local, docker, or auto)`)
-  }
-  const dockerPlatform = values['docker-platform']
-  if (dockerPlatform !== undefined && dockerPlatform !== 'linux/amd64' && dockerPlatform !== 'linux/arm64') {
-    throw new TypeError(`Invalid --docker-platform: ${dockerPlatform} (expected linux/amd64 or linux/arm64)`)
-  }
+  const runMode = parseRunMode(values['run-mode'])
+  const dockerPlatform = parseDockerPlatform(values['docker-platform'])
+  const fontRendering = parseFontRendering(values['font-rendering'])
   const docker: DockerOptions = {}
   if (values['docker-image'] !== undefined) docker.image = values['docker-image']
   if (dockerPlatform !== undefined) docker.platform = dockerPlatform
@@ -96,6 +119,7 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
     outputDir: values['output-dir'] ?? DEFAULT_OUTPUT_DIR,
     playwrightConfig: values.config,
     ...(runMode === undefined ? {} : { runMode }),
+    ...(fontRendering === undefined ? {} : { fontRendering }),
     ...(hasDockerOptions ? { docker } : {}),
   }
 }

@@ -9,6 +9,6 @@
     "rootDir": "./src",
     "emitDeclarationOnly": true
   },
-  "include": ["src/reporter.ts", "src/server.ts", "src/types.ts", "src/cli.ts"],
+  "include": ["src/reporter.ts", "src/server.ts", "src/types.ts", "src/cli.ts", "src/rendering.ts"],
   "exclude": ["src/client/**", "src/index.ts", "node_modules"]
 }

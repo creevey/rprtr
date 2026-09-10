@@ -44,6 +44,12 @@
       "require": "./dist/server.cjs",
       "default": "./dist/server.js"
     },
+    "./rendering": {
+      "types": "./dist/rendering.d.ts",
+      "import": "./dist/rendering.js",
+      "require": "./dist/rendering.cjs",
+      "default": "./dist/rendering.js"
+    },
     "./types": {
       "types": "./dist/types.d.ts"
     }
