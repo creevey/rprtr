@@ -19,6 +19,6 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 4. End-to-end and gate
 
-- [ ] 4.1 Extend integration assertion: offline report from the real Vitest run carries `approveFromPath`/`approveToPath` on images; approving via the routes against that replayed state updates the fixture reference (temp copy of fixture, never the committed PNG). Verify: `cd tests && bun test vitest-browser-integration.test.ts routes-approve.test.ts`
-- [ ] 4.2 README approval section: Vitest approvals supported, first-run baselines approvable. Verify: manual review against spec scenarios
-- [ ] 4.3 Full gate + Playwright regression. Verify: `bun run check && bun run test:playwright && cd tests && bun test`
+- [x] 4.1 Extend integration assertion: offline report from the real Vitest run carries `approveFromPath`/`approveToPath` on images; approving via the routes against that replayed state updates the fixture reference (temp copy of fixture, never the committed PNG). Verify: `cd tests && bun test vitest-browser-integration.test.ts routes-approve.test.ts`
+- [x] 4.2 README approval section: Vitest approvals supported, first-run baselines approvable. Verify: manual review against spec scenarios
+- [x] 4.3 Full gate + Playwright regression. Verify: `bun run check && bun run test:playwright && cd tests && bun test`

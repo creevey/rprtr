@@ -202,6 +202,13 @@ test('getImageNameFromPath keeps plain names untouched', () => {
   expect(getImageNameFromPath('/p/hero-section.png', 'chromium')).toBe('hero-section')
 })
 
+test('getImageNameFromPath strips the role before the platform suffix in real vitest layouts', () => {
+  expect(getImageNameFromPath(`/p/hero-section-actual-chromium-${process.platform}.png`, 'chromium')).toBe(
+    'hero-section',
+  )
+  expect(getImageNameFromPath(`/p/hero-section-diff-chromium-${process.platform}.png`, 'chromium')).toBe('hero-section')
+})
+
 test('buildReferencePath resolves the default __screenshots__ layout', () => {
   const path = buildReferencePath('/proj', '__screenshots__', '/proj/tests/hero.test.ts', 'hero-section', 'chromium')
   expect(path).toBe(`/proj/tests/__screenshots__/hero.test.ts/hero-section-chromium-${process.platform}.png`)

@@ -88,7 +88,7 @@ When the server can resolve a Playwright config (via `--config` or auto-discover
 1. **During test runs:** The Playwright reporter sends test results to the server via WebSocket in real-time and records the same run for artifact export.
 2. **After tests complete:** A static `crvy-rprtr.html` artifact is written for direct browser viewing, and offline report JSON is also written if the server was unavailable.
 3. **In the browser:** The UI shows all screenshot tests with side-by-side, swap, slide, and blend diff views.
-4. **Approving changes:** Start the UI server and click "Approve" or "Approve All" to accept a new screenshot as the baseline. Approval uses the same exact Playwright-aware resolver as passed-baseline display, including default layouts, unnamed screenshots, duplicate names, and custom templates when the running server was started with matching resolver options. Those approval-routing options are read from the server startup path, not from reporter options. If the server starts without explicit resolver overrides, approval falls back to the server defaults instead. If Crvy Rprtr cannot determine exactly one target path, it leaves the image unresolved instead of guessing.
+4. **Approving changes:** Start the UI server and click "Approve" or "Approve All" to accept a new screenshot as the baseline. Playwright approval uses the same exact Playwright-aware resolver as passed-baseline display, including default layouts, unnamed screenshots, duplicate names, and custom templates when the running server was started with matching resolver options. Those approval-routing options are read from the server startup path, not from reporter options. If the server starts without explicit resolver overrides, approval falls back to the server defaults instead. If Crvy Rprtr cannot determine exactly one target path, it leaves the image unresolved instead of guessing. Vitest-reported screenshots carry their baseline path from the reporter, so they approve without any resolver configuration — including first-run baselines, where approving accepts the newly created reference as-is.
 
 ## Component Testing
 
@@ -124,6 +124,8 @@ export default defineConfig({
 ```
 
 With a server running (`npx crvy-rprtr`), failed comparisons stream live and the UI serves Vitest's own screenshot files (reference, actual, diff) without copying them. Without a server, the reporter writes the same portable `crvy-rprtr.html` plus `crvy-rprtr-*.json` artifacts as Playwright runs, with screenshots copied content-addressed into `screenshotDir`.
+
+Approvals work from the same UI buttons: the reporter declares each screenshot's baseline path, so **Approve** and **Approve All** update Vitest's `__screenshots__` references without resolver configuration. First-run baselines (a newly created reference with no diff) are approvable too — approving accepts the reference as the baseline and marks the test approved.
 
 ### Vitest Reporter Options
 

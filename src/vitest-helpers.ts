@@ -36,14 +36,23 @@ export function getBrowserName(testCase: TestCase): string {
 export function getImageNameFromPath(filePath: string, browser: string): string {
   let imageName = basename(filePath).replace(/\.[^.]+$/, '')
 
-  const roleSuffix = /-(actual|diff)$/
-  if (roleSuffix.test(imageName)) {
-    imageName = imageName.replace(roleSuffix, '')
-  }
-
-  const suffix = `-${browser}-${process.platform}`
-  if (imageName.endsWith(suffix)) {
-    imageName = imageName.slice(0, -suffix.length)
+  // Vitest writes both `<image>-<browser>-<platform>-<role>` and
+  // `<image>-<role>-<browser>-<platform>` attachment layouts; strip whichever
+  // suffixes are present until neither matches.
+  let stripped = true
+  while (stripped) {
+    stripped = false
+    const roleMatch = imageName.match(/-(actual|diff)$/)
+    if (roleMatch !== null) {
+      imageName = imageName.slice(0, roleMatch.index)
+      stripped = true
+      continue
+    }
+    const platformSuffix = `-${browser}-${process.platform}`
+    if (imageName.endsWith(platformSuffix)) {
+      imageName = imageName.slice(0, -platformSuffix.length)
+      stripped = true
+    }
   }
 
   return imageName
