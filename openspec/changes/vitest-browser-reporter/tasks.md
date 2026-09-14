@@ -28,5 +28,5 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 6. Docs and gate
 
-- [ ] 6.1 README: Vitest Browser Mode setup section (install, provider, reporter options table including `referenceDir`/`attachmentsDir`), supported-layouts/limitations notes. Verify: manual review against spec scenarios
+- [x] 6.1 README: Vitest Browser Mode setup section (install, provider, reporter options table including `referenceDir`/`attachmentsDir`), supported-layouts/limitations notes. Verify: manual review against spec scenarios
 - [ ] 6.2 Full gate + Playwright regression + focused suites. Verify: `bun run check && bun run test:playwright && cd tests && bun test vitest-helpers.test.ts vitest-reporter.test.ts vitest-browser-integration.test.ts artifact-routes.test.ts`

@@ -94,6 +94,57 @@ When the server can resolve a Playwright config (via `--config` or auto-discover
 
 Crvy Rprtr works with [Playwright Component Testing](https://playwright.dev/docs/test-components) (the stories + gallery model, Playwright ≥ 1.62) out of the box — component tests are regular Playwright tests, so live reporting, baseline display, diffs, approval, and Docker mode all work unchanged. See the complete, annotated example in [examples/component-testing](./examples/component-testing).
 
+## Vitest Browser Mode
+
+Crvy Rprtr also reports [Vitest Browser Mode](https://vitest.dev/guide/browser/) `toMatchScreenshot()` results (Vitest ≥ 4 < 5). Install the reporter together with a browser provider:
+
+```bash
+npm i -D @crvy/rprtr vitest @vitest/browser-playwright
+```
+
+Wire the reporter into your Vitest config:
+
+```ts
+import { playwright } from '@vitest/browser-playwright'
+import { defineConfig } from 'vitest/config'
+
+import { CrvyRprtrVitestReporter } from '@crvy/rprtr/vitest'
+
+export default defineConfig({
+  test: {
+    browser: {
+      enabled: true,
+      headless: true,
+      provider: playwright(),
+      instances: [{ browser: 'chromium' }],
+    },
+    reporters: [new CrvyRprtrVitestReporter()],
+  },
+})
+```
+
+With a server running (`npx crvy-rprtr`), failed comparisons stream live and the UI serves Vitest's own screenshot files (reference, actual, diff) without copying them. Without a server, the reporter writes the same portable `crvy-rprtr.html` plus `crvy-rprtr-*.json` artifacts as Playwright runs, with screenshots copied content-addressed into `screenshotDir`.
+
+### Vitest Reporter Options
+
+| Option              | Type      | Default                        | Description                                                            |
+| ------------------- | --------- | ------------------------------ | ---------------------------------------------------------------------- |
+| `serverUrl`         | `string`  | `"ws://localhost:3000"`        | WebSocket URL of the Crvy Rprtr server                                 |
+| `screenshotDir`     | `string`  | `"./screenshots"`              | Directory for saving screenshot artifacts in offline/CI runs           |
+| `offlineReportPath` | `string`  | `"./crvy-rprtr-{worker}.json"` | Path for offline report when server is unavailable                     |
+| `reportHtmlPath`    | `string`  | `"./crvy-rprtr.html"`          | Path for the browser-openable static report HTML                       |
+| `ci`                | `boolean` | auto-detected                  | Force offline/CI mode (content-addressed copies, portable artifacts)   |
+| `referenceDir`      | `string`  | `"__screenshots__"`            | Overrides Vitest's default reference directory for location resolution |
+| `attachmentsDir`    | `string`  | `".vitest-attachments"`        | Overrides Vitest's default attachments directory for artifact lookup   |
+
+### Supported Layouts and Limitations
+
+- Default Vitest layouts are resolved automatically: references under `<test file dir>/__screenshots__/<test file>/` and actual/diff artifacts under `.vitest-attachments/<test file dir>/<test file>/`. Explicit `referenceDir`/`attachmentsDir` options override the defaults.
+- Custom Vitest `resolveScreenshotPath`/`resolveDiffPath` resolvers are not supported.
+- First-run baselines surface as `baseline-only` images and are viewable.
+- Approving Vitest screenshots is not supported yet (a follow-up change will bring it); the Playwright approval flow is unchanged.
+- The UI does not launch Vitest runs — start them with `vitest` yourself.
+
 ## Offline Mode
 
 When the server isn't running during tests, the reporter automatically falls back to offline mode:
