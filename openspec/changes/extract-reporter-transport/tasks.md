@@ -4,8 +4,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 1. Transport module
 
-- [ ] 1.1 Create `src/transport.ts` with `ReporterTransport` class: options (`serverUrl`, `screenshotDir`, `offlineReportPath`, `reportHtmlPath`, `workerIndex` env default, `ci` constructor-offline switch), `start()`, `connect()`, `enableOfflineMode()`, `send()` with `runEvents` recording — moved verbatim from `src/reporter.ts`. Verify: `bun run typecheck`
-- [ ] 1.2 Add `finish(runEndData)` to transport: run-end send, CI-mode `writeStaticArtifact`/`writeOfflineReport` calls, teardown wait — moved verbatim from `onEnd`/`writeOfflineReport`/`writeStaticArtifact` in `src/reporter.ts`, composing existing `reporter-artifact-ops.ts` functions. Verify: `bun run typecheck`
+- [x] 1.1 Create `src/transport.ts` with `ReporterTransport` class: options (`serverUrl`, `screenshotDir`, `offlineReportPath`, `reportHtmlPath`, `workerIndex` env default, `ci` constructor-offline switch), `start()`, `connect()`, `enableOfflineMode()`, `send()` with `runEvents` recording — moved verbatim from `src/reporter.ts`. Verify: `bun run typecheck`
+- [x] 1.2 Add `finish(runEndData)` to transport: run-end send, CI-mode `writeStaticArtifact`/`writeOfflineReport` calls, teardown wait — moved verbatim from `onEnd`/`writeOfflineReport`/`writeStaticArtifact` in `src/reporter.ts`, composing existing `reporter-artifact-ops.ts` functions. Verify: `bun run typecheck`
 
 ## 2. Adapter slim-down
 
