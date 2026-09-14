@@ -33,4 +33,4 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 7. Gate
 
-- [ ] 7.1 Full gate + browser regression (UI behavior changed). Verify: `bun run check && bun run test:playwright && cd tests && bun test`
+- [x] 7.1 Full gate + browser regression (UI behavior changed). Verify: `bun run check && bun run test:playwright && cd tests && bun test`
