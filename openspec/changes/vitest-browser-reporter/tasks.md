@@ -18,8 +18,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 4. Vitest reporter (test-first, mocked)
 
-- [ ] 4.1 Write failing `tests/vitest-reporter.test.ts` with mocked Vitest `TestCase` (artifacts + error messages, per the spike's mock harness): failed comparison → renamed attachment entries with native absolute paths + expected/actual/diff images in the emitted event; first-run reference-only → baseline-only image; explicit dirs honored; run-end → offline JSON with schema-valid events. Verify: `cd tests && bun test vitest-reporter.test.ts` (fails)
-- [ ] 4.2 Implement `src/vitest.ts` (`CrvyRprtrVitestReporter` on the shared transport): dev mode zero-copy renamed entries; CI-mode deferral + content-addressed copies via existing artifact ops; layered location resolution (D4); reserve `approvalTargets` as a documented, unimplemented payload field name (no field emitted yet). Verify: `cd tests && bun test vitest-reporter.test.ts` (passes) && `bun run typecheck`
+- [x] 4.1 Write failing `tests/vitest-reporter.test.ts` with mocked Vitest `TestCase` (artifacts + error messages, per the spike's mock harness): failed comparison → renamed attachment entries with native absolute paths + expected/actual/diff images in the emitted event; first-run reference-only → baseline-only image; explicit dirs honored; run-end → offline JSON with schema-valid events. Verify: `cd tests && bun test vitest-reporter.test.ts` (fails)
+- [x] 4.2 Implement `src/vitest.ts` (`CrvyRprtrVitestReporter` on the shared transport): dev mode zero-copy renamed entries; CI-mode deferral + content-addressed copies via existing artifact ops; layered location resolution (D4); reserve `approvalTargets` as a documented, unimplemented payload field name (no field emitted yet). Verify: `cd tests && bun test vitest-reporter.test.ts` (passes) && `bun run typecheck`
 
 ## 5. Real-browser integration harness
 
