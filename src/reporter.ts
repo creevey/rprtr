@@ -13,16 +13,8 @@ import type {
 } from '@playwright/test/reporter'
 import pLimit from 'p-limit'
 
-import { isCI } from './ci.ts'
-import { log, logError } from './debug-log.ts'
-import {
-  type RunEvent,
-  copyResolvedBaseline,
-  sanitizeId,
-  saveAttachments,
-  writeOfflineReport,
-  writeStaticArtifact,
-} from './reporter-artifact-ops.ts'
+import { log } from './debug-log.ts'
+import { copyResolvedBaseline, sanitizeId, saveAttachments } from './reporter-artifact-ops.ts'
 import {
   collectNativeImageAttachments,
   type CrvyRprtrOptions,
@@ -35,83 +27,48 @@ import {
   resolveBaselineTargets,
   withResolvedVisualNames,
 } from './snapshot-path-resolver.ts'
+import { ReporterTransport } from './transport.ts'
 
 export type { CrvyRprtrOptions }
 
 export class CrvyRprtr implements Reporter {
-  private ws: WebSocket | null = null
-  private serverUrl: string
-  private screenshotDir: string
-  private queue: string[] = []
-  private workerIndex: number
-  private offlineReportPath: string
-  private reportHtmlPath: string
+  private readonly transport: ReporterTransport
+  private readonly serverUrl: string
+  private readonly screenshotDir: string
   private configDir = process.cwd()
   private testMetadata = new Map<string, { reporterTitlePath: string[] }>()
   private playwrightSnapshotDir?: string
   private playwrightSnapshotPathTemplate?: string
   private playwrightToHaveScreenshotPathTemplate?: string
-  private isOfflineMode = false
-  private runEvents: RunEvent[] = []
   private readonly ci: boolean
   private readonly portableArtifacts = process.env.CRVY_RPRTR_PORTABLE_ARTIFACTS === '1'
   private pendingArtifacts: PendingPortableArtifact[] = []
 
   constructor(options: CrvyRprtrOptions = {}) {
-    this.serverUrl = options.serverUrl ?? process.env.CRVY_RPRTR_SERVER_URL ?? 'ws://localhost:3000'
-    this.screenshotDir = options.screenshotDir ?? './screenshots'
-    this.workerIndex = parseInt(process.env.TEST_WORKER_INDEX ?? '0', 10) || 0
-    this.offlineReportPath = options.offlineReportPath ?? `./crvy-rprtr-${this.workerIndex}.json`
-    this.reportHtmlPath = options.reportHtmlPath ?? './crvy-rprtr.html'
+    this.transport = new ReporterTransport(options)
+    this.serverUrl = this.transport.serverUrl
+    this.screenshotDir = this.transport.screenshotDir
+    this.ci = this.transport.ci
     this.playwrightSnapshotDir = options.playwrightSnapshotDir
     this.playwrightSnapshotPathTemplate = options.playwrightSnapshotPathTemplate
     this.playwrightToHaveScreenshotPathTemplate = options.playwrightToHaveScreenshotPathTemplate
-    this.ci = options.ci ?? isCI()
-    if (this.ci) this.isOfflineMode = true
   }
 
   onBegin(config: FullConfig, suite: Suite): void {
     this.configDir = config.configFile === undefined ? config.rootDir : dirname(config.configFile)
     log(`[CrvyRprtr] Starting run with ${suite.allTests().length} tests`)
-    if (!this.ci) {
-      this.connect()
-      this.sendRegister(config)
-    }
+    this.transport.start()
+    if (!this.ci) this.sendRegister(config)
   }
 
   private connect(): void {
-    const WebSocketConstructor = globalThis.WebSocket
-    if (typeof WebSocketConstructor !== 'function') {
-      log('[CrvyRprtr] WebSocket unavailable in current runtime; offline mode enabled')
-      this.enableOfflineMode()
-      return
-    }
-    try {
-      this.ws = new WebSocketConstructor(this.serverUrl)
-      this.ws.onopen = (): void => {
-        log('[CrvyRprtr] Connected to Crvy Rprtr server')
-        this.isOfflineMode = false
-        for (const message of this.queue) this.ws!.send(message)
-        this.queue = []
-      }
-      this.ws.onerror = (error): void => {
-        logError('[CrvyRprtr] WebSocket error:', error)
-        this.enableOfflineMode()
-      }
-      this.ws.onclose = (): void => {
-        log('[CrvyRprtr] Disconnected from Crvy Rprtr server')
-        this.enableOfflineMode()
-      }
-    } catch (error) {
-      logError('[CrvyRprtr] Failed to connect:', error)
-      this.enableOfflineMode()
-    }
+    this.transport.connect()
   }
-  private enableOfflineMode(): void {
-    if (this.isOfflineMode) return
-    this.isOfflineMode = true
-    log('[CrvyRprtr] Offline mode enabled - events will be queued to file')
+
+  private send(message: object): void {
+    this.transport.send(message)
   }
+
   private sendRegister(config: FullConfig): void {
     const snapshotDir = this.playwrightSnapshotDir ?? config.projects[0]?.snapshotDir
     const testDir = this.playwrightSnapshotDir === undefined ? config.projects[0]?.testDir : undefined
@@ -245,56 +202,25 @@ export class CrvyRprtr implements Reporter {
       ),
     )
   }
-  async onEnd(result: FullResult): Promise<void> {
-    this.send({ type: 'run-end', data: { status: result.status } })
-    if (this.ci) {
-      await mkdir(this.screenshotDir, { recursive: true })
-      const limit = pLimit(10)
-      await Promise.all(
-        this.pendingArtifacts.map((pending) =>
-          limit(async () => {
-            const savedAttachments = await saveAttachments(this.screenshotDir, pending.testId, {
-              attachments: pending.nativeAttachments,
-            })
-            await this.copyBaselinesForTargets(
-              pending.testId,
-              pending.status,
-              pending.resolvedTargets,
-              savedAttachments,
-            )
-            pending.eventData.attachments = savedAttachments
-          }),
-        ),
-      )
-      await writeStaticArtifact(this.runEvents, this.screenshotDir, this.reportHtmlPath)
-      await writeOfflineReport(this.runEvents, this.offlineReportPath, this.workerIndex)
-    }
 
-    await new Promise<void>((resolve) => {
-      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-        resolve()
-        return
-      }
-      this.ws.onclose = (): void => {
-        resolve()
-      }
-      setTimeout(() => {
-        this.ws?.close()
-        resolve()
-      }, 1000)
-      this.ws.close()
-    })
+  async onEnd(result: FullResult): Promise<void> {
+    await this.transport.finish({ status: result.status }, () => this.flushPendingArtifacts())
   }
 
-  private send(message: object): void {
-    const event = message as { type?: string; data?: unknown }
-    if (event.type === 'test-begin' || event.type === 'test-end' || event.type === 'run-end')
-      this.runEvents.push({ type: event.type, data: event.data })
-    const payload = JSON.stringify(message)
-    if (!this.isOfflineMode) {
-      if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(payload)
-      else this.queue.push(payload)
-    }
+  private async flushPendingArtifacts(): Promise<void> {
+    await mkdir(this.screenshotDir, { recursive: true })
+    const limit = pLimit(10)
+    await Promise.all(
+      this.pendingArtifacts.map((pending) =>
+        limit(async () => {
+          const savedAttachments = await saveAttachments(this.screenshotDir, pending.testId, {
+            attachments: pending.nativeAttachments,
+          })
+          await this.copyBaselinesForTargets(pending.testId, pending.status, pending.resolvedTargets, savedAttachments)
+          pending.eventData.attachments = savedAttachments
+        }),
+      ),
+    )
   }
 }
 export default CrvyRprtr

@@ -9,8 +9,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 2. Adapter slim-down
 
-- [ ] 2.1 Rewrite `src/reporter.ts` to compose `ReporterTransport`: constructor delegates options; `onBegin`/`onTestBegin`/`onTestEnd`/`onEnd` call transport; keep register payload, declaration extraction, `baselineInput`, `resolveBrowserLabel`, title paths, CI `pendingArtifacts` deferral queue (calling transport persistence primitives at flush) — move-only, no logic edits. Verify: `bun run typecheck`
-- [ ] 2.2 Confirm no public surface change: `build.ts` entries, `package.json` exports, `tsconfig.build.json` includes untouched; transport not added to exports map. Verify: `bun run build` and `git diff --stat build.ts package.json tsconfig.build.json` is empty
+- [x] 2.1 Rewrite `src/reporter.ts` to compose `ReporterTransport`: constructor delegates options; `onBegin`/`onTestBegin`/`onTestEnd`/`onEnd` call transport; keep register payload, declaration extraction, `baselineInput`, `resolveBrowserLabel`, title paths, CI `pendingArtifacts` deferral queue (calling transport persistence primitives at flush) — move-only, no logic edits. Verify: `bun run typecheck`
+- [x] 2.2 Confirm no public surface change: `build.ts` entries, `package.json` exports, `tsconfig.build.json` includes untouched; transport not added to exports map. Verify: `bun run build` and `git diff --stat build.ts package.json tsconfig.build.json` is empty
 
 ## 3. Behavior-equivalence gate
 
