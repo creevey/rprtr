@@ -8,8 +8,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 2. Vitest helpers (test-first)
 
-- [ ] 2.1 Write failing `tests/vitest-helpers.test.ts` covering: title-path extraction, browser-name resolution (project name → browser instance → fallback), image-name-from-path (browser+platform suffix, role suffix stripping), reference/attachment path builders for default and explicit dirs, status mapping, ANSI-stripping error parser extracting reference/actual/diff paths. Verify: `cd tests && bun test vitest-helpers.test.ts` (fails)
-- [ ] 2.2 Implement `src/vitest-helpers.ts` (pure functions, `vitest/node` types only). Verify: `cd tests && bun test vitest-helpers.test.ts` (passes) && `bun run typecheck`
+- [x] 2.1 Write failing `tests/vitest-helpers.test.ts` covering: title-path extraction, browser-name resolution (project name → browser instance → fallback), image-name-from-path (browser+platform suffix, role suffix stripping), reference/attachment path builders for default and explicit dirs, status mapping, ANSI-stripping error parser extracting reference/actual/diff paths. Verify: `cd tests && bun test vitest-helpers.test.ts` (fails)
+- [x] 2.2 Implement `src/vitest-helpers.ts` (pure functions, `vitest/node` types only). Verify: `cd tests && bun test vitest-helpers.test.ts` (passes) && `bun run typecheck`
 
 ## 3. Register allowlist extension (test-first)
 
