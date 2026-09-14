@@ -1,4 +1,3 @@
-import { spawn } from 'child_process'
 import { unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -13,16 +12,22 @@ import {
   type ContainerPathMapping,
 } from './docker-support.ts'
 import { type RunLauncher } from './run-launcher.ts'
+import { createRealSpawn, createRealTimers } from './run-process.ts'
 
 export { resolvePlaywrightLaunch } from './run-launcher.ts'
 export { buildTestListEntries } from './docker-support.ts'
 export { resolvePlaywrightVersion } from './docker-support.ts'
+export { createRealSpawn, createRealTimers } from './run-process.ts'
+
+export type RunnerKind = 'playwright' | 'vitest'
 
 export interface RunContext {
   configFile: string
   cwd: string
   /** Playwright's rootDir — the base --test-list entries are matched against. */
   rootDir?: string
+  /** Which runner kind this context launches. Absent means Playwright (old registers, seeded contexts). */
+  runner?: RunnerKind
 }
 
 export interface RunFilters {
@@ -71,11 +76,6 @@ export interface RunControllerDeps {
 }
 
 const STOP_GRACE_MS = 5000
-
-const KNOWN_SIGNALS: Record<string, NodeJS.Signals> = {
-  SIGTERM: 'SIGTERM',
-  SIGKILL: 'SIGKILL',
-}
 
 function sharedProject(tests: RunTestDescriptor[]): string | undefined {
   const names = new Set(tests.map((t) => t.projectName ?? ''))
@@ -266,32 +266,5 @@ export class RunController {
     this.deps.setReportRunning(false)
     this.deps.broadcast({ type: 'run-status', data: { running: false, mode: this.deps.launcher.mode } })
     void this.deps.saveReport?.()
-  }
-}
-
-export function createRealSpawn(): SpawnLike {
-  return (cmd, args, opts): ChildProcessLike => {
-    const cp = spawn(cmd, args, opts)
-    return {
-      on: (event, cb) => cp.on(event, cb),
-      kill: (signal) => {
-        const sig = KNOWN_SIGNALS[signal]
-        if (sig !== undefined) cp.kill(sig)
-      },
-    }
-  }
-}
-
-export function createRealTimers(): RunControllerDeps['timers'] {
-  const pending: NodeJS.Timeout[] = []
-  return {
-    setTimeout: (fn, ms?): unknown => {
-      const id = setTimeout(fn, ms)
-      pending.push(id)
-      return id
-    },
-    clearTimeout: (): void => {
-      for (const h of pending.splice(0)) clearTimeout(h)
-    },
   }
 }

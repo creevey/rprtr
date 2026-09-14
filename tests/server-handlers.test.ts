@@ -355,6 +355,7 @@ describe('handleRegister runContext persistence', () => {
       configFile: '/proj/playwright.config.ts',
       cwd: '/proj',
       rootDir: '/proj',
+      runner: 'playwright',
     })
   })
 
@@ -367,5 +368,54 @@ describe('handleRegister runContext persistence', () => {
   test('does not set runContext when only one of configFile/cwd is present', () => {
     handleRegister(ctx, { configFile: '/proj/playwright.config.ts' })
     expect(ctx.routesContext.runContext).toBeUndefined()
+  })
+})
+
+describe('handleRegister runner kinds', () => {
+  let ctx: HandlerContext
+
+  beforeEach(() => {
+    const created = createContext()
+    ctx = created.ctx
+  })
+
+  test('builds a Vitest run context from a Vitest-shaped register', () => {
+    handleRegister(ctx, {
+      vitestAttachmentsDir: '/proj/.vitest-attachments',
+      vitestReferenceDir: '/proj',
+      configFile: '/proj/vitest.config.ts',
+      cwd: '/proj',
+      runner: 'vitest',
+    })
+    expect(ctx.routesContext.runContext).toEqual({
+      configFile: '/proj/vitest.config.ts',
+      cwd: '/proj',
+      rootDir: '/proj',
+      runner: 'vitest',
+    })
+  })
+
+  test('old Vitest register with artifact dirs only leaves the run context unset', () => {
+    handleRegister(ctx, {
+      vitestAttachmentsDir: '/proj/.vitest-attachments',
+      vitestReferenceDir: '/proj',
+    })
+    expect(ctx.routesContext.runContext).toBeUndefined()
+  })
+
+  test('Playwright register without runner still builds a Playwright run context', () => {
+    handleRegister(ctx, {
+      playwrightSnapshotDir: '/proj/tests/__screenshots__',
+      playwrightTestDir: '/proj/tests',
+      playwrightRootDir: '/proj/tests',
+      configFile: '/proj/playwright.config.ts',
+      cwd: '/proj/tests',
+    })
+    expect(ctx.routesContext.runContext).toEqual({
+      configFile: '/proj/playwright.config.ts',
+      cwd: '/proj',
+      rootDir: '/proj/tests',
+      runner: 'playwright',
+    })
   })
 })

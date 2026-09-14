@@ -5,7 +5,7 @@ import { handleApiApprove, handleApiApproveAll } from './approval.ts'
 import { handleArtifactRoute } from './artifact-routes.ts'
 import type { ContainerPathMapping } from './docker-support.ts'
 import { respondWithFile } from './file-utils.ts'
-import type { RunController } from './run-controller.ts'
+import type { RunController, RunContext } from './run-controller.ts'
 import { handleRunRoutes } from './run-routes.ts'
 
 export interface RoutesContext {
@@ -27,7 +27,7 @@ export interface RoutesContext {
     playwrightToHaveScreenshotPathTemplate?: string
     containerPathMapping?: ContainerPathMapping
   }
-  runContext?: { configFile: string; cwd: string; rootDir?: string }
+  runContext?: RunContext
   runInfo?: { mode: 'local' | 'docker' }
   containerPathMapping?: ContainerPathMapping
 }

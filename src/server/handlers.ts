@@ -181,7 +181,7 @@ export function handleRegister(ctx: HandlerContext, rawData: RegisterData): void
   }
 
   if (data.configFile !== undefined && data.cwd !== undefined) {
-    ctx.routesContext.runContext = buildRunContext(data.configFile, data)
+    ctx.routesContext.runContext = buildRunContext(data.configFile, data.cwd, data)
   }
 
   console.log('[Server] Reporter registered with config:', {
@@ -191,6 +191,7 @@ export function handleRegister(ctx: HandlerContext, rawData: RegisterData): void
     vitestReferenceDir: data.vitestReferenceDir,
     configFile: data.configFile,
     cwd: data.cwd,
+    runner: data.runner,
   })
 }
 
@@ -198,8 +199,19 @@ export function handleRegister(ctx: HandlerContext, rawData: RegisterData): void
  * The config dir is the project root the server mounts and spawns in. Older reporters
  * registered Playwright's `rootDir` as cwd — a testDir-derived subdirectory — so derive
  * cwd from the config file instead. `rootDir` keys --test-list entry matching.
+ *
+ * Vitest registers carry the project root as `cwd` directly: Vitest spawns from the
+ * project root and has no testDir/rootDir templates, so both the spawn cwd and the
+ * rootDir are the register's `cwd`.
  */
-function buildRunContext(configFile: string, data: RegisterData): NonNullable<RoutesContext['runContext']> {
+function buildRunContext(
+  configFile: string,
+  cwd: string,
+  data: RegisterData,
+): NonNullable<RoutesContext['runContext']> {
+  if (data.runner === 'vitest') {
+    return { configFile, cwd, rootDir: cwd, runner: 'vitest' }
+  }
   const configDir = dirname(configFile)
   return {
     configFile,
@@ -207,5 +219,6 @@ function buildRunContext(configFile: string, data: RegisterData): NonNullable<Ro
     rootDir:
       data.playwrightRootDir ??
       (data.playwrightTestDir === undefined ? configDir : resolve(configDir, data.playwrightTestDir)),
+    runner: 'playwright',
   }
 }

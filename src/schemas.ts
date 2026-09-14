@@ -225,6 +225,9 @@ export const RegisterDataSchema = z.object({
   vitestReferenceDir: z.string().optional(),
   configFile: z.string().optional(),
   cwd: z.string().optional(),
+  // Runner kind declaring the register payload. Playwright reporters never
+  // send it; absent means Playwright.
+  runner: z.literal('vitest').optional(),
 })
 export type RegisterData = z.infer<typeof RegisterDataSchema>
 
