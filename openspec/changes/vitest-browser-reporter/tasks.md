@@ -24,7 +24,7 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 ## 5. Real-browser integration harness
 
 - [x] 5.1 Port the spike's fixture: `tests/fixtures/vitest-browser/` (vitest config with playwright provider + headless chromium, `toMatchScreenshot` test, committed reference PNG, `VITEST_HERO_COLOR` override for diff generation). Verify: `bunx vitest run --config tests/fixtures/vitest-browser/vitest.config.ts` exits nonzero with artifacts on disk
-- [ ] 5.2 Write failing `tests/vitest-browser-integration.test.ts`: spawn the fixture run, assert schema-valid offline report with expected/actual/diff attachments, image URLs, and locations; assert exit code reflects the visual failure. Verify: fails, then passes after any harness fixes; `cd tests && bun test vitest-browser-integration.test.ts`
+- [x] 5.2 Write failing `tests/vitest-browser-integration.test.ts`: spawn the fixture run, assert schema-valid offline report with expected/actual/diff attachments, image URLs, and locations; assert exit code reflects the visual failure. Verify: fails, then passes after any harness fixes; `cd tests && bun test vitest-browser-integration.test.ts`
 
 ## 6. Docs and gate
 
