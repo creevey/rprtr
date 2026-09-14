@@ -63,6 +63,8 @@
   // Ignore Svelte/CSS handling (these are processed at build time)
   // ws: runtime-used (src/server/node-adapter.ts) but flagged due to a knip tracing limitation.
   // @playwright/test: peerDependency used only in test files (excluded from production analysis).
+  // vitest: peerDependency used as types-only in src (vitest/node) and at runtime in the
+  // vitest-browser fixture files, which production analysis excludes.
   "ignoreDependencies": [
     "svelte",
     "tailwindcss",
@@ -71,5 +73,6 @@
     "esbuild-svelte",
     "ws",
     "@playwright/test",
+    "vitest",
   ],
 }

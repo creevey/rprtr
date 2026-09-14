@@ -106,6 +106,7 @@
     "oxlint-tsgolint": "^0.19.0",
     "postcss": "^8.5.8",
     "publint": "^0.3.18",
+    "serve": "14.2.6",
     "svelte": "^5.54.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
