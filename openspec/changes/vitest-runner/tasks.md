@@ -11,7 +11,7 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 - [x] 2.1 Write failing `tests/vitest-reporter.test.ts` cases: non-CI register payload carries `runner: 'vitest'`, `cwd` = project root, and `configFile` from the resolved config (mock sets `vitest.config.configFile`); `configFile` undefined (inline config) ⇒ field omitted, rest of payload unchanged; CI mode still sends no register. Verify: `cd tests && bun test vitest-reporter.test.ts` (new cases fail)
 - [x] 2.2 Implement in `src/vitest.ts` `sendRegister`/`onInit` (D2): `configFile` from `vitest.config.configFile` with the `vitest.vite.config.configFile` fallback spike; omit when neither resolves. Verify: tests from 2.1 pass && `cd tests && bun test vitest-browser-integration.test.ts` (harness still green)
-- [ ] 2.3 Live-register integration test: add a non-CI config variant to the browser fixture (temp-copied, never the committed baselines); start the server programmatically on an ephemeral port, spawn the fixture Vitest run against it, assert the register payload arrives with `runner`/`configFile`/`cwd` and the run-enabled status flips true. Verify: `cd tests && bun test vitest-register-integration.test.ts`
+- [x] 2.3 Live-register integration test: add a non-CI config variant to the browser fixture (temp-copied, never the committed baselines); start the server programmatically on an ephemeral port, spawn the fixture Vitest run against it, assert the register payload arrives with `runner`/`configFile`/`cwd` and the run-enabled status flips true. Verify: `cd tests && bun test vitest-register-integration.test.ts`
 
 ## 3. Per-runner launch args (test-first)
 

@@ -20,8 +20,8 @@ function toMessageString(message: string | Buffer | ArrayBuffer | Uint8Array): s
   return Buffer.from(message.buffer, message.byteOffset, message.byteLength).toString()
 }
 
-export function startBunServer(app: ServerApp): void {
-  Bun.serve({
+export function startBunServer(app: ServerApp): Bun.Server<undefined> {
+  const bunServer = Bun.serve({
     port: app.port,
     fetch(req, server) {
       if (isWebSocketUpgradeRequest(req)) {
@@ -54,4 +54,5 @@ export function startBunServer(app: ServerApp): void {
   })
 
   console.log(`Crvy Rprtr started at http://localhost:${app.port}`)
+  return bunServer
 }
