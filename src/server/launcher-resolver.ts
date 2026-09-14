@@ -8,6 +8,10 @@ import { resolveRunMode, type RunMode } from './run-mode.ts'
 
 export interface ResolvedRunBackend {
   launcher: RunLauncher
+  /** Always-local launcher; Vitest runs fall back to it even in docker mode. */
+  localLauncher: RunLauncher
+  /** The configured (not resolved) run mode; 'auto' stays 'auto'. */
+  configuredRunMode: RunMode
   routesContextOptions: RoutesContextOptions
 }
 
@@ -49,6 +53,8 @@ export async function resolveRunBackend(options: ResolveRunBackendOptions): Prom
       : createLocalLauncher({ port: options.port, fontRendering: options.fontRendering })
   return {
     launcher,
+    localLauncher: createLocalLauncher({ port: options.port, fontRendering: options.fontRendering }),
+    configuredRunMode: options.runMode ?? 'auto',
     routesContextOptions: {
       runInfo: { mode: resolvedRunMode },
       containerPathMapping: resolvedRunMode === 'docker' ? { from: DOCKER_WORK_DIR, to: process.cwd() } : undefined,

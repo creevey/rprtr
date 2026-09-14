@@ -29,6 +29,11 @@ describe('RunResponseSchema', () => {
     const parsed = safeParse(RunResponseSchema, { ok: false, reason: 'docker-unavailable' })
     expect(parsed).toEqual({ ok: false, reason: 'docker-unavailable' })
   })
+
+  test('accepts docker-unsupported-for-runner reason', () => {
+    const parsed = safeParse(RunResponseSchema, { ok: false, reason: 'docker-unsupported-for-runner' })
+    expect(parsed).toEqual({ ok: false, reason: 'docker-unsupported-for-runner' })
+  })
 })
 
 describe('handleRunRoutes docker-unavailable mapping', () => {

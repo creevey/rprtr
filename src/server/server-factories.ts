@@ -4,6 +4,7 @@ import type { ReportPersistence } from './report-persistence.ts'
 import type { RoutesContext } from './routes.ts'
 import { RunController, createRealSpawn, createRealTimers, type RunContext } from './run-controller.ts'
 import type { RunLauncher } from './run-launcher.ts'
+import type { RunMode } from './run-mode.ts'
 import { broadcastToBrowsers } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
@@ -23,6 +24,8 @@ function createServerRunController(
   setRunFiltered: (filtered: boolean) => void,
   saveReport: () => Promise<void>,
   launcher: RunLauncher,
+  localLauncher: RunLauncher,
+  configuredRunMode: RunMode,
 ): RunController {
   return new RunController({
     getRunContext: (): RunContext | null => routesContext.runContext ?? null,
@@ -39,6 +42,8 @@ function createServerRunController(
     spawn: createRealSpawn(),
     timers: createRealTimers(),
     launcher,
+    localLauncher,
+    getRunMode: (): RunMode => configuredRunMode,
   })
 }
 
@@ -57,6 +62,8 @@ export function createRunControllerAndHandlers(
   port: number,
   persistence: ReportPersistence,
   launcher: RunLauncher,
+  localLauncher: RunLauncher,
+  configuredRunMode: RunMode,
 ): { runController: RunController; getHandlerContext: () => HandlerContext } {
   let isFilteredRun = false
   const runController = createServerRunController(
@@ -69,6 +76,8 @@ export function createRunControllerAndHandlers(
     },
     persistence.saveReport,
     launcher,
+    localLauncher,
+    configuredRunMode,
   )
   const getHandlerContext = (): HandlerContext => ({
     reportData,

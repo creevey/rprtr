@@ -237,8 +237,13 @@ async function setupRoutesContext(
   staticDir: string,
   saveReport: () => Promise<void>,
   port: number,
-): Promise<{ routesContext: RoutesContext; launcher: RunLauncher }> {
-  const { launcher, routesContextOptions } = await resolveRunBackend({
+): Promise<{
+  routesContext: RoutesContext
+  launcher: RunLauncher
+  localLauncher: RunLauncher
+  configuredRunMode: RunMode
+}> {
+  const { launcher, localLauncher, configuredRunMode, routesContextOptions } = await resolveRunBackend({
     runMode: options.runMode,
     docker: options.docker,
     fontRendering: options.fontRendering,
@@ -249,7 +254,7 @@ async function setupRoutesContext(
     ...routesContextOptions,
   })
   await seedRunContext(routesContext, options)
-  return { routesContext, launcher }
+  return { routesContext, launcher, localLauncher, configuredRunMode }
 }
 
 export async function createServerApp(options: ServerOptions = {}): Promise<ServerApp> {
@@ -261,7 +266,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const wsClients = new Set<RuntimeWebSocket>()
   const currentRunIds = new Set<string>()
   const persistence = createReportPersistence(reportFile, reportData)
-  const { routesContext, launcher } = await setupRoutesContext(
+  const { routesContext, launcher, localLauncher, configuredRunMode } = await setupRoutesContext(
     options,
     reportData,
     staticDir,
@@ -276,6 +281,8 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
     port,
     persistence,
     launcher,
+    localLauncher,
+    configuredRunMode,
   )
   const handleRequest = (req: Request): Promise<Response> => handleHttpRequest(routesContext, req, runController)
   const handleWebSocketMessage = createWebSocketMessageHandler(getHandlerContext)

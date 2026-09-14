@@ -1,8 +1,3 @@
-import { unlinkSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
 import type { RunTestDescriptor } from '../schemas.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
 import {
@@ -11,7 +6,15 @@ import {
   resolvePlaywrightVersion,
   type ContainerPathMapping,
 } from './docker-support.ts'
+import {
+  defaultDeleteTempFile,
+  defaultWriteTempFile,
+  gteMinor,
+  resolveReporterDefault,
+  sharedProject,
+} from './run-command-helpers.ts'
 import { type RunLauncher } from './run-launcher.ts'
+import type { RunMode } from './run-mode.ts'
 import { createRealSpawn, createRealTimers } from './run-process.ts'
 
 export { resolvePlaywrightLaunch } from './run-launcher.ts'
@@ -37,7 +40,10 @@ export interface RunFilters {
 
 export type StartResult =
   | { ok: true }
-  | { ok: false; reason: 'no-config' | 'already-running' | 'no-tests' | 'docker-unavailable' }
+  | {
+      ok: false
+      reason: 'no-config' | 'already-running' | 'no-tests' | 'docker-unavailable' | 'docker-unsupported-for-runner'
+    }
 
 export type StopResult = { ok: true } | { ok: false; reason: 'not-running' }
 
@@ -69,6 +75,12 @@ export interface RunControllerDeps {
   resolveReporter?: (cwd: string) => string | null
   /** Builds the launch command and environment for a run. */
   launcher: RunLauncher
+  /** Configured run mode; Vitest runs only ever launch locally (D5). */
+  getRunMode?: () => RunMode | undefined
+  /** Always-local launcher used when a Vitest run must skip the docker backend. */
+  localLauncher?: RunLauncher
+  /** Warning sink for run-mode fallbacks; defaults to console.warn. */
+  warn?: (message: string) => void
   /** Injectable seams for the version-gated `--test-list` path (Playwright >= 1.56). */
   getPlaywrightVersion?: (cwd: string) => string | null
   writeTempFile?: (content: string) => string
@@ -77,54 +89,9 @@ export interface RunControllerDeps {
 
 const STOP_GRACE_MS = 5000
 
-function sharedProject(tests: RunTestDescriptor[]): string | undefined {
-  const names = new Set(tests.map((t) => t.projectName ?? ''))
-  if (names.size === 1) {
-    const name = [...names][0]
-    return name === '' ? undefined : name
-  }
-  return undefined
-}
-
-/** `MAJOR.MINOR` threshold check using only leading digits; ignores pre-release suffixes. False for unparseable input. */
-export function gteMinor(version: string, major: number, minor: number): boolean {
-  const match = /^(\d+)\.(\d+)/.exec(version.trim())
-  if (match === null) return false
-  const maj = parseInt(match[1]!, 10)
-  const min = parseInt(match[2]!, 10)
-  if (maj !== major) return maj > major
-  return min >= minor
-}
-
-const defaultWriteTempFile = (content: string): string => {
-  const path = join(tmpdir(), `crvy-rprtr-test-list-${process.pid}-${Date.now()}.txt`)
-  writeFileSync(path, content, 'utf8')
-  return path
-}
-
-function defaultDeleteTempFile(path: string): void {
-  try {
-    unlinkSync(path)
-  } catch {
-    // Ignore — the file may already be removed (e.g. double exit/error).
-  }
-}
-
-export function resolveReporterDefault(cwd: string): string | null {
-  try {
-    return createRequire(join(cwd, 'package.json')).resolve('@crvy/rprtr')
-  } catch {
-    // Not installed in the project; fall through to the server's own package.
-  }
-  try {
-    return createRequire(import.meta.url).resolve('@crvy/rprtr')
-  } catch {
-    return null
-  }
-}
-
 export class RunController {
   private child: ChildProcessLike | null = null
+  private childLauncher: RunLauncher | null = null
   private sigkillTimer: unknown = null
   private testListPath: string | null = null
 
@@ -204,12 +171,40 @@ export class RunController {
     return args
   }
 
+  /**
+   * Resolves the launcher for a run and enforces per-runner docker scoping (D5):
+   * docker runs are a Playwright-only concept — containerizing a Vitest run would
+   * need a vitest + browser-provider image. Explicit docker mode refuses instead
+   * of silently changing the rendering environment; auto mode falls back to a
+   * local launch with a warning.
+   */
+  private resolveRunLauncher(
+    ctx: RunContext,
+  ): { launcher: RunLauncher } | { refusal: 'docker-unsupported-for-runner' } {
+    const isVitest = ctx.runner === 'vitest'
+    const runMode = this.deps.getRunMode?.() ?? 'local'
+    if (isVitest && runMode === 'docker') return { refusal: 'docker-unsupported-for-runner' }
+    if (isVitest && runMode === 'auto') {
+      const warn =
+        this.deps.warn ??
+        ((message: string): void => {
+          console.warn(message)
+        })
+      warn('[RunController] Docker skipped: Vitest runs are not containerized; launching locally.')
+    }
+    return { launcher: isVitest ? (this.deps.localLauncher ?? this.deps.launcher) : this.deps.launcher }
+  }
+
   start(filters: RunFilters): StartResult {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: false, reason: 'no-config' }
     if (this.child !== null) return { ok: false, reason: 'already-running' }
     if (filters.tests !== undefined && filters.tests.length === 0) return { ok: false, reason: 'no-tests' }
-    if (this.deps.launcher.available === false) return { ok: false, reason: 'docker-unavailable' }
+
+    const resolved = this.resolveRunLauncher(ctx)
+    if ('refusal' in resolved) return { ok: false, reason: resolved.refusal }
+    const launcher = resolved.launcher
+    if (launcher.available === false) return { ok: false, reason: 'docker-unavailable' }
 
     const tests = rewriteContainerTestDescriptors(filters.tests, this.deps.containerPathMapping)
     const args =
@@ -217,7 +212,7 @@ export class RunController {
         ? this.buildVitestArgs(ctx, filters, tests)
         : this.buildPlaywrightArgs(ctx, filters, tests)
 
-    const spec = this.deps.launcher.launch({ ctx, playwrightArgs: args })
+    const spec = launcher.launch({ ctx, playwrightArgs: args })
     let child: ChildProcessLike
     try {
       child = this.deps.spawn(spec.cmd, spec.args, { cwd: ctx.cwd, env: spec.env, stdio: 'inherit' })
@@ -226,6 +221,7 @@ export class RunController {
       throw err
     }
     this.child = child
+    this.childLauncher = launcher
     child.on('exit', (code) => {
       this.handleChildExit(code)
     })
@@ -234,7 +230,7 @@ export class RunController {
     })
     this.deps.setReportRunning(true)
     this.deps.setRunFiltered?.(filters.tests !== undefined)
-    this.deps.broadcast({ type: 'run-status', data: { running: true, mode: this.deps.launcher.mode } })
+    this.deps.broadcast({ type: 'run-status', data: { running: true, mode: launcher.mode } })
     return { ok: true }
   }
 
@@ -252,9 +248,11 @@ export class RunController {
   }
 
   async prepareRun(): Promise<{ ok: true } | { ok: false; reason: 'docker-unavailable' }> {
+    const ctx = this.deps.getRunContext()
+    // Vitest runs never containerize; skip the docker probe/pull entirely.
+    if (ctx !== null && ctx.runner === 'vitest') return { ok: true }
     const launcher = this.deps.launcher
     if (launcher.prepare === undefined) return { ok: true }
-    const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: true }
     try {
       await launcher.prepare({
@@ -286,10 +284,12 @@ export class RunController {
     if (this.sigkillTimer !== null) this.deps.timers.clearTimeout(this.sigkillTimer)
     this.sigkillTimer = null
     this.child = null
+    const launcher = this.childLauncher ?? this.deps.launcher
+    this.childLauncher = null
     this.cleanupTempFile()
-    if (code !== null && code !== 0) console.warn(`[RunController] playwright test exited with code ${code}`)
+    if (code !== null && code !== 0) console.warn(`[RunController] test run exited with code ${code}`)
     this.deps.setReportRunning(false)
-    this.deps.broadcast({ type: 'run-status', data: { running: false, mode: this.deps.launcher.mode } })
+    this.deps.broadcast({ type: 'run-status', data: { running: false, mode: launcher.mode } })
     void this.deps.saveReport?.()
   }
 }

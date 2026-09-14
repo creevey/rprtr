@@ -20,8 +20,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 4. Docker scoping for Vitest runs (test-first)
 
-- [ ] 4.1 Write failing tests: Vitest + explicit docker run mode ⇒ `{ ok: false, reason: 'docker-unsupported-for-runner' }` with no spawn; Vitest + auto ⇒ local spawn with one warning logged; Vitest + local ⇒ local spawn; Playwright + docker unchanged; `RunResponseSchema` accepts the new reason literal. Verify: `cd tests && bun test run-controller.test.ts run-request-schema.test.ts` (new cases fail)
-- [ ] 4.2 Implement (D5): run-mode awareness in `RunController` deps and the per-mode branch; add the reason to `RunResponseSchema` (src/schemas/http.ts). Verify: tests from 4.1 pass && `bun run typecheck`
+- [x] 4.1 Write failing tests: Vitest + explicit docker run mode ⇒ `{ ok: false, reason: 'docker-unsupported-for-runner' }` with no spawn; Vitest + auto ⇒ local spawn with one warning logged; Vitest + local ⇒ local spawn; Playwright + docker unchanged; `RunResponseSchema` accepts the new reason literal. Verify: `cd tests && bun test run-controller.test.ts run-request-schema.test.ts` (new cases fail)
+- [x] 4.2 Implement (D5): run-mode awareness in `RunController` deps and the per-mode branch; add the reason to `RunResponseSchema` (src/schemas/http.ts). Verify: tests from 4.1 pass && `bun run typecheck`
 
 ## 5. Client run-error mapping
 

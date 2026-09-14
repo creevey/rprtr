@@ -87,10 +87,11 @@ export function createLocalLauncher(options: LocalLauncherOptions): RunLauncher 
     launch({ ctx, playwrightArgs }: LaunchParams): LaunchSpec {
       // The default resolver picks the runner binary by kind; an injected
       // resolveLaunch stays fully responsible for the command shape.
-      const name = ctx.runner === 'vitest' ? 'vitest' : 'playwright'
       const resolve =
         options.resolveLaunch ??
-        ((cwd: string, args: string[]): { cmd: string; args: string[] } => resolveLocalCommand(name, args))
+        (ctx.runner === 'vitest'
+          ? (cwd: string, args: string[]): { cmd: string; args: string[] } => resolveLocalCommand('vitest', args)
+          : resolvePlaywrightLaunch)
       const { cmd, args } = resolve(ctx.cwd, playwrightArgs)
       const { port, resolveLaunch: _resolveLaunch, env: baseEnv, ...spawnEnvOptions } = options
       return { cmd, args, env: buildSpawnEnv(port, baseEnv, spawnEnvOptions) }

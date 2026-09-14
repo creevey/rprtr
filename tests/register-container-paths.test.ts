@@ -50,6 +50,7 @@ describe('handleRegister container path mapping', () => {
       configFile: '/host/proj/playwright.config.ts',
       cwd: '/host/proj',
       rootDir: '/host/proj/tests',
+      runner: 'playwright',
     })
     expect(routesContext.approvalRouting?.playwrightSnapshotDir).toBe('/host/proj/tests/__screenshots__')
     expect(routesContext.approvalRouting?.playwrightTestDir).toBe('/host/proj/tests')
@@ -65,6 +66,7 @@ describe('handleRegister container path mapping', () => {
       configFile: '/work/playwright.config.ts',
       cwd: '/work',
       rootDir: '/work/tests',
+      runner: 'playwright',
     })
     expect(routesContext.approvalRouting?.playwrightSnapshotDir).toBe('/work/tests/__screenshots__')
   })
@@ -80,6 +82,7 @@ describe('handleRegister container path mapping', () => {
       configFile: '/host/proj/playwright.config.ts',
       cwd: '/host/proj',
       rootDir: '/host/proj/tests',
+      runner: 'playwright',
     })
   })
 

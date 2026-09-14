@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 
 import type { ContainerPathMapping } from '../src/server/docker-support'
+import { gteMinor, resolveReporterDefault } from '../src/server/run-command-helpers'
 import {
   RunController,
   type ChildProcessLike,
   type RunContext,
   type RunControllerDeps,
-  resolveReporterDefault,
-  gteMinor,
   buildTestListEntries,
 } from '../src/server/run-controller'
 import type { LaunchParams, LaunchSpec } from '../src/server/run-launcher'
@@ -54,6 +53,9 @@ interface Fixture {
   saveReportCalls: { value: number }
   setLauncherAvailable: (value: boolean | undefined) => void
   probeCalls: { value: number }
+  setRunMode: (mode: 'local' | 'docker' | 'auto' | undefined) => void
+  warnings: string[]
+  prepareCalls: { value: number }
 }
 
 function createFixture(
@@ -74,8 +76,11 @@ function createFixture(
   const deletedTempFiles: string[] = []
   let playwrightVersion: string | null = null
   let spawnThrows = false
+  let runMode: 'local' | 'docker' | 'auto' | undefined
   const saveReportCalls = { value: 0 }
   const probeCalls = { value: 0 }
+  const warnings: string[] = []
+  const prepareCalls = { value: 0 }
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -112,6 +117,10 @@ function createFixture(
       get available(): boolean | undefined {
         return launcherAvailable
       },
+      prepare: (): Promise<void> => {
+        prepareCalls.value += 1
+        return Promise.resolve()
+      },
       launch: ({ ctx, playwrightArgs }: LaunchParams): LaunchSpec => {
         const name = ctx.runner === 'vitest' ? 'vitest' : 'playwright'
         const resolved = resolveLaunch?.(ctx.cwd, playwrightArgs) ?? {
@@ -136,6 +145,10 @@ function createFixture(
     saveReport: (): Promise<void> => {
       saveReportCalls.value++
       return Promise.resolve()
+    },
+    getRunMode: (): 'local' | 'docker' | 'auto' | undefined => runMode,
+    warn: (message: string): void => {
+      warnings.push(message)
     },
   }
   const controller = new RunController(deps)
@@ -172,6 +185,11 @@ function createFixture(
       launcherAvailable = value
     },
     probeCalls,
+    setRunMode: (mode): void => {
+      runMode = mode
+    },
+    warnings,
+    prepareCalls,
   }
 }
 
@@ -465,6 +483,66 @@ describe('RunController.start', () => {
     const result = f.controller.start({})
     expect(result).toEqual({ ok: false, reason: 'docker-unavailable' })
     expect(f.spawnCalls).toHaveLength(0)
+  })
+})
+
+describe('RunController.start Vitest docker scoping', () => {
+  test('explicit docker run mode refuses Vitest runs without spawning', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: false, reason: 'docker-unsupported-for-runner' })
+    expect(f.spawnCalls).toHaveLength(0)
+    expect(f.broadcasts).toHaveLength(0)
+    expect(f.runningFlag.value).toBe(false)
+    expect(f.warnings).toHaveLength(0)
+  })
+
+  test('auto run mode falls back to a local spawn with one warning', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('auto')
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: true })
+    expect(f.spawnCalls).toHaveLength(1)
+    expect(f.spawnCalls[0]!.args).toEqual(['vitest', 'run', '--config', '/proj/vitest.config.ts'])
+    expect(f.broadcasts).toEqual([{ type: 'run-status', data: { running: true, mode: 'local' } }])
+    expect(f.warnings).toHaveLength(1)
+  })
+
+  test('local run mode spawns locally without warning', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('local')
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: true })
+    expect(f.spawnCalls).toHaveLength(1)
+    expect(f.spawnCalls[0]!.args[0]).toBe('vitest')
+    expect(f.warnings).toHaveLength(0)
+  })
+
+  test('Playwright runs ignore the docker scoping branch', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setRunMode('docker')
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: true })
+    expect(f.spawnCalls).toHaveLength(1)
+    expect(f.spawnCalls[0]!.args[0]).toBe('playwright')
+    expect(f.warnings).toHaveLength(0)
+  })
+
+  test('Vitest runs never trigger docker preparation', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    const preparation = await f.controller.prepareRun()
+    expect(preparation).toEqual({ ok: true })
+    expect(f.prepareCalls.value).toBe(0)
+  })
+
+  test('Playwright runs still prepare', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setRunMode('docker')
+    const preparation = await f.controller.prepareRun()
+    expect(preparation).toEqual({ ok: true })
+    expect(f.prepareCalls.value).toBe(1)
   })
 })
 

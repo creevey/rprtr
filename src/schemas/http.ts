@@ -30,7 +30,7 @@ export const RunResponseSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true) }),
   z.object({
     ok: z.literal(false),
-    reason: z.enum(['no-config', 'already-running', 'no-tests', 'docker-unavailable']),
+    reason: z.enum(['no-config', 'already-running', 'no-tests', 'docker-unavailable', 'docker-unsupported-for-runner']),
   }),
 ])
 
