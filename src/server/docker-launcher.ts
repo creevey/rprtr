@@ -1,3 +1,4 @@
+import { collectForwardedEnvNames } from './docker-env.ts'
 import {
   createDockerExec,
   detectProjectAgent,
@@ -55,34 +56,6 @@ export interface DockerLauncherOptions {
   platform?: NodeJS.Platform
 }
 
-/**
- * Never propagated into the container: host-specific or launcher-pinned values. Upper-case,
- * matched case-insensitively — Windows env-var casing is nondeterministic (`Path` vs `PATH`).
- */
-const ENV_DENYLIST = new Set([
-  'CI',
-  'PLAYWRIGHT_BROWSERS_PATH',
-  'CRVY_RPRTR_SERVER_URL',
-  'CRVY_RPRTR_PORTABLE_ARTIFACTS',
-  'TZ',
-  'LANG',
-  'LC_ALL',
-  'PLAYWRIGHT_HTML_OPEN',
-  'PATH',
-  // Host paths that do not exist in the container: fontconfig resolves them to nothing and
-  // the browser ends up with no font directories at all (blank text). The container gets its
-  // AA from the mounted drop-in instead.
-  'FONTCONFIG_FILE',
-  'FONTCONFIG_PATH',
-])
-
-/** Windows host env noise: host paths/separators a Linux container can't use, or host-platform markers (`OS`, `PROCESSOR_ARCHITECTURE`) that mislead in-container platform detection. */
-const WINDOWS_ENV_NOISE = new Set(
-  'SYSTEMROOT COMSPEC WINDIR PATHEXT OS PROGRAMFILES PROGRAMFILES(X86) PROGRAMW6432 PROGRAMDATA ALLUSERSPROFILE PUBLIC APPDATA LOCALAPPDATA TEMP TMP USERPROFILE HOMEDRIVE HOMEPATH USERNAME PSMODULEPATH DRIVERDATA NUMBER_OF_PROCESSORS PROCESSOR_ARCHITECTURE PROCESSOR_IDENTIFIER PROCESSOR_LEVEL PROCESSOR_REVISION'.split(
-    ' ',
-  ),
-)
-
 export class DockerUnavailableError extends Error {
   constructor() {
     super('Docker daemon is not available')
@@ -115,6 +88,7 @@ interface LaunchDeps {
   image: string
   command: readonly string[]
   warn: Warn
+  platform: NodeJS.Platform
 }
 
 function defaultWarn(message: string): void {
@@ -191,9 +165,7 @@ function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], deps: Lau
   if (deps.docker?.fontRendering !== 'inherit') {
     args.push('-v', `${ensureGrayscaleFontconfig()}:${CONTAINER_FONTCONFIG_PATH}:ro`)
   }
-  for (const [key, value] of Object.entries(deps.env)) {
-    const upper = key.toUpperCase()
-    if (ENV_DENYLIST.has(upper) || WINDOWS_ENV_NOISE.has(upper) || value === undefined) continue
+  for (const key of collectForwardedEnvNames(deps.env, deps.platform)) {
     args.push('-e', key)
   }
   if (deps.docker?.extraArgs !== undefined) args.push(...deps.docker.extraArgs)
@@ -274,6 +246,7 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
         image,
         command: state.command,
         warn: deps.warn,
+        platform: deps.platform,
       })
       return { cmd: 'docker', args, env: stripCi(deps.baseEnv) }
     },

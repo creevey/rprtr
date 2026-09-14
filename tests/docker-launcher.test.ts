@@ -355,6 +355,8 @@ describe('DockerLauncher.launch', () => {
         TEMP: 'C:\\Users\\dev\\AppData\\Local\\Temp',
         APPDATA: 'C:\\Users\\dev\\AppData\\Roaming',
         'ProgramFiles(x86)': 'C:\\Program Files (x86)',
+        HOME: '/home/dev',
+        NPM_CONFIG_CACHE: '/home/dev/.npm',
       } as Record<string, string | undefined>,
     })
     await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
@@ -373,9 +375,32 @@ describe('DockerLauncher.launch', () => {
     expect(envFlags).not.toContain('TEMP')
     expect(envFlags).not.toContain('APPDATA')
     expect(envFlags).not.toContain('ProgramFiles(x86)')
+    expect(envFlags).not.toContain('HOME')
+    expect(envFlags).not.toContain('NPM_CONFIG_CACHE')
     // The pinned values still come from explicit -e KEY=VALUE flags.
     expect(spec.args).toContain('TZ=UTC')
     expect(spec.args).toContain('CRVY_RPRTR_SERVER_URL=ws://host.docker.internal:3000')
+  })
+
+  test('drops env vars with Windows-path values on win32 hosts', async () => {
+    const { launcher } = makeLauncher({
+      platform: 'win32',
+      env: {
+        API_KEY: 'secret',
+        BUN_INSTALL: 'C:\\Users\\dev\\.bun',
+        NVM_SYMLINK: 'C:\\Program Files\\nodejs',
+        UNC_DIR: '\\\\server\\share',
+        POSIX_LIKE: 'secret-value',
+      },
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const spec = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] })
+    const envFlags = spec.args.filter((a, i) => i > 0 && spec.args[i - 1] === '-e')
+    expect(envFlags).toContain('API_KEY')
+    expect(envFlags).toContain('POSIX_LIKE')
+    expect(envFlags).not.toContain('BUN_INSTALL')
+    expect(envFlags).not.toContain('NVM_SYMLINK')
+    expect(envFlags).not.toContain('UNC_DIR')
   })
 
   test('includes --platform only when configured', async () => {
