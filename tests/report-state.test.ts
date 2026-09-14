@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
+import { mergeOfflineReportsIntoTests } from '../src/offline-reports'
 import { applyTestBeginEvent, applyTestEndEvent, createMutableReportState } from '../src/report-state'
 import { ReportApiResponseSchema, TestEndDataSchema, safeParse } from '../src/schemas'
+import type { OfflineReport } from '../src/types'
 
 describe('report-state visual classification', () => {
   test('keeps skipped test and result statuses consistent', () => {
@@ -461,5 +463,247 @@ describe('report-state approval metadata', () => {
         occurrenceIndex: 1,
       },
     ])
+  })
+
+  test('TestEndData accepts an optional approvalTargets map and preserves it through parsing', () => {
+    const parsedEvent = safeParse(TestEndDataSchema, {
+      id: 'test-targets-schema',
+      status: 'failed',
+      attachments: [],
+      visualNames: ['header'],
+      approvalTargets: { header: '/refs/hero-chromium-darwin.png' },
+    })
+
+    expect(parsedEvent).not.toBeNull()
+    expect(parsedEvent?.approvalTargets).toEqual({ header: '/refs/hero-chromium-darwin.png' })
+  })
+
+  test('stamps approveFromPath from the actual attachment and approveToPath from the target', () => {
+    const state = createMutableReportState('./screenshots')
+
+    applyTestBeginEvent(state, {
+      id: 'test-targets-comparison',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/hero.test.ts', line: 10 },
+    })
+
+    const parsedEvent = safeParse(TestEndDataSchema, {
+      id: 'test-targets-comparison',
+      status: 'failed',
+      attachments: [
+        { name: 'header-expected.png', path: '/refs/hero-chromium-darwin.png', contentType: 'image/png' },
+        { name: 'header-actual.png', path: '/tmp/artifacts/header-actual.png', contentType: 'image/png' },
+        { name: 'header-diff.png', path: '/tmp/artifacts/header-diff.png', contentType: 'image/png' },
+      ],
+      visualNames: ['header'],
+      approvalTargets: { header: '/refs/hero-chromium-darwin.png' },
+    })
+
+    expect(parsedEvent).not.toBeNull()
+    if (parsedEvent === null) {
+      return
+    }
+
+    applyTestEndEvent(state, parsedEvent, { screenshotsBaseUrl: '/screenshots/' })
+
+    const image = state.reportData.tests['test-targets-comparison']?.results?.[0]?.images?.['header']
+    expect(image?.actual).toBe('/file/%2Ftmp%2Fartifacts%2Fheader-actual.png')
+    expect(image?.approveFromPath).toBe('/tmp/artifacts/header-actual.png')
+    expect(image?.approveToPath).toBe('/refs/hero-chromium-darwin.png')
+  })
+
+  test('stamps both approve paths to the target for an expected-only first-run image', () => {
+    const state = createMutableReportState('./screenshots')
+
+    applyTestBeginEvent(state, {
+      id: 'test-targets-first-run',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/hero.test.ts', line: 10 },
+    })
+
+    const parsedEvent = safeParse(TestEndDataSchema, {
+      id: 'test-targets-first-run',
+      status: 'failed',
+      attachments: [{ name: 'header-expected.png', path: '/refs/hero-chromium-darwin.png', contentType: 'image/png' }],
+      visualNames: ['header'],
+      approvalTargets: { header: '/refs/hero-chromium-darwin.png' },
+    })
+
+    expect(parsedEvent).not.toBeNull()
+    if (parsedEvent === null) {
+      return
+    }
+
+    applyTestEndEvent(state, parsedEvent, { screenshotsBaseUrl: '/screenshots/' })
+
+    const image = state.reportData.tests['test-targets-first-run']?.results?.[0]?.images?.['header']
+    expect(image?.source).toBe('baseline-only')
+    expect(image?.approveFromPath).toBe('/refs/hero-chromium-darwin.png')
+    expect(image?.approveToPath).toBe('/refs/hero-chromium-darwin.png')
+  })
+
+  test('resolves CI-mode relative attachment paths against the report screenshotDir', () => {
+    const state = createMutableReportState('/srv/artifacts/screenshots')
+
+    applyTestBeginEvent(state, {
+      id: 'test-targets-ci',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/hero.test.ts', line: 10 },
+    })
+
+    const parsedEvent = safeParse(TestEndDataSchema, {
+      id: 'test-targets-ci',
+      status: 'failed',
+      attachments: [
+        { name: 'header-expected.png', path: 'test-targets-ci/ref-hash.png', contentType: 'image/png' },
+        { name: 'header-actual.png', path: 'test-targets-ci/actual-hash.png', contentType: 'image/png' },
+        { name: 'header-diff.png', path: 'test-targets-ci/diff-hash.png', contentType: 'image/png' },
+      ],
+      visualNames: ['header'],
+      approvalTargets: { header: '/refs/hero-chromium-darwin.png' },
+    })
+
+    expect(parsedEvent).not.toBeNull()
+    if (parsedEvent === null) {
+      return
+    }
+
+    applyTestEndEvent(state, parsedEvent, { screenshotsBaseUrl: '/screenshots/' })
+
+    const image = state.reportData.tests['test-targets-ci']?.results?.[0]?.images?.['header']
+    expect(image?.actual).toBe('/screenshots/test-targets-ci/actual-hash.png')
+    expect(image?.approveFromPath).toBe('/srv/artifacts/screenshots/test-targets-ci/actual-hash.png')
+    expect(image?.approveToPath).toBe('/refs/hero-chromium-darwin.png')
+  })
+
+  test('event without approval targets builds images without approve metadata', () => {
+    const state = createMutableReportState('./screenshots')
+
+    applyTestBeginEvent(state, {
+      id: 'test-no-targets',
+      title: 'visual',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/hero.test.ts', line: 10 },
+    })
+
+    applyTestEndEvent(
+      state,
+      {
+        id: 'test-no-targets',
+        status: 'failed',
+        attachments: [
+          { name: 'header-expected.png', path: '/refs/hero-chromium-darwin.png', contentType: 'image/png' },
+          { name: 'header-actual.png', path: '/tmp/artifacts/header-actual.png', contentType: 'image/png' },
+          { name: 'header-diff.png', path: '/tmp/artifacts/header-diff.png', contentType: 'image/png' },
+        ],
+        visualNames: ['header'],
+      },
+      { screenshotsBaseUrl: '/screenshots/' },
+    )
+
+    const image = state.reportData.tests['test-no-targets']?.results?.[0]?.images?.['header']
+    expect(image?.source).toBe('comparison')
+    expect(image?.actual).toBe('/file/%2Ftmp%2Fartifacts%2Fheader-actual.png')
+    expect(image?.approveFromPath).toBeUndefined()
+    expect(image?.approveToPath).toBeUndefined()
+  })
+
+  test('replayed offline report with approval targets stamps approve paths onto the matching image', () => {
+    const offlineReport: OfflineReport = {
+      version: 1,
+      generatedAt: '2026-09-14T00:00:00.000Z',
+      workers: 1,
+      events: [
+        {
+          type: 'test-begin',
+          data: {
+            id: 'test-replay-targets',
+            title: 'visual',
+            titlePath: ['Suite'],
+            browser: 'chromium',
+            location: { file: 'tests/hero.test.ts', line: 10 },
+          },
+          timestamp: 1,
+          workerIndex: 0,
+        },
+        {
+          type: 'test-end',
+          data: {
+            id: 'test-replay-targets',
+            status: 'failed',
+            attachments: [
+              { name: 'header-expected.png', path: 'test-replay-targets/ref-hash.png', contentType: 'image/png' },
+              { name: 'header-actual.png', path: 'test-replay-targets/actual-hash.png', contentType: 'image/png' },
+              { name: 'header-diff.png', path: 'test-replay-targets/diff-hash.png', contentType: 'image/png' },
+            ],
+            visualNames: ['header'],
+            approvalTargets: { header: '/proj/__screenshots__/hero-chromium-darwin.png' },
+          },
+          timestamp: 2,
+          workerIndex: 0,
+        },
+        { type: 'run-end', data: { status: 'failed' }, timestamp: 3, workerIndex: 0 },
+      ],
+    }
+
+    const tests = mergeOfflineReportsIntoTests({}, [offlineReport], {
+      screenshotDir: '/srv/offline/screenshots',
+      screenshotsBaseUrl: '/screenshots/',
+    })
+
+    const image = tests['test-replay-targets']?.results?.[0]?.images?.['header']
+    expect(image?.approveFromPath).toBe('/srv/offline/screenshots/test-replay-targets/actual-hash.png')
+    expect(image?.approveToPath).toBe('/proj/__screenshots__/hero-chromium-darwin.png')
+  })
+
+  test('old offline report fixture without approval metadata still parses and replays', () => {
+    const legacyReport: OfflineReport = {
+      version: 1,
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      workers: 1,
+      events: [
+        {
+          type: 'test-begin',
+          data: {
+            id: 'test-legacy',
+            title: 'visual',
+            titlePath: ['Suite'],
+            browser: 'chromium',
+            location: { file: 'tests/hero.test.ts', line: 10 },
+          },
+          timestamp: 1,
+          workerIndex: 0,
+        },
+        {
+          type: 'test-end',
+          data: {
+            id: 'test-legacy',
+            status: 'failed',
+            attachments: [
+              { name: 'header-actual.png', path: '/tmp/legacy/header-actual.png', contentType: 'image/png' },
+            ],
+            visualNames: ['header'],
+          },
+          timestamp: 2,
+          workerIndex: 0,
+        },
+        { type: 'run-end', data: { status: 'failed' }, timestamp: 3, workerIndex: 0 },
+      ],
+    }
+
+    const tests = mergeOfflineReportsIntoTests({}, [legacyReport], { screenshotsBaseUrl: '/screenshots/' })
+
+    const image = tests['test-legacy']?.results?.[0]?.images?.['header']
+    expect(image?.source).toBe('comparison')
+    expect(image?.actual).toBe('/file/%2Ftmp%2Flegacy%2Fheader-actual.png')
+    expect(image?.approveFromPath).toBeUndefined()
+    expect(image?.approveToPath).toBeUndefined()
   })
 })

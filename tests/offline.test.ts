@@ -1204,4 +1204,42 @@ describe('Offline Mode', () => {
     // No baseline copy under the screenshot dir
     expect(existsSync(join(TEST_SCREENSHOT_DIR, 'test-visual-named-copy', 'header-expected.png'))).toBe(false)
   })
+
+  test('old offline report fixture without approval metadata still parses', () => {
+    const legacyReport = {
+      version: 1,
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      workers: 1,
+      events: [
+        {
+          type: 'test-begin',
+          data: {
+            id: 'legacy-test',
+            title: 'visual pass',
+            titlePath: ['Suite'],
+            browser: 'chromium',
+            location: { file: TEST_FILE, line: 10 },
+          },
+          timestamp: 1,
+          workerIndex: 0,
+        },
+        {
+          type: 'test-end',
+          data: {
+            id: 'legacy-test',
+            status: 'failed',
+            attachments: [{ name: 'header-actual.png', path: 'legacy-test/actual.png', contentType: 'image/png' }],
+            visualNames: ['header'],
+          },
+          timestamp: 2,
+          workerIndex: 0,
+        },
+        { type: 'run-end', data: { status: 'failed' }, timestamp: 3, workerIndex: 0 },
+      ],
+    }
+
+    const parsed = safeParse(OfflineReportSchema, legacyReport)
+    expect(parsed).not.toBeNull()
+    expect(parsed?.events).toHaveLength(3)
+  })
 })

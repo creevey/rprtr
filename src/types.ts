@@ -11,6 +11,10 @@ export interface Images {
   diff?: string
   error?: string
   source?: VisualSource
+  /** Reporter-asserted baseline source file (metadata-carrying providers). */
+  approveFromPath?: string
+  /** Reporter-asserted baseline target path (metadata-carrying providers). */
+  approveToPath?: string
 }
 
 export interface Attachment {
@@ -122,6 +126,7 @@ export interface TestEndMessage {
     attachments: Attachment[]
     visualNames: string[]
     visualDeclarations?: readonly ScreenshotDeclaration[]
+    approvalTargets?: Record<string, string>
     error?: string
     duration?: number
   }

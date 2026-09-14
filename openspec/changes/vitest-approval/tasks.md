@@ -4,8 +4,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 1. Schema additions (test-first)
 
-- [ ] 1.1 Write failing schema/report-state tests: `TestEndData` accepts optional `approvalTargets` map; replayed offline report with targets stamps `approveFromPath`/`approveToPath` onto the matching image; event without targets builds images as before; old offline report fixtures still parse. Verify: `cd tests && bun test report-state.test.ts offline.test.ts` (new cases fail)
-- [ ] 1.2 Extend `ImagesSchema` (optional `approveFromPath`/`approveToPath`) and `TestEndDataSchema` (optional `approvalTargets`); implement stamping in `applyTestEndEvent` (metadata present → stamp actual as source, target as target; expected-only image → both = target). Verify: tests from 1.1 pass && `bun run typecheck`
+- [x] 1.1 Write failing schema/report-state tests: `TestEndData` accepts optional `approvalTargets` map; replayed offline report with targets stamps `approveFromPath`/`approveToPath` onto the matching image; event without targets builds images as before; old offline report fixtures still parse. Verify: `cd tests && bun test report-state.test.ts offline.test.ts` (new cases fail)
+- [x] 1.2 Extend `ImagesSchema` (optional `approveFromPath`/`approveToPath`) and `TestEndDataSchema` (optional `approvalTargets`); implement stamping in `applyTestEndEvent` (metadata present → stamp actual as source, target as target; expected-only image → both = target). Verify: tests from 1.1 pass && `bun run typecheck`
 
 ## 2. Route resolution order (test-first)
 

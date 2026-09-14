@@ -53,6 +53,18 @@ export function mergeDeclaredImages(
   )
 }
 
+export type ImageAttachmentRole = 'actual' | 'expected' | 'diff'
+
+export function parseImageAttachmentName(name: string): { baseName: string; role: ImageAttachmentRole } | null {
+  const match = name.match(/^(.+?)-(actual|expected|diff)(?:\.png)?$/)
+  if (match === null) return null
+  const baseName = match[1]
+  const role = match[2]
+  if (baseName === undefined || role === undefined) return null
+  if (role !== 'actual' && role !== 'expected' && role !== 'diff') return null
+  return { baseName, role }
+}
+
 export function attachmentsToImages(
   attachments: Attachment[],
   screenshotsBaseUrl = '/screenshots/',
@@ -62,11 +74,9 @@ export function attachmentsToImages(
 
   for (const attachment of attachments) {
     if (attachment.contentType !== 'image/png') continue
-    const match = attachment.name.match(/^(.+?)-(actual|expected|diff)(?:\.png)?$/)
-    if (match === null) continue
-    const baseName = match[1]
-    const role = match[2]
-    if (baseName === null || baseName === undefined || role === null || role === undefined) continue
+    const parsed = parseImageAttachmentName(attachment.name)
+    if (parsed === null) continue
+    const { baseName, role } = parsed
     images[baseName] ??= {}
     const url = isAnyAbsolutePath(attachment.path)
       ? `/file/${encodeURIComponent(attachment.path)}`

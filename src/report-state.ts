@@ -1,3 +1,6 @@
+import { join } from 'path'
+
+import { isAnyAbsolutePath } from './path-utils.ts'
 import {
   attachmentsToImages,
   classifyImage,
@@ -5,6 +8,7 @@ import {
   getDeclaredVisualNames,
   mapStatus,
   mergeDeclaredImages,
+  parseImageAttachmentName,
 } from './report-utils.ts'
 import type { ScreenshotDeclaration } from './reporter-utils.ts'
 import type { TestBeginData, TestEndData } from './schemas.ts'
@@ -83,6 +87,46 @@ function countDiffImages(images: Partial<Record<string, Images>>): number {
   return Object.values(images).filter((img) => img?.diff !== null && img?.diff !== undefined).length
 }
 
+/**
+ * Filesystem path of an image's actual artifact: the attachment's native path
+ * when absolute (dev mode), or the content-addressed copy inside the report
+ * screenshot dir when relative (CI mode).
+ */
+function actualAttachmentSourcePath(
+  attachments: TestEndData['attachments'],
+  imageName: string,
+  screenshotDir: string,
+): string | undefined {
+  for (const attachment of attachments) {
+    if (attachment.contentType !== 'image/png') continue
+    const parsed = parseImageAttachmentName(attachment.name)
+    if (parsed === null || parsed.baseName !== imageName || parsed.role !== 'actual') continue
+    return isAnyAbsolutePath(attachment.path) ? attachment.path : join(screenshotDir, attachment.path)
+  }
+  return undefined
+}
+
+/**
+ * Stamp reporter-asserted approval metadata onto built images. The source is
+ * the image's actual artifact; expected-only first-run images (no actual) fall
+ * back to the target itself — approving them is a same-file no-op that only
+ * marks the test approved.
+ */
+function stampApprovalTargets(
+  images: Partial<Record<string, Images>>,
+  data: ReportStateTestEndData,
+  screenshotDir: string,
+): void {
+  const approvalTargets = data.approvalTargets
+  if (approvalTargets === undefined) return
+  for (const [imageName, targetPath] of Object.entries(approvalTargets)) {
+    const image = images[imageName]
+    if (image === undefined) continue
+    image.approveFromPath = actualAttachmentSourcePath(data.attachments, imageName, screenshotDir) ?? targetPath
+    image.approveToPath = targetPath
+  }
+}
+
 export function createMutableReportState(screenshotDir = './screenshots'): MutableReportState {
   return {
     reportData: {
@@ -147,6 +191,7 @@ export function applyTestEndEvent(
       getDeclaredVisualNames(data.visualNames, visualDeclarations),
     ),
   )
+  stampApprovalTargets(images, data, state.reportData.screenshotDir)
 
   // New failure with diff images invalidates any prior approval.
   const diffCount = countDiffImages(images)

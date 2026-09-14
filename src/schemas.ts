@@ -23,6 +23,10 @@ export const ImagesSchema = z.object({
   diff: z.string().optional(),
   error: z.string().optional(),
   source: VisualSourceSchema.optional(),
+  // Reporter-asserted approval metadata (metadata-carrying providers such as
+  // Vitest): the file to copy onto the baseline and the baseline target path.
+  approveFromPath: z.string().optional(),
+  approveToPath: z.string().optional(),
 })
 
 export type Images = z.infer<typeof ImagesSchema>
@@ -194,6 +198,10 @@ export const TestEndDataSchema = z.object({
     (value) => (value === null ? undefined : value),
     z.array(ScreenshotDeclarationSchema).optional(),
   ),
+  // Screenshot name → baseline file path. Only emitted by metadata-carrying
+  // providers (e.g. Vitest) that know their baseline location directly; absent
+  // for Playwright, whose baselines are resolved server-side from templates.
+  approvalTargets: z.record(z.string(), z.string()).optional(),
   error: z.string().optional(),
   duration: z.number().optional(),
 })
