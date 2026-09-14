@@ -52,6 +52,10 @@
     },
     "./types": {
       "types": "./dist/types.d.ts"
+    },
+    "./vitest": {
+      "types": "./dist/vitest.d.ts",
+      "import": "./dist/vitest.js"
     }
   },
   "publishConfig": {
@@ -92,6 +96,7 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@types/bun": "^1.4.0",
     "@types/ws": "^8.18.1",
+    "@vitest/browser-playwright": "4.1.11",
     "esbuild": "^0.27.4",
     "esbuild-svelte": "^0.9.4",
     "jscpd": "^4.0.8",
@@ -103,10 +108,12 @@
     "publint": "^0.3.18",
     "svelte": "^5.54.0",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
-    "@playwright/test": ">=1.40"
+    "@playwright/test": ">=1.40",
+    "vitest": ">=4 <5"
   },
   "engines": {
     "bun": ">=1.4.0",

@@ -27,8 +27,10 @@ await build({
 })
 
 // Build server-side JS (reporter, server, CLI)
+// src/vitest.ts is ESM-only (vitest itself is ESM-only; the ./vitest export
+// carries no `require` condition), so it is excluded from the CJS pass.
 await build({
-  entryPoints: ['./src/reporter.ts', './src/server.ts', './src/cli.ts', './src/rendering.ts'],
+  entryPoints: ['./src/reporter.ts', './src/vitest.ts', './src/server.ts', './src/cli.ts', './src/rendering.ts'],
   bundle: true,
   splitting: true,
   outdir: './dist',

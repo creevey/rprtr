@@ -8,6 +8,7 @@
   // (uses devDependencies like esbuild), so it is intentionally NOT production-marked.
   "entry": [
     "src/reporter.ts!",
+    "src/vitest.ts!",
     "src/server.ts!",
     "src/server/index.ts!",
     "src/server/handlers.ts!",

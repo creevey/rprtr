@@ -4,7 +4,7 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 1. Dependencies and build surface
 
-- [ ] 1.1 Add `vitest` + `@vitest/browser-playwright` devDependencies, `vitest: ">=4 <5"` peerDependency, `"./vitest"` exports subpath, and `src/vitest.ts` build entry. Verify: `bun install && bun run build && node -e "import('@crvy/rprtr/vitest').then(()=>console.log('ok'))"`
+- [x] 1.1 Add `vitest` + `@vitest/browser-playwright` devDependencies, `vitest: ">=4 <5"` peerDependency, `"./vitest"` exports subpath, and `src/vitest.ts` build entry. Verify: `bun install && bun run build && node -e "import('@crvy/rprtr/vitest').then(()=>console.log('ok'))"`
 
 ## 2. Vitest helpers (test-first)
 
