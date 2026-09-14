@@ -1,0 +1,107 @@
+schema: spec-driven
+
+context: |
+  rprtr (@crvy/rprtr) is a Playwright reporter with a visual regression UI
+  for comparing and approving screenshot test diffs. Test runs stream results
+  over WebSocket to a local UI server for interactive diff review/approval,
+  and every run also writes a self-contained static HTML artifact
+  (crvy-rprtr.html) plus per-worker offline JSON reports for CI-artifact
+  review. Published to npm; consumers get the reporter, the crvy-rprtr CLI,
+  and the ./server and ./rendering export surfaces.
+
+  Tech stack:
+  - Runtime: Bun (never npm/npx for dev tasks; use `bun`, `bun test`,
+    `bun run <script>`, `bunx`); consumers run Node 22+ or Bun
+  - Language: strict TypeScript
+  - Build: esbuild via build.ts (no vite); Svelte 5 + Tailwind 4 for the UI
+  - Validation: Zod v4 for all external input and config boundaries
+  - Realtime: `ws` for the reporter-to-server WebSocket link
+  - Concurrency: `p-limit` for bounded concurrency, never unbounded
+    `Promise.all`
+
+  Key conventions:
+  - Error extraction: `error instanceof Error ? error.message : String(error)`
+  - Never add lint-disable or type-ignore comments — fix the underlying issue
+  - max-lines / max-lines-per-function failures are a design signal: split
+    the file or extract functions; do not compress formatting to game limits
+  - oxlint/oxfmt for lint and format; knip guards unused exports; jscpd
+    guards duplication
+
+  Surfaces that must stay in sync when behavior changes:
+  - Reporter (src/reporter.ts) to server (src/server.ts: WebSocket + REST
+    approval API) to Svelte client (src/client/)
+  - Offline/static path: per-worker offline JSON reports and the
+    crvy-rprtr.html artifact (browser-openable, read-only, self-contained
+    except screenshot files)
+  - CLI (src/cli.ts, bin crvy-rprtr): server launch and artifact-dir mode
+  - Public exports: ., ./server, ./rendering, ./types (package.json exports)
+
+  Verification commands:
+  - `bun test <name>.test.ts` for focused tests (run inside tests/, after
+    `bun run build`; tests mirror src/ modules)
+  - `bun run typecheck`, `bun run lint`, `bun run format:check`
+  - `bun run check` is the full gate: lint, typecheck, format:check, knip,
+    test:bun, duplicates, publint
+  - `bun run test:playwright` for browser E2E; `bun run example` and
+    `bun run example:ct` exercise the example projects
+
+rules:
+  proposal:
+    - Include a "Non-goals" section listing explicitly out-of-scope behavior
+    - For each declared capability, state what concretely breaks or stays
+      missing without it; a capability justified only by an anticipated
+      need belongs in Non-goals rather than in scope
+    - Name the existing capability or module that already covers a declared
+      capability where one does, and either extend it or say why a separate
+      one is needed
+    - Reference existing capability specs under openspec/specs/ that the
+      change modifies, and docs/*.md pages it affects
+    - Keep proposals under 500 words; detail belongs in design.md
+  specs:
+    - Requirements use SHALL statements; every requirement has at least one
+      `#### Scenario:` with WHEN/THEN
+    - Cover every affected output surface — live server UI, static HTML
+      artifact, offline JSON reports, CLI — not just the one that motivated
+      the change
+    - Spec screenshot-determinism concerns where relevant (snapshot path
+      resolution, font/antialiasing behavior per
+      docs/text-antialiasing-determinism.md and docs/docker-screenshot-determinism.md)
+    - Never log or expose credentials or token-bearing URLs
+  design:
+    - For new dependencies, justify why the existing stack (esbuild, Svelte,
+      ws, Zod, p-limit) cannot cover the need
+    - Before introducing a new module, name the existing one that covers the
+      need or state that none does — the dependency question one level in
+    - State impact on the published package surface (exports map, bin,
+      peer dependency on @playwright/test, dist/ layout) for any
+      consumer-visible change
+  tasks:
+    - Break tasks into independently verifiable chunks; order them
+      test-first (failing test before implementation)
+    - Every task ends with its verification command (run bun tests from
+      inside tests/, e.g. `bun test reporter-utils.test.ts`; also
+      `bun run typecheck`)
+    - Final task is always the full gate pass (`bun run check`, plus
+      `bun run test:playwright` when browser behavior changed) and any
+      affected docs/*.md update
+
+operations:
+  apply:
+    guidance:
+      - Follow test-driven-development — write the failing test, watch it
+        fail, implement, watch it pass
+      - Check off tasks.md checkboxes as each task completes; keep the file
+        current as filesystem state
+      - Keep test output summaries concise; quote only the failing excerpts
+      - Commit each tasks.md section in its own commit as it completes; the
+        tasks.md checkbox state lands in the same commit as the work
+      - The change folder (openspec/changes/<name>/) rides with the code on
+        the same branch/PR; never commit implementation without artifacts
+  archive:
+    guidance:
+      - Before archiving, confirm all tasks.md checkboxes are complete and
+        `openspec validate --strict` passes
+      - Update docs/*.md pages whose behavior changed, in the same commit
+        or PR as the archive
+      - Archive after the PR merges, as a small follow-up commit on main —
+        not inside the implementation branch
