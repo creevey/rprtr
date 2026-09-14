@@ -306,7 +306,7 @@ describe('CrvyRprtrVitestReporter', () => {
         { name: 'hero-section-actual.png', path: fixture.paths.actualPath, contentType: 'image/png' },
         { name: 'hero-section-diff.png', path: fixture.paths.diffPath, contentType: 'image/png' },
       ])
-      expect('approvalTargets' in endData).toBe(false)
+      expect(endData.approvalTargets).toEqual({ 'hero-section': fixture.paths.referencePath })
 
       const images = attachmentsToImages(endData.attachments)
       const image = images['hero-section']
@@ -366,6 +366,7 @@ describe('CrvyRprtrVitestReporter', () => {
       expect(endData.attachments).toEqual([
         { name: 'hero-section-expected.png', path: fixture.paths.referencePath, contentType: 'image/png' },
       ])
+      expect(endData.approvalTargets).toEqual({ 'hero-section': fixture.paths.referencePath })
 
       const image = attachmentsToImages(endData.attachments)['hero-section']
       expect(image?.source).toBe('baseline-only')
@@ -549,5 +550,46 @@ describe('CrvyRprtrVitestReporter', () => {
     expect(
       await Bun.file(join(fixture.screenshotDir, image?.actual?.replace('/screenshots/', '') ?? '')).exists(),
     ).toBe(true)
+  })
+})
+
+describe('CrvyRprtr Playwright reporter', () => {
+  test('emits no approvalTargets field on test-end payloads', async () => {
+    const { CrvyRprtr } = await import('../src/reporter')
+
+    const reporter = new CrvyRprtr({
+      screenshotDir: join(tmpdir(), 'crvy-playwright-no-targets'),
+      reportHtmlPath: join(tmpdir(), 'crvy-playwright-no-targets', 'crvy-rprtr.html'),
+      ci: true,
+    })
+
+    const sent: unknown[] = []
+    type TestReporter = {
+      send: (message: unknown) => void
+      onTestEnd: (test: object, result: object) => Promise<void>
+    }
+    const reporterAny = reporter as unknown as TestReporter
+    reporterAny.send = (message: unknown): void => {
+      sent.push(message)
+    }
+
+    await reporterAny.onTestEnd(
+      {
+        id: 'pw-no-targets',
+        title: 'visual',
+        location: { file: 'tests/example.spec.ts', line: 10 },
+        parent: {
+          project: () => ({ name: 'chromium' }),
+        },
+      },
+      { status: 'failed', errors: [], duration: 100, attachments: [], steps: [] },
+    )
+
+    const endMessage = sent.find((message): message is { type: string; data: Record<string, unknown> } => {
+      const typed = message as { type?: string }
+      return typed.type === 'test-end'
+    })
+    expect(endMessage).toBeDefined()
+    expect('approvalTargets' in (endMessage?.data ?? {})).toBe(false)
   })
 })

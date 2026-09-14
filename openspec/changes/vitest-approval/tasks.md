@@ -14,8 +14,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 3. Vitest reporter emits targets (test-first)
 
-- [ ] 3.1 Write failing `tests/vitest-reporter.test.ts` case: failed comparison event carries `approvalTargets[screenshot] = reference path`; first-run event carries the reference as target; Playwright reporter emits no field. Verify: `cd tests && bun test vitest-reporter.test.ts` (new cases fail)
-- [ ] 3.2 Implement `approvalTargets` emission in `src/vitest.ts` (D5). Verify: tests from 3.1 pass && `cd tests && bun test vitest-browser-integration.test.ts` (harness still green)
+- [x] 3.1 Write failing `tests/vitest-reporter.test.ts` case: failed comparison event carries `approvalTargets[screenshot] = reference path`; first-run event carries the reference as target; Playwright reporter emits no field. Verify: `cd tests && bun test vitest-reporter.test.ts` (new cases fail)
+- [x] 3.2 Implement `approvalTargets` emission in `src/vitest.ts` (D5). Verify: tests from 3.1 pass && `cd tests && bun test vitest-browser-integration.test.ts` (harness still green)
 
 ## 4. End-to-end and gate
 
