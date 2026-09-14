@@ -74,14 +74,19 @@ If `artifact-dir` is provided, the CLI treats it as the directory containing:
 
 Explicit flags override the paths derived from `artifact-dir`.
 
-| Option             | Short | Default         | Description                                                                                                                                                                                        |
-| ------------------ | ----- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--port`           | `-p`  | `3000`          | Server port                                                                                                                                                                                        |
-| `--screenshot-dir` | `-s`  | `./screenshots` | Screenshot directory path                                                                                                                                                                          |
-| `--report-path`    | `-r`  | `./report.json` | Report JSON file path or directory containing `report.json` and `crvy-rprtr-*.json` files                                                                                                          |
-| `--config`         | `-c`  | auto-detect     | Playwright config path used to enable the run buttons at startup. When omitted, the server discovers `playwright.config.*` in the working directory. A registering reporter always overrides this. |
+| Option             | Short | Default         | Description                                                                                                                                                                                                                                                                          |
+| ------------------ | ----- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--port`           | `-p`  | `3000`          | Server port                                                                                                                                                                                                                                                                          |
+| `--screenshot-dir` | `-s`  | `./screenshots` | Screenshot directory path                                                                                                                                                                                                                                                            |
+| `--report-path`    | `-r`  | `./report.json` | Report JSON file path or directory containing `report.json` and `crvy-rprtr-*.json` files                                                                                                                                                                                            |
+| `--config`         | `-c`  | auto-detect     | Playwright config path used to enable the run buttons at startup (Playwright only — Vitest runs are enabled by the Vitest reporter's registration). When omitted, the server discovers `playwright.config.*` in the working directory. A registering reporter always overrides this. |
 
-When the server can resolve a Playwright config (via `--config` or auto-discovery, or once a reporter registers), the sidebar shows Start/Stop and per-test run buttons that trigger `playwright test` without leaving the browser. Approval-routing resolver overrides are available through the programmatic server API, not additional CLI flags.
+When the server can resolve a run configuration (via `--config`/auto-discovery for Playwright, or once a reporter registers), the sidebar shows Start/Stop and per-test run buttons that launch the registered runner without leaving the browser:
+
+- **Playwright** runs spawn `playwright test --config <config>` through your package manager with the rprtr reporter injected. Per-test reruns select exactly via positional `file:line` filters (or `--test-list` on Playwright ≥ 1.56), and update runs pass `--update-snapshots`.
+- **Vitest** runs spawn `vitest run --config <config>` — the project's own Vitest config carries the reporter, so nothing is injected. Per-test reruns filter by test file plus a `-t` pattern built from the test's full title path; `-t` matches test names as a substring, so selection is approximate and similarly named tests may run too. Update runs pass `--update`.
+
+Docker mode applies to Playwright runs only: with `--run-mode docker`, Vitest run requests fail fast with a clear message instead of launching a container; with `auto`, Vitest runs launch locally with a one-line warning. Approval-routing resolver overrides are available through the programmatic server API, not additional CLI flags.
 
 ## How It Works
 
@@ -125,6 +130,10 @@ export default defineConfig({
 
 With a server running (`npx crvy-rprtr`), failed comparisons stream live and the UI serves Vitest's own screenshot files (reference, actual, diff) without copying them. Without a server, the reporter writes the same portable `crvy-rprtr.html` plus `crvy-rprtr-*.json` artifacts as Playwright runs, with screenshots copied content-addressed into `screenshotDir`.
 
+Leave the reporter's `serverUrl` unset for dev use: the server injects `CRVY_RPRTR_SERVER_URL` into UI-launched runs, so the spawned reporter connects back to the server that launched it automatically. An explicitly configured `serverUrl` wins over the injected env, which would point a UI-launched run away from its launching server.
+
+The UI's Start/Stop and per-test run buttons launch Vitest too: full suites and update runs spawn `vitest run --config <your vitest config>` (the reporter registers its config file and project root), while per-test reruns select the test file plus a `-t` title-pattern approximation of the test's title path. See [Server CLI Options](#server-cli-options) for the provider details and the docker-mode behavior.
+
 Approvals work from the same UI buttons: the reporter declares each screenshot's baseline path, so **Approve** and **Approve All** update Vitest's `__screenshots__` references without resolver configuration. First-run baselines (a newly created reference with no diff) are approvable too — approving accepts the reference as the baseline and marks the test approved.
 
 ### Vitest Reporter Options
@@ -144,8 +153,7 @@ Approvals work from the same UI buttons: the reporter declares each screenshot's
 - Default Vitest layouts are resolved automatically: references under `<test file dir>/__screenshots__/<test file>/` and actual/diff artifacts under `.vitest-attachments/<test file dir>/<test file>/`. Explicit `referenceDir`/`attachmentsDir` options override the defaults.
 - Custom Vitest `resolveScreenshotPath`/`resolveDiffPath` resolvers are not supported.
 - First-run baselines surface as `baseline-only` images and are viewable.
-- Approving Vitest screenshots is not supported yet (a follow-up change will bring it); the Playwright approval flow is unchanged.
-- The UI does not launch Vitest runs — start them with `vitest` yourself.
+- Per-test run selection is approximate (`-t` title-pattern matching); Playwright keeps exact `file:line` selection.
 
 ## Offline Mode
 
@@ -187,7 +195,7 @@ Run Playwright browsers inside a pinned Docker container so screenshot baselines
 npx crvy-rprtr --run-mode docker
 ```
 
-The server still runs on your host; only `playwright test` executes in the container, against the official `mcr.microsoft.com/playwright:v<your @playwright/test version>-noble` image with your project bind-mounted. Reporters stream results back live, and approve/update flows work unchanged.
+The server still runs on your host; only `playwright test` executes in the container, against the official `mcr.microsoft.com/playwright:v<your @playwright/test version>-noble` image with your project bind-mounted. Reporters stream results back live, and approve/update flows work unchanged. Vitest runs are not containerized (their image would need vitest plus a browser provider): under explicit `--run-mode docker`, Vitest run requests fail fast; under `auto`, they launch locally with a warning.
 
 | Mode             | Behavior                                                                        |
 | ---------------- | ------------------------------------------------------------------------------- |

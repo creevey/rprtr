@@ -29,7 +29,7 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 6. Docs
 
-- [ ] 6.1 README: drop "The UI does not launch Vitest runs" from the Vitest limitations list; document run buttons for both providers, the `-t` title-pattern approximation, docker refusal/auto-mode warning, and omitting `serverUrl` so UI-launched runs connect via `CRVY_RPRTR_SERVER_URL`; CLI `--config` stays documented Playwright-specific. Verify: manual review against spec scenarios
+- [x] 6.1 README: drop "The UI does not launch Vitest runs" from the Vitest limitations list; document run buttons for both providers, the `-t` title-pattern approximation, docker refusal/auto-mode warning, and omitting `serverUrl` so UI-launched runs connect via `CRVY_RPRTR_SERVER_URL`; CLI `--config` stays documented Playwright-specific. Verify: manual review against spec scenarios
 
 ## 7. Gate
 
