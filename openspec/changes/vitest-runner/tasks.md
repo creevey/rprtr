@@ -5,7 +5,7 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 ## 1. Runner discriminator in the register contract (test-first)
 
 - [x] 1.1 Write failing register tests: `RegisterDataSchema` parses `runner: 'vitest'` and rejects/ignores other values (safeParse null ⇒ Playwright default); `handleRegister` with a Vitest-shaped register (`configFile` + `cwd` + `runner: 'vitest'`) builds a run context resolving to the Vitest runner; old Vitest register (artifact dirs only) leaves run context unset; Playwright register without `runner` still builds a Playwright run context. Verify: `cd tests && bun test register-message.test.ts server-handlers.test.ts` (new cases fail)
-- [ ] 1.2 Add optional `runner` literal to `RegisterDataSchema` (src/schemas.ts); carry the runner kind on the run context ('playwright' when absent); branch `buildRunContext` (Vitest: `rootDir = cwd`; Playwright: unchanged derivation). Verify: tests from 1.1 pass && `bun run typecheck`
+- [x] 1.2 Add optional `runner` literal to `RegisterDataSchema` (src/schemas.ts); carry the runner kind on the run context ('playwright' when absent); branch `buildRunContext` (Vitest: `rootDir = cwd`; Playwright: unchanged derivation). Verify: tests from 1.1 pass && `bun run typecheck`
 
 ## 2. Vitest reporter declares its runner (test-first)
 
