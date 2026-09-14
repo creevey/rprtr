@@ -182,6 +182,28 @@ export class RunController {
     return args
   }
 
+  /**
+   * Vitest selection flags: positional file filters, `--project` when every
+   * requested test shares one project, and `-t` with the full title path for a
+   * single test (Vitest matches `-t` against the full test name as substring).
+   * No `--reporter` injection (the project's Vitest config carries the
+   * reporter), no `--test-list` temp file, no Playwright version probe.
+   */
+  private buildVitestArgs(ctx: RunContext, filters: RunFilters, tests: RunTestDescriptor[] | undefined): string[] {
+    const args = ['run', '--config', ctx.configFile]
+    if (filters.update === true) args.push('--update')
+    if (tests !== undefined && tests.length > 0) {
+      const project = sharedProject(tests)
+      if (project !== undefined) args.push(`--project=${project}`)
+      for (const file of new Set(tests.map((t) => t.file))) args.push(file)
+      if (tests.length === 1) {
+        const only = tests[0]!
+        args.push('-t', only.titlePath.join(' '))
+      }
+    }
+    return args
+  }
+
   start(filters: RunFilters): StartResult {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: false, reason: 'no-config' }
@@ -190,7 +212,10 @@ export class RunController {
     if (this.deps.launcher.available === false) return { ok: false, reason: 'docker-unavailable' }
 
     const tests = rewriteContainerTestDescriptors(filters.tests, this.deps.containerPathMapping)
-    const args = this.buildPlaywrightArgs(ctx, filters, tests)
+    const args =
+      ctx.runner === 'vitest'
+        ? this.buildVitestArgs(ctx, filters, tests)
+        : this.buildPlaywrightArgs(ctx, filters, tests)
 
     const spec = this.deps.launcher.launch({ ctx, playwrightArgs: args })
     let child: ChildProcessLike

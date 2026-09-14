@@ -15,8 +15,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 3. Per-runner launch args (test-first)
 
-- [ ] 3.1 Write failing `tests/run-controller.test.ts` cases: Vitest run context ⇒ full-suite spawns `vitest run --config <configFile>`; update ⇒ `--update`; single test ⇒ file positional + `-t <titlePath joined>`; shared project ⇒ `--project=<name>`; mixed projects ⇒ no `--project`; never `--reporter` injection, no `--test-list` temp file, no Playwright version probe; existing Playwright assertions stay byte-identical. Verify: `cd tests && bun test run-controller.test.ts` (new cases fail)
-- [ ] 3.2 Implement (D4): extract `resolveLocalCommand(name, args)` from `resolvePlaywrightLaunch` in `src/server/run-launcher.ts` (package-manager-detector, npx fallback); runner branch in `RunController` arg building. Verify: tests from 3.1 pass && `cd tests && bun test run-launcher.test.ts` && `bun run typecheck`
+- [x] 3.1 Write failing `tests/run-controller.test.ts` cases: Vitest run context ⇒ full-suite spawns `vitest run --config <configFile>`; update ⇒ `--update`; single test ⇒ file positional + `-t <titlePath joined>`; shared project ⇒ `--project=<name>`; mixed projects ⇒ no `--project`; never `--reporter` injection, no `--test-list` temp file, no Playwright version probe; existing Playwright assertions stay byte-identical. Verify: `cd tests && bun test run-controller.test.ts` (new cases fail)
+- [x] 3.2 Implement (D4): extract `resolveLocalCommand(name, args)` from `resolvePlaywrightLaunch` in `src/server/run-launcher.ts` (package-manager-detector, npx fallback); runner branch in `RunController` arg building. Verify: tests from 3.1 pass && `cd tests && bun test run-launcher.test.ts` && `bun run typecheck`
 
 ## 4. Docker scoping for Vitest runs (test-first)
 

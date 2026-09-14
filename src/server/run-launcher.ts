@@ -28,17 +28,22 @@ export interface RunLauncher {
 }
 
 /**
- * Resolves the `playwright` launch command for the project's package manager.
+ * Resolves the launch command for a local runner binary (`playwright`,
+ * `vitest`, …) through the project's package manager.
  * `cwd` is reserved for future cwd-based detection (`package-manager-detector`'s
  * `detect` is async in v1.x and cannot run in the synchronous `start()` path),
  * so today detection uses the synchronous `getUserAgent()`, matching Creevey's
  * spawn pattern. Falls back to `npx` when no agent is detectable.
  */
-export function resolvePlaywrightLaunch(cwd: string, playwrightArgs: string[]): { cmd: string; args: string[] } {
+export function resolveLocalCommand(name: string, args: string[]): { cmd: string; args: string[] } {
   const agent = getUserAgent()
-  const resolved = agent === null ? null : resolveCommand(agent, 'execute-local', ['playwright', ...playwrightArgs])
+  const resolved = agent === null ? null : resolveCommand(agent, 'execute-local', [name, ...args])
   if (resolved !== null) return { cmd: resolved.command, args: resolved.args }
-  return { cmd: 'npx', args: ['playwright', ...playwrightArgs] }
+  return { cmd: 'npx', args: [name, ...args] }
+}
+
+export function resolvePlaywrightLaunch(cwd: string, playwrightArgs: string[]): { cmd: string; args: string[] } {
+  return resolveLocalCommand('playwright', playwrightArgs)
 }
 
 export interface SpawnEnvOptions extends GrayscaleFontconfigEnvOptions {
@@ -80,7 +85,12 @@ export function createLocalLauncher(options: LocalLauncherOptions): RunLauncher 
   return {
     mode: 'local',
     launch({ ctx, playwrightArgs }: LaunchParams): LaunchSpec {
-      const resolve = options.resolveLaunch ?? resolvePlaywrightLaunch
+      // The default resolver picks the runner binary by kind; an injected
+      // resolveLaunch stays fully responsible for the command shape.
+      const name = ctx.runner === 'vitest' ? 'vitest' : 'playwright'
+      const resolve =
+        options.resolveLaunch ??
+        ((cwd: string, args: string[]): { cmd: string; args: string[] } => resolveLocalCommand(name, args))
       const { cmd, args } = resolve(ctx.cwd, playwrightArgs)
       const { port, resolveLaunch: _resolveLaunch, env: baseEnv, ...spawnEnvOptions } = options
       return { cmd, args, env: buildSpawnEnv(port, baseEnv, spawnEnvOptions) }

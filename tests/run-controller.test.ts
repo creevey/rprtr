@@ -53,6 +53,7 @@ interface Fixture {
   setSpawnThrows: (flag: boolean) => void
   saveReportCalls: { value: number }
   setLauncherAvailable: (value: boolean | undefined) => void
+  probeCalls: { value: number }
 }
 
 function createFixture(
@@ -74,6 +75,7 @@ function createFixture(
   let playwrightVersion: string | null = null
   let spawnThrows = false
   const saveReportCalls = { value: 0 }
+  const probeCalls = { value: 0 }
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -111,9 +113,10 @@ function createFixture(
         return launcherAvailable
       },
       launch: ({ ctx, playwrightArgs }: LaunchParams): LaunchSpec => {
+        const name = ctx.runner === 'vitest' ? 'vitest' : 'playwright'
         const resolved = resolveLaunch?.(ctx.cwd, playwrightArgs) ?? {
           cmd: 'npx',
-          args: ['playwright', ...playwrightArgs],
+          args: [name, ...playwrightArgs],
         }
         return { cmd: resolved.cmd, args: resolved.args, env: { STUB_ENV: '1' } }
       },
@@ -126,7 +129,10 @@ function createFixture(
     deleteTempFile: (path: string): void => {
       deletedTempFiles.push(path)
     },
-    getPlaywrightVersion: (): string | null => playwrightVersion,
+    getPlaywrightVersion: (): string | null => {
+      probeCalls.value += 1
+      return playwrightVersion
+    },
     saveReport: (): Promise<void> => {
       saveReportCalls.value++
       return Promise.resolve()
@@ -165,10 +171,103 @@ function createFixture(
     setLauncherAvailable: (value): void => {
       launcherAvailable = value
     },
+    probeCalls,
   }
 }
 
 const SAMPLE_CTX: RunContext = { configFile: '/proj/playwright.config.ts', cwd: '/proj' }
+
+const VITEST_CTX: RunContext = {
+  configFile: '/proj/vitest.config.ts',
+  cwd: '/proj',
+  rootDir: '/proj',
+  runner: 'vitest',
+}
+
+describe('RunController.start Vitest runner', () => {
+  test('full suite spawns vitest run --config without reporter injection or version probe', () => {
+    const f = createFixture(VITEST_CTX, () => '/abs/path/to/reporter.js')
+    f.setPlaywrightVersion('1.59.0')
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: true })
+    expect(f.spawnCalls).toHaveLength(1)
+    const { cmd, args, opts } = f.spawnCalls[0]!
+    expect(cmd).toBe('npx')
+    expect(args).toEqual(['vitest', 'run', '--config', '/proj/vitest.config.ts'])
+    expect(opts.cwd).toBe('/proj')
+    expect(f.writtenTempFiles).toHaveLength(0)
+    expect(f.probeCalls.value).toBe(0)
+  })
+
+  test('update maps to --update', () => {
+    const f = createFixture(VITEST_CTX)
+    f.controller.start({ update: true })
+    expect(f.spawnCalls[0]!.args).toEqual(['vitest', 'run', '--config', '/proj/vitest.config.ts', '--update'])
+  })
+
+  test('single test filters by file positional plus -t title-path pattern', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setPlaywrightVersion('1.59.0')
+    f.controller.start({
+      tests: [
+        {
+          file: 'tests/button.test.ts',
+          line: 3,
+          projectName: 'chromium',
+          titlePath: ['renders', 'primary button'],
+        },
+      ],
+    })
+    expect(f.spawnCalls[0]!.args).toEqual([
+      'vitest',
+      'run',
+      '--config',
+      '/proj/vitest.config.ts',
+      '--project=chromium',
+      'tests/button.test.ts',
+      '-t',
+      'renders primary button',
+    ])
+    expect(f.writtenTempFiles).toHaveLength(0)
+  })
+
+  test('descriptors sharing a project pass --project=<name> once', () => {
+    const f = createFixture(VITEST_CTX)
+    f.controller.start({
+      tests: [
+        { file: 'a.test.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+        { file: 'a.test.ts', line: 5, projectName: 'chromium', titlePath: ['t2'] },
+      ],
+    })
+    expect(f.spawnCalls[0]!.args).toEqual([
+      'vitest',
+      'run',
+      '--config',
+      '/proj/vitest.config.ts',
+      '--project=chromium',
+      'a.test.ts',
+    ])
+    expect(f.writtenTempFiles).toHaveLength(0)
+  })
+
+  test('descriptors with mixed projects omit --project', () => {
+    const f = createFixture(VITEST_CTX)
+    f.controller.start({
+      tests: [
+        { file: 'a.test.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+        { file: 'b.test.ts', line: 2, projectName: 'firefox', titlePath: ['t2'] },
+      ],
+    })
+    expect(f.spawnCalls[0]!.args).toEqual([
+      'vitest',
+      'run',
+      '--config',
+      '/proj/vitest.config.ts',
+      'a.test.ts',
+      'b.test.ts',
+    ])
+  })
+})
 
 describe('RunController.start', () => {
   test('refuses when no config registered', () => {
