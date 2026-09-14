@@ -9,8 +9,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 2. Route resolution order (test-first)
 
-- [ ] 2.1 Write failing approve-route tests: metadata image approved → `copyFilePortable` from metadata source to metadata target (temp-dir file assertions, per existing routes-approve pattern); metadata image in approve-all with a non-approvable sibling → sibling skipped, action succeeds; resolver-fallback case unchanged for Playwright-shaped data. Verify: `cd tests && bun test routes-approve.test.ts` (new cases fail)
-- [ ] 2.2 Update `/api/approve` and `/api/approve-all` to the metadata-first → resolver-fallback → skip order (D3); validate metadata paths as absolute existing files before copy. Verify: tests from 2.1 pass && `cd tests && bun test artifact-routes.test.ts` (resolver cases still green)
+- [x] 2.1 Write failing approve-route tests: metadata image approved → `copyFilePortable` from metadata source to metadata target (temp-dir file assertions, per existing routes-approve pattern); metadata image in approve-all with a non-approvable sibling → sibling skipped, action succeeds; resolver-fallback case unchanged for Playwright-shaped data. Verify: `cd tests && bun test routes-approve.test.ts` (new cases fail)
+- [x] 2.2 Update `/api/approve` and `/api/approve-all` to the metadata-first → resolver-fallback → skip order (D3); validate metadata paths as absolute existing files before copy. Verify: tests from 2.1 pass && `cd tests && bun test artifact-routes.test.ts` (resolver cases still green)
 
 ## 3. Vitest reporter emits targets (test-first)
 
