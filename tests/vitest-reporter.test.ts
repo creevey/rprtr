@@ -221,6 +221,18 @@ function createBrowserInitProject(paths: ReporterFixturePaths): unknown {
   }
 }
 
+interface MockVitestInit {
+  readonly config: { readonly root: string; readonly configFile?: string }
+  readonly vite: { readonly config: { readonly configFile?: string } }
+}
+
+function createMockVitest(root: string, configFile?: string, viteConfigFile?: string): MockVitestInit {
+  return {
+    config: configFile === undefined ? { root } : { root, configFile },
+    vite: { config: { configFile: viteConfigFile ?? configFile } },
+  }
+}
+
 type ReceivedEvent = { type: string; data: Record<string, unknown> }
 
 function eventsOfType(received: Array<Record<string, unknown>>, type: string): ReceivedEvent[] {
@@ -246,7 +258,7 @@ describe('CrvyRprtrVitestReporter', () => {
         serverUrl: `ws://127.0.0.1:${harness.port}`,
         screenshotDir: fixture.screenshotDir,
       })
-      reporter.onInit({ config: { root: fixture.paths.root } } as never)
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
       reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
       await harness.waitForCount(1)
 
@@ -330,7 +342,7 @@ describe('CrvyRprtrVitestReporter', () => {
         serverUrl: `ws://127.0.0.1:${harness.port}`,
         screenshotDir: fixture.screenshotDir,
       })
-      reporter.onInit({ config: { root: fixture.paths.root } } as never)
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
       reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
       await harness.waitForCount(1)
 
@@ -391,7 +403,7 @@ describe('CrvyRprtrVitestReporter', () => {
         referenceDir: 'custom-refs',
         attachmentsDir: 'custom-attachments',
       })
-      reporter.onInit({ config: { root: fixture.paths.root } } as never)
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
       reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
       await harness.waitForCount(1)
 
@@ -479,7 +491,7 @@ describe('CrvyRprtrVitestReporter', () => {
       screenshotDir: fixture.screenshotDir,
       serverUrl: 'ws://127.0.0.1:9',
     })
-    reporter.onInit({ config: { root: fixture.paths.root } } as never)
+    reporter.onInit(createMockVitest(fixture.paths.root) as never)
     reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
 
     const testCase = createTestCase({
@@ -550,6 +562,107 @@ describe('CrvyRprtrVitestReporter', () => {
     expect(
       await Bun.file(join(fixture.screenshotDir, image?.actual?.replace('/screenshots/', '') ?? '')).exists(),
     ).toBe(true)
+  })
+})
+
+describe('CrvyRprtrVitestReporter register payload', () => {
+  test('dev mode register carries runner, cwd, and configFile from the resolved config', async () => {
+    process.env.CI = ''
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+
+    try {
+      const configFile = join(fixture.paths.root, 'vitest.config.ts')
+      const reporter = new CrvyRprtrVitestReporter({
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root, configFile) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await harness.waitForCount(1)
+
+      const register = RegisterDataSchema.parse(eventsOfType(harness.received, 'register')[0]?.data)
+      expect(register.runner).toBe('vitest')
+      expect(register.cwd).toBe(fixture.paths.root)
+      expect(register.configFile).toBe(configFile)
+      expect(register.vitestAttachmentsDir).toBe(join(fixture.paths.root, '.vitest-attachments'))
+      expect(register.vitestReferenceDir).toBe(fixture.paths.root)
+    } finally {
+      harness.close()
+    }
+  })
+
+  test('falls back to the vite config when the merged test config hides configFile', async () => {
+    process.env.CI = ''
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+
+    try {
+      const configFile = join(fixture.paths.root, 'vitest.config.ts')
+      const reporter = new CrvyRprtrVitestReporter({
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root, undefined, configFile) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await harness.waitForCount(1)
+
+      const register = RegisterDataSchema.parse(eventsOfType(harness.received, 'register')[0]?.data)
+      expect(register.configFile).toBe(configFile)
+    } finally {
+      harness.close()
+    }
+  })
+
+  test('inline configuration without a config file omits configFile and keeps the payload shape', async () => {
+    process.env.CI = ''
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+
+    try {
+      const reporter = new CrvyRprtrVitestReporter({
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await harness.waitForCount(1)
+
+      const register = RegisterDataSchema.parse(eventsOfType(harness.received, 'register')[0]?.data)
+      expect('configFile' in register).toBe(false)
+      expect(register.cwd).toBe(fixture.paths.root)
+      expect(register.runner).toBe('vitest')
+      expect(register.vitestAttachmentsDir).toBe(join(fixture.paths.root, '.vitest-attachments'))
+      expect(register.vitestReferenceDir).toBe(fixture.paths.root)
+    } finally {
+      harness.close()
+    }
+  })
+
+  test('CI mode sends no register', async () => {
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+
+    try {
+      const reporter = new CrvyRprtrVitestReporter({
+        ci: true,
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+        offlineReportPath: join(fixture.paths.root, 'crvy-rprtr-0.json'),
+        reportHtmlPath: join(fixture.paths.root, 'crvy-rprtr.html'),
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root, join(fixture.paths.root, 'vitest.config.ts')) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await Bun.sleep(150)
+
+      expect(harness.received).toHaveLength(0)
+    } finally {
+      harness.close()
+    }
   })
 })
 

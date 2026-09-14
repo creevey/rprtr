@@ -1,7 +1,7 @@
 import { isAbsolute, relative, resolve } from 'path'
 
 import pLimit from 'p-limit'
-import type { Reporter, TestCase, TestProject, TestRunEndReason, Vitest } from 'vitest/node'
+import type { Reporter, ResolvedConfig, TestCase, TestProject, TestRunEndReason, Vitest } from 'vitest/node'
 
 import { log, logError } from './debug-log.ts'
 import { saveAttachments } from './reporter-artifact-ops.ts'
@@ -40,6 +40,19 @@ function mapRunReason(reason: TestRunEndReason): 'passed' | 'failed' | 'skipped'
 
 const MAX_CONCURRENT_FILE_OPS = 5
 
+/**
+ * The resolved config file path, or undefined for inline programmatic
+ * configuration. Vitest's merged test config may or may not surface Vite's
+ * `configFile` depending on how the config was merged, so check the test
+ * config first and fall back to the underlying Vite dev-server config.
+ */
+function resolveVitestConfigFile(vitest: Vitest): string | undefined {
+  const fromTestConfig = (vitest.config as ResolvedConfig & { configFile?: string | false }).configFile
+  if (typeof fromTestConfig === 'string') return fromTestConfig
+  const fromViteConfig = vitest.vite.config.configFile
+  return typeof fromViteConfig === 'string' ? fromViteConfig : undefined
+}
+
 function isPathWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
@@ -64,6 +77,7 @@ export class CrvyRprtrVitestReporter implements Reporter {
   private readonly referenceDir: string
   private readonly attachmentsDir: string
   private projectRoot = process.cwd()
+  private configFile: string | undefined
   private transportStarted = false
   private pendingArtifacts: PendingVitestArtifact[] = []
 
@@ -77,6 +91,7 @@ export class CrvyRprtrVitestReporter implements Reporter {
 
   onInit(vitest: Vitest): void {
     this.projectRoot = vitest.config.root
+    this.configFile = resolveVitestConfigFile(vitest)
   }
 
   onBrowserInit(project: TestProject): void {
@@ -174,6 +189,12 @@ export class CrvyRprtrVitestReporter implements Reporter {
             ? configuredAttachmentsDir
             : resolve(root, this.attachmentsDir),
         vitestReferenceDir: isPathWithin(resolvedReferenceDir, root) ? root : resolvedReferenceDir,
+        // Lets the server enable the UI run controls (vitest run --config …).
+        // Omitted for inline programmatic config: the server keeps the run
+        // buttons hidden when the config file path is unknown.
+        ...(this.configFile === undefined ? {} : { configFile: this.configFile }),
+        cwd: root,
+        runner: 'vitest',
       },
     })
   }
