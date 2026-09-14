@@ -327,7 +327,9 @@
           ? 'A run is already in progress'
           : body?.reason === 'no-tests'
             ? 'No tests selected'
-            : 'Connect a Playwright reporter to enable running';
+            : body?.reason === 'docker-unsupported-for-runner'
+              ? 'Vitest runs are not supported in docker mode — start the server with --run-mode local or auto'
+              : 'Connect a test reporter to enable running';
     }
   }
 

@@ -25,7 +25,7 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 5. Client run-error mapping
 
-- [ ] 5.1 Map `docker-unsupported-for-runner` to a clear message and make the `no-config` fallback provider-neutral in `src/client/App.svelte` (run error toast). Verify: `bun run build && bun run test:playwright` (ui-controls e2e green)
+- [x] 5.1 Map `docker-unsupported-for-runner` to a clear message and make the `no-config` fallback provider-neutral in `src/client/App.svelte` (run error toast). Verify: `bun run build && bun run test:playwright` (ui-controls e2e green)
 
 ## 6. Docs
 
