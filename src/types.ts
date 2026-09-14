@@ -29,6 +29,8 @@ export type TestStatus = 'unknown' | 'pending' | 'running' | 'failed' | 'approve
 
 export type TestResultStatus = 'failed' | 'success' | 'pending'
 
+export type Provider = 'playwright' | 'vitest'
+
 export interface TestResult {
   status: TestResultStatus
   retries: number
@@ -57,6 +59,8 @@ export interface TestData {
   approved?: Partial<Record<string, number>> | null
   attachments?: Attachment[]
   location?: Location
+  /** Reporting provider that produced this test's events; absent means playwright. */
+  provider?: Provider
 }
 
 export interface CrvyRprtrTest extends TestData {

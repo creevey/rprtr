@@ -136,17 +136,25 @@ function applyContainerPathMapping(rawData: RegisterData, mapping: ContainerPath
   }
 }
 
+/** Every absolute directory a reporter may serve artifacts from, in registration order. */
+function collectRegisterRoots(data: RegisterData): string[] {
+  const roots: string[] = []
+  for (const dir of [
+    data.playwrightSnapshotDir,
+    data.playwrightTestDir,
+    data.vitestAttachmentsDir,
+    data.vitestReferenceDir,
+  ]) {
+    if (dir !== undefined && dir !== '') roots.push(dir)
+  }
+  return roots
+}
+
 export function handleRegister(ctx: HandlerContext, rawData: RegisterData): void {
   const mapping = ctx.routesContext.containerPathMapping
   const data: RegisterData = mapping === undefined ? rawData : applyContainerPathMapping(rawData, mapping)
 
-  const roots: string[] = []
-  if (data.playwrightSnapshotDir !== undefined && data.playwrightSnapshotDir !== '') {
-    roots.push(data.playwrightSnapshotDir)
-  }
-  if (data.playwrightTestDir !== undefined && data.playwrightTestDir !== '') {
-    roots.push(data.playwrightTestDir)
-  }
+  const roots = collectRegisterRoots(data)
 
   const existing = ctx.routesContext.artifactRoots ?? []
   for (const root of roots) {
@@ -179,6 +187,8 @@ export function handleRegister(ctx: HandlerContext, rawData: RegisterData): void
   console.log('[Server] Reporter registered with config:', {
     playwrightSnapshotDir: data.playwrightSnapshotDir,
     playwrightTestDir: data.playwrightTestDir,
+    vitestAttachmentsDir: data.vitestAttachmentsDir,
+    vitestReferenceDir: data.vitestReferenceDir,
     configFile: data.configFile,
     cwd: data.cwd,
   })

@@ -13,8 +13,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 3. Register allowlist extension (test-first)
 
-- [ ] 3.1 Write failing server test: register payload with `vitestAttachmentsDir`/`vitestReferenceDir` extends `artifactRoots`; `/file/` serves a file inside a registered vitest dir and rejects one outside all roots. Verify: `cd tests && bun test artifact-routes.test.ts` (new case fails)
-- [ ] 3.2 Extend `RegisterDataSchema` (optional vitest dir fields) and `handleRegister` root pushing; add optional `provider` to test-begin/test data schemas. Verify: test from 3.1 passes && `cd tests && bun test report-state.test.ts` && `bun run typecheck`
+- [x] 3.1 Write failing server test: register payload with `vitestAttachmentsDir`/`vitestReferenceDir` extends `artifactRoots`; `/file/` serves a file inside a registered vitest dir and rejects one outside all roots. Verify: `cd tests && bun test artifact-routes.test.ts` (new case fails)
+- [x] 3.2 Extend `RegisterDataSchema` (optional vitest dir fields) and `handleRegister` root pushing; add optional `provider` to test-begin/test data schemas. Verify: test from 3.1 passes && `cd tests && bun test report-state.test.ts` && `bun run typecheck`
 
 ## 4. Vitest reporter (test-first, mocked)
 

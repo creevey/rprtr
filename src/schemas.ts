@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export * from './schemas/http.ts'
+export * from './schemas/offline.ts'
 
 // Location schema
 export const LocationSchema = z.object({
@@ -61,6 +62,12 @@ export const TestResultStatusSchema = z.enum(['failed', 'success', 'pending'])
 
 export type TestResultStatus = z.infer<typeof TestResultStatusSchema>
 
+// Reporting provider that produced the test events. Absent means playwright
+// (older reporters never sent this field).
+export const ProviderSchema = z.enum(['playwright', 'vitest'])
+
+export type Provider = z.infer<typeof ProviderSchema>
+
 // Test result schema
 export const TestResultSchema = z.object({
   status: TestResultStatusSchema,
@@ -87,6 +94,7 @@ export const TestDataSchema = z.object({
   approved: z.record(z.string(), z.number()).nullable().optional(),
   attachments: z.array(AttachmentSchema).optional(),
   location: LocationSchema.optional(),
+  provider: ProviderSchema.optional(),
 })
 
 export type TestData = z.infer<typeof TestDataSchema>
@@ -171,6 +179,7 @@ export const TestBeginDataSchema = z.object({
   browser: z.string(),
   projectName: z.string().optional(),
   location: LocationSchema,
+  provider: ProviderSchema.optional(),
 })
 
 export type TestBeginData = z.infer<typeof TestBeginDataSchema>
@@ -204,6 +213,8 @@ export const RegisterDataSchema = z.object({
   playwrightRootDir: z.string().optional(),
   playwrightSnapshotPathTemplate: z.string().optional(),
   playwrightToHaveScreenshotPathTemplate: z.string().optional(),
+  vitestAttachmentsDir: z.string().optional(),
+  vitestReferenceDir: z.string().optional(),
   configFile: z.string().optional(),
   cwd: z.string().optional(),
 })
@@ -227,26 +238,6 @@ export const LoadedReportDataSchema = z.object({
 })
 
 export type LoadedReportData = z.infer<typeof LoadedReportDataSchema>
-
-// Offline event schema
-export const OfflineEventSchema = z.object({
-  type: z.enum(['test-begin', 'test-end', 'run-end']),
-  data: z.unknown(),
-  timestamp: z.number(),
-  workerIndex: z.number(),
-})
-
-export type OfflineEvent = z.infer<typeof OfflineEventSchema>
-
-// Offline report schema
-export const OfflineReportSchema = z.object({
-  version: z.number(),
-  generatedAt: z.string(),
-  workers: z.number(),
-  events: z.array(OfflineEventSchema),
-})
-
-export type OfflineReport = z.infer<typeof OfflineReportSchema>
 
 // Report API response schema
 export const ReportApiResponseSchema = z.object({

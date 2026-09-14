@@ -97,7 +97,7 @@ export function createMutableReportState(screenshotDir = './screenshots'): Mutab
 }
 
 export function applyTestBeginEvent(state: MutableReportState, data: TestBeginData): TestData {
-  const { id, title, titlePath, browser, projectName, location } = data
+  const { id, title, titlePath, browser, projectName, location, provider } = data
   state.currentRunIds.add(id)
   const existing = state.reportData.tests[id]
   if (existing !== undefined) {
@@ -118,6 +118,7 @@ export function applyTestBeginEvent(state: MutableReportState, data: TestBeginDa
     projectName: projectName ?? browser ?? '',
     title: title ?? '',
     location,
+    provider,
     status: 'running',
   }
   state.reportData.tests[id] = created
