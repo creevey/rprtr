@@ -30,7 +30,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.4.x"
+          bun-version: '1.4.x'
 
       - name: Setup Node.js for npm publish
         uses: actions/setup-node@v6
@@ -39,6 +39,10 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install example dependencies
+        working-directory: examples/component-testing
         run: bun install --frozen-lockfile
 
       - name: Install git-cliff
