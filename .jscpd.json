@@ -5,7 +5,7 @@
   "reporters": ["console", "html"],
   "output": "./reports/jscpd",
   "ignore": ["**/node_modules/**", "**/*.d.ts", "**/dist/**", "**/tests/**", "**/*.spec.ts", "docs/**", "scripts/*.sh"],
-  "formats": ["typescript", "javascript"],
+  "format": "typescript,javascript",
   "absolute": true,
   "gitignore": true
 }
