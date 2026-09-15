@@ -14,7 +14,7 @@ All example commands run inside `examples/vitest-browser/` unless stated otherwi
 
 ## 3. Baselines
 
-- [ ] 3.1 Regenerate + commit `-chromium-darwin` references (fresh `vitest run --update`, review images, commit). Verify: `bunx vitest run` green on darwin with a clean checkout (`git stash` of outputs not needed — references are tracked)
+- [x] 3.1 Regenerate + commit `-chromium-darwin` references (fresh `vitest run --update`, review images, commit). Verify: `bunx vitest run` green on darwin with a clean checkout (`git stash` of outputs not needed — references are tracked)
 - [ ] 3.2 Generate + commit `-chromium-linux` references via the official container (`docker run --rm -v "$PWD":/work -w /work mcr.microsoft.com/playwright:v1.59.0-noble` running `bunx vitest run --update` with node fallback, or a local CI-triggered run). Verify: committed `*-linux.png` files exist beside the darwin ones
 
 ## 4. README
