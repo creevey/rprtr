@@ -20,5 +20,5 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 4. Docs
 
-- [ ] 4.1 Update main `README.md` (run-buttons/server CLI section: Vitest discovery enables buttons and pre-run listing) and `examples/vitest-browser/README.md` (drop the "restart the server → buttons gone until next run" limitation in Run buttons + FAQ; note the pre-populated pending list). Verify: manual review against implemented behavior
+- [x] 4.1 Update main `README.md` (run-buttons/server CLI section: Vitest discovery enables buttons and pre-run listing) and `examples/vitest-browser/README.md` (drop the "restart the server → buttons gone until next run" limitation in Run buttons + FAQ; note the pre-populated pending list). Verify: manual review against implemented behavior
 - [ ] 4.2 Full gate + browser regression. Verify: `bun run check && bun run test:playwright`

@@ -103,6 +103,8 @@ Baselines are committed for **darwin and linux**, so the suite is green immediat
 
 With the UI server running, the sidebar's Start/Stop and per-test ▶ buttons launch Vitest too: the reporter registers its config file and project root, and the server spawns `vitest run --config vitest.config.ts` with results streaming back into the UI. Per-test reruns select the test file plus a `-t` title-pattern approximation. See the [main README](../../../README.md#vitest-browser-mode) for details.
 
+The buttons are enabled as soon as the server starts — it discovers this example's `vitest.config.ts` and lists the tests (`bun run reporter` → the sidebar shows `button.test.ts` and `expandable.test.ts` entries as pending before anything has run). A real run replaces that list with actual results.
+
 ## Where baselines live
 
 Vitest's default layout places references next to the test file:
@@ -126,6 +128,7 @@ Actual/diff artifacts land in `.vitest-attachments/` (gitignored); the reporter'
 ## FAQ
 
 - **`Error: listen EADDRINUSE` / the UI never receives events** — port 3000 is taken. Start the server elsewhere (`bunx crvy-rprtr -p 3100`) and point the reporter at it with `CRVY_RPRTR_SERVER_URL=ws://localhost:3100 bun run test`.
+- **The sidebar lists tests before the first run** — that's startup discovery: the server asks Vitest to enumerate the suite when it starts (collection only, no browser launch). The list is pending-only; run the tests to get real results, and edits made after the server started appear on the next run.
 - **Visual tests fail on a brand-new machine/CI runner** — you're on a platform suffix without baselines (e.g. first linux run without `-linux` references). Run once to write them, or `bun run update-snapshots`, then commit.
 - **Diffs appear everywhere after an intentional redesign** — use `bun run update-snapshots`, or click **Approve All** in the UI, then commit the regenerated `__screenshots__/` files.
 - **The config fails to load with `Missing "./vitest" specifier`** — your `@crvy/rprtr` version predates the Vitest reporter (see version note at the top).
