@@ -23,8 +23,8 @@ All example commands run inside `examples/vitest-browser/` unless stated otherwi
 
 ## 5. CI wiring
 
-- [ ] 5.1 `.github/workflows/ci.yml`: install step for `examples/vitest-browser` in `lint-and-typecheck`; install + `bun run example:vitest` step in the `playwright-tests` container job (validates `-linux` baselines and the offline-artifact path). Verify: workflow YAML reviewed; suite passes in CI on the PR
-- [ ] 5.2 `.github/workflows/publish.yml`: mirror the component-testing install step for the new example. Verify: YAML diff reviewed against the CT step
+- [x] 5.1 `.github/workflows/ci.yml`: install step for `examples/vitest-browser` in `lint-and-typecheck`; install + `bun run example:vitest` step in the `playwright-tests` container job (validates `-linux` baselines and the offline-artifact path). Verify: workflow YAML reviewed; suite passes in CI on the PR
+- [x] 5.2 `.github/workflows/publish.yml`: mirror the component-testing install step for the new example. Verify: YAML diff reviewed against the CT step
 
 ## 6. Main README
 

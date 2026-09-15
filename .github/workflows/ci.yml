@@ -38,6 +38,10 @@ jobs:
         working-directory: examples/component-testing
         run: bun install
 
+      - name: Install vitest browser example dependencies
+        working-directory: examples/vitest-browser
+        run: bun install
+
       - name: Run linter
         run: bun run lint
 
@@ -99,6 +103,13 @@ jobs:
 
       - name: Run Playwright tests
         run: bun run test:playwright
+
+      - name: Install vitest browser example dependencies
+        working-directory: examples/vitest-browser
+        run: bun install
+
+      - name: Run vitest browser example
+        run: bun run example:vitest
 
       - name: Upload Playwright report
         if: failure()
