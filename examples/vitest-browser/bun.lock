@@ -15,7 +15,7 @@
   "packages": {
     "@blazediff/core": ["@blazediff/core@1.9.1", "", {}, "sha512-ehg3jIkYKulZh+8om/O25vkvSsXXwC+skXmyA87FFx6A/45eqOkZsBltMw/TVteb0mloiGT8oGRTcjRAz66zaA=="],
 
-    "@crvy/rprtr": ["@crvy/rprtr@0.3.3", "", { "dependencies": { "p-limit": "^7.3.0", "package-manager-detector": "^1.6.0", "ws": "^8.18.3", "zod": "^4.3.6" }, "peerDependencies": { "@playwright/test": ">=1.40" }, "bin": { "crvy-rprtr": "dist/cli.js" } }, "sha512-hJG1/m4CqMmhmes5gNDc8uL5WdlsnotVY3Zv5edHHMNgrOPTgVIzpZDKOVrFDVAKxGQb/YYedNQPciiaRYqNoA=="],
+    "@crvy/rprtr": ["@crvy/rprtr@/var/folders/bb/4_lkm1wx25q1vtz97xy66hd40000gn/T/opencode/crvy-rprtr-0.3.3.tgz", { "dependencies": { "p-limit": "^7.3.0", "package-manager-detector": "^1.6.0", "ws": "^8.18.3", "zod": "^4.3.6" }, "peerDependencies": { "@playwright/test": ">=1.40", "vitest": ">=4 <5" }, "bin": { "crvy-rprtr": "./dist/cli.js" } }, "sha512-tpaEVQDEXoPTgQBJinELvHm6YPZto55Mln4/EUO9wJxyviQ/je4q/v50gqkHGNR+c/TSHXoJndRJYcubjEW8tA=="],
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.6.0", "", {}, "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw=="],
 

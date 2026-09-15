@@ -19,7 +19,7 @@ All example commands run inside `examples/vitest-browser/` unless stated otherwi
 
 ## 4. README
 
-- [ ] 4.1 Write `examples/vitest-browser/README.md` per design Decision 7: architecture diagram, requirements, quickstart (two terminals), first-run UX, the approve loop (edit color constant in `src/`, rerun, diff, Approve, rerun), `test:ci` artifacts, `update-snapshots`, limitations + forward link to `vitest-runner`, FAQ (port conflicts, new-platform baselines, intentional redesigns). Verify: manual walkthrough of every command in the quickstart from a clean state
+- [x] 4.1 Write `examples/vitest-browser/README.md` per design Decision 7: architecture diagram, requirements, quickstart (two terminals), first-run UX, the approve loop (edit color constant in `src/`, rerun, diff, Approve, rerun), `test:ci` artifacts, `update-snapshots`, limitations + forward link to `vitest-runner`, FAQ (port conflicts, new-platform baselines, intentional redesigns). Verify: manual walkthrough of every command in the quickstart from a clean state
 
 ## 5. CI wiring
 
