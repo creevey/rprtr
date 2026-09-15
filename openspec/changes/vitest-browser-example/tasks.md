@@ -9,8 +9,8 @@ All example commands run inside `examples/vitest-browser/` unless stated otherwi
 
 ## 2. Components and tests
 
-- [ ] 2.1 Write `src/button.js` and `src/expandable.js` (vanilla DOM factories, one with internal state) and `tests/button.test.ts` / `tests/expandable.test.ts`: DOM assertions for rendered props/update, a click-then-assert interaction, and `toMatchScreenshot('…')` on a locator in each file. Verify: `bunx vitest run` — DOM/interaction tests pass; visual tests fail once creating references (expected first-run UX) — then `bunx vitest run` again green
-- [ ] 2.2 Typecheck the example standalone. Verify: `cd examples/vitest-browser && bunx tsc --noEmit`
+- [x] 2.1 Write `src/button.js` and `src/expandable.js` (vanilla DOM factories, one with internal state) and `tests/button.test.ts` / `tests/expandable.test.ts`: DOM assertions for rendered props/update, a click-then-assert interaction, and `toMatchScreenshot('…')` on a locator in each file. Verify: `bunx vitest run` — DOM/interaction tests pass; visual tests fail once creating references (expected first-run UX) — then `bunx vitest run` again green
+- [x] 2.2 Typecheck the example standalone. Verify: `cd examples/vitest-browser && bunx tsc --noEmit`
 
 ## 3. Baselines
 
