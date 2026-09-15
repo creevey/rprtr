@@ -32,4 +32,4 @@ All example commands run inside `examples/vitest-browser/` unless stated otherwi
 
 ## 7. Gate
 
-- [ ] 7.1 Full gate + browser regression (repo-level, no product code changed but CI/UI-adjacent files touched). Verify: `bun run check && bun run test:playwright`
+- [x] 7.1 Full gate + browser regression (repo-level, no product code changed but CI/UI-adjacent files touched). Verify: `bun run check && bun run test:playwright`
