@@ -25,12 +25,19 @@ export function getTitlePath(testCase: TestCase): string[] {
   return titlePath
 }
 
-export function getBrowserName(testCase: TestCase): string {
-  const projectName = testCase.project.name
-  if (projectName !== '') return projectName
+/**
+ * Project name → sidebar browser label. Empty project names fall back to the
+ * project's configured browser instance, then to a generic label.
+ */
+export function browserLabelFromProjectName(projectName: string | undefined, fallback = 'browser'): string {
+  return projectName === undefined || projectName === '' ? fallback : projectName
+}
 
-  const browserName = testCase.project.config.browser.instances?.[0]?.browser
-  return browserName ?? 'browser'
+export function getBrowserName(testCase: TestCase): string {
+  return browserLabelFromProjectName(
+    testCase.project.name,
+    testCase.project.config.browser.instances?.[0]?.browser ?? 'browser',
+  )
 }
 
 export function getImageNameFromPath(filePath: string, browser: string): string {

@@ -4,8 +4,8 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 1. Discovery primitives
 
-- [ ] 1.1 Failing test first: `tests/vitest-discovery.test.ts` — parse `vitest list --json` stdout (fixture entries: name/file/projectName; malformed stdout → empty list; timeout/kill → empty list). Implement `src/server/vitest-discovery.ts`: `runVitestList({ configFile, cwd })` spawning via the run-launcher command resolution with `CI=true`, closed stdin, captured stdout, kill timeout; Zod-parse entries. Verify: `cd tests && bun test vitest-discovery.test.ts && cd .. && bun run typecheck`
-- [ ] 1.2 Tree synthesis: map entries to the streamed grouping — suites from the Vitest-root-relative file path, `pending` status, browser label from `projectName` via `getBrowserName`, `discovered:`-prefixed ids, identity `(file, full title path)`. Tests cover flat-file and nested-directory projects. Verify: `cd tests && bun test vitest-discovery.test.ts`
+- [x] 1.1 Failing test first: `tests/vitest-discovery.test.ts` — parse `vitest list --json` stdout (fixture entries: name/file/projectName; malformed stdout → empty list; timeout/kill → empty list). Implement `src/server/vitest-discovery.ts`: `runVitestList({ configFile, cwd })` spawning via the run-launcher command resolution with `CI=true`, closed stdin, captured stdout, kill timeout; Zod-parse entries. Verify: `cd tests && bun test vitest-discovery.test.ts && cd .. && bun run typecheck`
+- [x] 1.2 Tree synthesis: map entries to the streamed grouping — suites from the Vitest-root-relative file path, `pending` status, browser label from `projectName` via `getBrowserName`, `discovered:`-prefixed ids, identity `(file, full title path)`. Tests cover flat-file and nested-directory projects. Verify: `cd tests && bun test vitest-discovery.test.ts`
 
 ## 2. Startup seeding
 
