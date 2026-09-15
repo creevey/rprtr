@@ -1,6 +1,6 @@
 <script lang="ts">
   import { isTest, isDefined, type CrvyRprtrSuite, type CrvyRprtrTest } from '../../types';
-  import { getTestPath, hasScreenshots } from '../helpers';
+  import { getTestPath, hasScreenshots, isTreeVisible } from '../helpers';
   import { cn, statusDotClass } from '../cn';
   import TreeItem from './TreeItem.svelte';
 
@@ -89,7 +89,7 @@
 </div>
 
 {#if isOpen}
-  {#each Object.values(suiteItem.children).filter(isDefined).filter((c) => hasScreenshots(c as CrvyRprtrSuite | CrvyRprtrTest)) as child}
+  {#each Object.values(suiteItem.children).filter(isDefined).filter((c) => isTreeVisible(c as CrvyRprtrSuite | CrvyRprtrTest)) as child}
     <TreeItem
       item={child as CrvyRprtrSuite | CrvyRprtrTest}
       level={level + 1}

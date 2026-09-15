@@ -40,6 +40,10 @@ After `loadOfflineReports`/report.json restore, discovered entries fill only ide
 
 Child-process spawn, Zod parsing of `vitest list --json` output, and the existing tree types cover everything; the published exports map, CLI flags, and peer deps are untouched. Discovery executes the project's config and test files (collection) — the same trust boundary as UI-launched runs, scoped to servers started inside a Vitest project.
 
+### 7. Client visibility gate lets never-run tests through (correction found in verification)
+
+The original assumption "the client already renders `pending` tests, zero client changes" was wrong: the sidebar (and the header counters) gate visibility on `hasScreenshots` — a test with results but no screenshot artifacts, or with no results at all, is hidden, so discovered `pending` entries never rendered. A new `isTreeVisible` helper (screenshot artifacts **or** no results yet — pending/in-flight) replaces the gate in the sidebar, nested tree items, and `countTestsStatus`. Finished tests without artifacts stay hidden: the sidebar remains a visual-attention list. No wire-format or reporter changes.
+
 ## Risks / Trade-offs
 
 - [Discovery snapshot goes stale] → the list reflects discovery time; edits mid-session aren't picked up until the next run replaces the tree. Accepted for v1 (spec: no refresh affordance).

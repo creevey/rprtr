@@ -9,7 +9,7 @@ Starting the UI server in a Vitest Browser Mode project shows an empty sidebar (
 - Server startup discovers `vitest.config.*` in the working directory (mirroring the existing `playwright.config.*` discovery in `seedRunContext`, src/server/app.ts) and seeds a Vitest run context — sidebar run controls (Start/Stop) are enabled without any prior run.
 - Seeding additionally spawns `CI=true vitest list --json` (verified: ~1s, does not launch the browser) and synthesizes the discovered tests into the report tree as `pending` entries, so the sidebar lists what would run before anything ran.
 - Discovered pending tests are server-session state: they fill only the gaps in a loaded `report.json` (real results always win), are replaced wholesale when a real run streams, and are excluded from persisted reports.
-- No reporter, client, or wire-format changes — the client already renders `pending` tests, and `runner: 'vitest'` registration semantics are unchanged.
+- No reporter or wire-format changes — `runner: 'vitest'` registration semantics are unchanged. One client change was required (found during verification): the sidebar's screenshot-artifact visibility gate hid never-run `pending` tests, so a new `isTreeVisible` helper lets tests without results yet render (design.md decision 7).
 
 ## Capabilities
 

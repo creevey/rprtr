@@ -1,6 +1,6 @@
 <script lang="ts">
   import { isDefined, type CrvyRprtrSuite, type CrvyRprtrTest, type TestStatus } from '../../types';
-  import { countTestsStatus, filterTests, hasScreenshots, parseFilterString, type CrvyRprtrViewFilter } from '../helpers';
+  import { countTestsStatus, filterTests, hasScreenshots, isTreeVisible, parseFilterString, type CrvyRprtrViewFilter } from '../helpers';
   import { cn, statusDotClass } from '../cn';
   import TreeItem from './TreeItem.svelte';
 
@@ -46,7 +46,7 @@
   let visibleChildren = $derived(
     Object.values(filteredTests.children)
       .filter(isDefined)
-      .filter((c) => hasScreenshots(c as CrvyRprtrSuite | CrvyRprtrTest))
+      .filter((c) => isTreeVisible(c as CrvyRprtrSuite | CrvyRprtrTest))
   );
 
   function handleFilterInput(e: Event): void {

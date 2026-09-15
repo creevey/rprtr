@@ -34,7 +34,7 @@ export function countTestsStatus(suite: CrvyRprtrSuite): {
   let suiteOrTest
   while ((suiteOrTest = cases.pop())) {
     if (isTest(suiteOrTest)) {
-      if (!hasScreenshots(suiteOrTest)) continue
+      if (!isTreeVisible(suiteOrTest)) continue
       if (suiteOrTest.status === 'approved') approvedCount++
       if (suiteOrTest.status === 'success') successCount++
       if (suiteOrTest.status === 'failed') failedCount++
@@ -66,4 +66,17 @@ export function hasScreenshots(item: CrvyRprtrSuite | CrvyRprtrTest): boolean {
     return item.results?.some((r) => r.images !== undefined && Object.keys(r.images).length > 0) ?? false
   }
   return getChildrenArray(item.children).some((child) => hasScreenshots(child))
+}
+
+/**
+ * Sidebar/tree visibility: a test shows when it has screenshot artifacts — or
+ * when it has no results yet, i.e. it was discovered but never ran (pending) or
+ * is currently in flight (running). Finished tests without artifacts stay
+ * hidden: the sidebar lists visual comparisons, not the whole suite.
+ */
+export function isTreeVisible(item: CrvyRprtrSuite | CrvyRprtrTest): boolean {
+  if (isTest(item)) {
+    return item.results === undefined || hasScreenshots(item)
+  }
+  return getChildrenArray(item.children).some((child) => isTreeVisible(child))
 }
