@@ -76,9 +76,11 @@ export function createDebouncedSaver(
 /** Builds the debounced report-persistence facade shared by handlers, the run
  * controller, and shutdown. `scheduleReportSave` coalesces frequent mutations;
  * `saveReport` flushes immediately so an interrupted run (Ctrl+C before run-end,
- * killed child, server restart) still lands its results on disk. */
-export function createReportPersistence<T>(reportFile: string, reportData: T): ReportPersistence {
-  const reportSaver = createDebouncedSaver(() => writeJsonFile(reportFile, reportData), 250)
+ * killed child, server restart) still lands its results on disk. `getReportData`
+ * is read at write time, so callers can persist a filtered view (e.g. without
+ * discovered-but-never-run tests) of their live state. */
+export function createReportPersistence<T>(reportFile: string, getReportData: () => T): ReportPersistence {
+  const reportSaver = createDebouncedSaver(() => writeJsonFile(reportFile, getReportData()), 250)
   return {
     saveReport: (): Promise<void> => reportSaver.flush(),
     scheduleReportSave: (): void => {

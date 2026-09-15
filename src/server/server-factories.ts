@@ -6,6 +6,7 @@ import { RunController, createRealSpawn, createRealTimers, type RunContext } fro
 import type { RunLauncher } from './run-launcher.ts'
 import type { RunMode } from './run-mode.ts'
 import { broadcastToBrowsers } from './utils.ts'
+import { dropDiscoveredTests } from './vitest-seeding.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
 interface ServerFactoryReportData {
@@ -35,6 +36,11 @@ function createServerRunController(
     },
     setReportRunning: (running): void => {
       reportData.isRunning = running
+    },
+    onRunStart: (): void => {
+      dropDiscoveredTests(reportData, (message): void => {
+        broadcastToBrowsers(wsClients, message)
+      })
     },
     setRunFiltered,
     containerPathMapping: routesContext.containerPathMapping,

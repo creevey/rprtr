@@ -32,7 +32,7 @@ import { type RunLauncher } from './run-launcher.ts'
 import { type RunMode } from './run-mode.ts'
 import { createCloseHandler, createRunControllerAndHandlers } from './server-factories.ts'
 import { broadcastToBrowsers } from './utils.ts'
-import { resolveSeedRunContext, seedDiscoveredTests } from './vitest-discovery.ts'
+import { resolveSeedRunContext, seedDiscoveredTests, withoutDiscoveredTests } from './vitest-seeding.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
 export interface ServerOptions {
@@ -241,7 +241,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const staticDir = await resolveStaticDir(options.staticDir)
   const wsClients = new Set<RuntimeWebSocket>()
   const currentRunIds = new Set<string>()
-  const persistence = createReportPersistence(reportFile, reportData)
+  const persistence = createReportPersistence(reportFile, () => withoutDiscoveredTests(reportData))
   const { routesContext, launcher, localLauncher, configuredRunMode } = await setupRoutesContext(
     options,
     reportData,

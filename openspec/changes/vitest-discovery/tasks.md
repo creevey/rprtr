@@ -14,9 +14,9 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 3. Merge, replace, persistence exclusion
 
-- [ ] 3.1 Merge semantics: discovered `pending` entries fill only identities absent from a loaded report; loaded results are never downgraded. Test: report with one of two discovered tests → report test keeps its status, the unknown one renders pending. Verify: `cd tests && bun test vitest-discovery.test.ts`
-- [ ] 3.2 Replacement: on run start, all `discovered:`-prefixed entries are dropped before streamed events land (stale identities disappear). Verify: `cd tests && bun test vitest-discovery.test.ts`
-- [ ] 3.3 Persistence exclusion: `saveReport` filters `discovered:` ids — report.json, offline JSON review, and the static HTML artifact contain no never-run pending entries. Verify: `cd tests && bun test report-persistence.test.ts vitest-discovery.test.ts`
+- [x] 3.1 Merge semantics: discovered `pending` entries fill only identities absent from a loaded report; loaded results are never downgraded. Test: report with one of two discovered tests → report test keeps its status, the unknown one renders pending. Verify: `cd tests && bun test vitest-discovery.test.ts`
+- [x] 3.2 Replacement: on run start, all `discovered:`-prefixed entries are dropped before streamed events land (stale identities disappear). Verify: `cd tests && bun test vitest-discovery.test.ts`
+- [x] 3.3 Persistence exclusion: `saveReport` filters `discovered:` ids — report.json, offline JSON review, and the static HTML artifact contain no never-run pending entries. Verify: `cd tests && bun test report-persistence.test.ts vitest-discovery.test.ts`
 
 ## 4. Docs
 
