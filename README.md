@@ -101,7 +101,7 @@ Crvy Rprtr works with [Playwright Component Testing](https://playwright.dev/docs
 
 ## Vitest Browser Mode
 
-Crvy Rprtr also reports [Vitest Browser Mode](https://vitest.dev/guide/browser/) `toMatchScreenshot()` results (Vitest ≥ 4 < 5). Install the reporter together with a browser provider:
+Crvy Rprtr also reports [Vitest Browser Mode](https://vitest.dev/guide/browser/) `toMatchScreenshot()` results (Vitest ≥ 4 < 5) — a complete, annotated example lives in [examples/vitest-browser](./examples/vitest-browser). Install the reporter together with a browser provider:
 
 ```bash
 npm i -D @crvy/rprtr vitest @vitest/browser-playwright

@@ -28,7 +28,7 @@ All example commands run inside `examples/vitest-browser/` unless stated otherwi
 
 ## 6. Main README
 
-- [ ] 6.1 Root `README.md`: link the new example from the Vitest Browser Mode section (like the Component Testing section does) and remove the stale "Approving Vitest screenshots is not supported yet" limitation line (shipped in `vitest-approval`). Verify: manual review against shipped behavior
+- [x] 6.1 Root `README.md`: link the new example from the Vitest Browser Mode section (like the Component Testing section does) and remove the stale "Approving Vitest screenshots is not supported yet" limitation line (shipped in `vitest-approval`). Verify: manual review against shipped behavior
 
 ## 7. Gate
 
