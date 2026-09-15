@@ -9,8 +9,8 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 2. Startup seeding
 
-- [ ] 2.1 Failing test first: extend the seeding tests (`tests/vitest-discovery.test.ts` or a focused `server/app` seeding test mirroring existing app-level test style) — `seedRunContext` discovers `vitest.config.{ts,js,mts,mjs,cts,cjs}` when no `playwright.config.*` exists and seeds `{ runner: 'vitest', configFile, cwd }`; a Playwright config (or CLI `--config`) keeps precedence and skips Vitest discovery. Implement in `src/server/app.ts`. Verify: `cd tests && bun test vitest-discovery.test.ts && cd .. && bun run typecheck`
-- [ ] 2.2 Wire async seeding at server startup: after listen, seed the run context (await) and fire-and-forget the listing; listing failure logs once and leaves buttons enabled. Test: seeded app in a temp Vitest project dir exposes run controls and a pending tree without any run. Verify: `cd tests && bun test vitest-discovery.test.ts`
+- [x] 2.1 Failing test first: extend the seeding tests (`tests/vitest-discovery.test.ts` or a focused `server/app` seeding test mirroring existing app-level test style) — `seedRunContext` discovers `vitest.config.{ts,js,mts,mjs,cts,cjs}` when no `playwright.config.*` exists and seeds `{ runner: 'vitest', configFile, cwd }`; a Playwright config (or CLI `--config`) keeps precedence and skips Vitest discovery. Implement in `src/server/app.ts`. Verify: `cd tests && bun test vitest-discovery.test.ts && cd .. && bun run typecheck`
+- [x] 2.2 Wire async seeding at server startup: after listen, seed the run context (await) and fire-and-forget the listing; listing failure logs once and leaves buttons enabled. Test: seeded app in a temp Vitest project dir exposes run controls and a pending tree without any run. Verify: `cd tests && bun test vitest-discovery.test.ts`
 
 ## 3. Merge, replace, persistence exclusion
 

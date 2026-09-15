@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, spyOn, test } from 'bun:test'
 import { mkdir, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 
+import { createServerApp, type ServerApp } from '../src/server/app'
 import {
   discoveredTestIdentity,
+  resolveSeedRunContext,
   runVitestList,
   synthesizeDiscoveredTests,
   type VitestListEntry,
@@ -11,6 +13,7 @@ import {
 import type { TestData } from '../src/types'
 
 const TMP_ROOT = join(import.meta.dir, 'fixtures', 'vitest-discovery-tmp')
+const VITEST_CONFIG = `import { defineConfig } from 'vitest/config'\nexport default defineConfig({})\n`
 
 setDefaultTimeout(60000)
 
@@ -82,6 +85,50 @@ async function createTempProject(files: Record<string, string>): Promise<string>
     await writeFile(absolutePath, content)
   }
   return projectDir
+}
+
+interface ReportApiBody {
+  runEnabled?: boolean
+  isRunning?: boolean
+  tests?: Record<string, TestData>
+}
+
+async function waitFor(
+  check: (body: ReportApiBody) => boolean,
+  request: () => Promise<ReportApiBody>,
+  timeoutMs = 30000,
+): Promise<ReportApiBody> {
+  const deadline = Date.now() + timeoutMs
+  let body: ReportApiBody = {}
+  while (Date.now() < deadline) {
+    body = await request()
+    if (check(body)) return body
+    await Bun.sleep(250)
+  }
+  return body
+}
+
+async function startSeededApp(projectDir: string): Promise<ServerApp> {
+  const previousCwd = process.cwd()
+  process.chdir(projectDir)
+  try {
+    return await createServerApp({
+      screenshotDir: join(projectDir, 'screenshots'),
+      reportPath: join(projectDir, 'report.json'),
+      staticDir: './dist',
+      // Skip the docker daemon probe; these tests exercise the local seed path.
+      runMode: 'local',
+    })
+  } finally {
+    process.chdir(previousCwd)
+  }
+}
+
+function createReportRequest(app: ServerApp): () => Promise<ReportApiBody> {
+  return async () => {
+    const res = await app.handleRequest(new Request('http://localhost/api/report'))
+    return (await res.json()) as ReportApiBody
+  }
 }
 
 afterEach(async () => {
@@ -263,5 +310,100 @@ describe('synthesizeDiscoveredTests', () => {
     expect(discoveredTestIdentity('/proj/tests/a.test.ts', 'outer > inner > does the thing')).toBe(
       discoveredTestIdentity(streamed.location?.file ?? '', [...streamed.titlePath, streamed.title].join(' > ')),
     )
+  })
+})
+
+describe('resolveSeedRunContext', () => {
+  test('discovers vitest.config.* when no playwright config exists', async () => {
+    const projectDir = await createTempProject({
+      'vitest.config.mts': `export default {}\n`,
+    })
+    const ctx = await resolveSeedRunContext(undefined, projectDir)
+    expect(ctx).toEqual({
+      configFile: join(projectDir, 'vitest.config.mts'),
+      cwd: projectDir,
+      rootDir: projectDir,
+      runner: 'vitest',
+    })
+  })
+
+  test('a discovered playwright config keeps precedence and skips vitest discovery', async () => {
+    const projectDir = await createTempProject({
+      'playwright.config.ts': `export default {}\n`,
+      'vitest.config.ts': `export default {}\n`,
+    })
+    const ctx = await resolveSeedRunContext(undefined, projectDir)
+    expect(ctx).toEqual({ configFile: join(projectDir, 'playwright.config.ts'), cwd: projectDir })
+  })
+
+  test('an explicit CLI --config keeps precedence over a discovered vitest config', async () => {
+    const projectDir = await createTempProject({
+      'vitest.config.ts': `export default {}\n`,
+    })
+    const ctx = await resolveSeedRunContext('./custom/playwright.config.ts', projectDir)
+    expect(ctx).toEqual({
+      configFile: join(projectDir, 'custom', 'playwright.config.ts'),
+      cwd: projectDir,
+    })
+  })
+
+  test('no configs at all yields no run context', async () => {
+    const projectDir = await createTempProject({})
+    expect(await resolveSeedRunContext(undefined, projectDir)).toBeNull()
+  })
+})
+
+describe('startup seeding', () => {
+  let app: ServerApp | null = null
+
+  afterEach(async () => {
+    if (app !== null) {
+      await app.close()
+      app = null
+    }
+  })
+
+  test('a seeded app exposes run controls and a pending tree without any run', async () => {
+    const projectDir = await createTempProject({
+      'vitest.config.ts': VITEST_CONFIG,
+      'tests/one.test.ts': `import { it } from 'vitest'\nit('first discovered test', () => {})\n`,
+      'src/nested/two.test.ts': `import { it } from 'vitest'\nit('second discovered test', () => {})\n`,
+    })
+    app = await startSeededApp(projectDir)
+
+    const body = await waitFor(
+      (b) => b.runEnabled === true && Object.keys(b.tests ?? {}).length >= 2,
+      createReportRequest(app),
+    )
+
+    expect(body.runEnabled).toBe(true)
+    const tests = Object.values(body.tests ?? {})
+    expect(tests.length).toBe(2)
+    expect(body.isRunning).toBe(false)
+    for (const discovered of tests) {
+      expect(discovered.id?.startsWith('discovered:')).toBe(true)
+      expect(discovered.status).toBe('pending')
+    }
+    expect(tests.map(({ title }) => title).sort()).toEqual(['first discovered test', 'second discovered test'])
+  })
+
+  test('a failing listing keeps the run controls enabled and logs once', async () => {
+    const errorSpy = spyOn(console, 'error')
+    const projectDir = await createTempProject({
+      'vitest.config.ts': `throw new Error('boom')\n`,
+      'tests/one.test.ts': `import { it } from 'vitest'\nit('never collected', () => {})\n`,
+    })
+    app = await startSeededApp(projectDir)
+
+    const body = await waitFor(
+      (b) => b.runEnabled === true && (errorSpy.mock.calls.length > 0 || Object.keys(b.tests ?? {}).length > 0),
+      createReportRequest(app),
+    )
+
+    expect(body.runEnabled).toBe(true)
+    expect(Object.keys(body.tests ?? {}).length).toBe(0)
+    const discoveryLogs = errorSpy.mock.calls.filter((call) => String(call[0]).includes('VitestDiscovery'))
+    expect(discoveryLogs.length).toBe(1)
+    errorSpy.mockRestore()
   })
 })

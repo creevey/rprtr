@@ -5,7 +5,6 @@ import { loadOfflineReports } from '../offline-reports.ts'
 import type { FontRendering } from '../rendering.ts'
 import {
   IncomingWebSocketMessageSchema,
-  LoadedReportDataSchema,
   RegisterDataSchema,
   RunEndDataSchema,
   TestBeginDataSchema,
@@ -13,9 +12,8 @@ import {
   safeParse,
   type IncomingWebSocketMessage,
 } from '../schemas.ts'
-import type { TestData } from '../types.ts'
 import { type DockerOptions } from './docker-launcher.ts'
-import { fileExists, isDirectory, readJsonFile } from './file-utils.ts'
+import { fileExists } from './file-utils.ts'
 import {
   handleTestBegin,
   handleTestEnd,
@@ -26,13 +24,15 @@ import {
   type HandlerContext,
 } from './handlers.ts'
 import { resolveRunBackend } from './launcher-resolver.ts'
-import { resolveSeedConfigFile } from './playwright-config.ts'
+import { createReportData, loadReport, resolveReportPath, type ReportData } from './report-bootstrap.ts'
 import { createReportPersistence } from './report-persistence.ts'
 import { createRoutesContext } from './routes-context.ts'
 import { handleHttpRequest, type RoutesContext } from './routes.ts'
 import { type RunLauncher } from './run-launcher.ts'
 import { type RunMode } from './run-mode.ts'
 import { createCloseHandler, createRunControllerAndHandlers } from './server-factories.ts'
+import { broadcastToBrowsers } from './utils.ts'
+import { resolveSeedRunContext, seedDiscoveredTests } from './vitest-discovery.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
 export interface ServerOptions {
@@ -72,14 +72,6 @@ export interface ServerOptions {
   fontRendering?: FontRendering
 }
 
-interface ReportData {
-  isRunning: boolean
-  tests: Record<string, TestData>
-  browsers: string[]
-  isUpdateMode: boolean
-  screenshotDir: string
-}
-
 export interface ServerApp {
   port: number
   wsClients: Set<RuntimeWebSocket>
@@ -87,34 +79,6 @@ export interface ServerApp {
   close: () => Promise<void>
   handleRequest: (req: Request) => Promise<Response>
   handleWebSocketMessage: (message: string) => Promise<void>
-}
-
-function createReportData(options: ServerOptions): ReportData {
-  return {
-    isRunning: false,
-    tests: {},
-    browsers: ['chromium'],
-    isUpdateMode: false,
-    screenshotDir: options.screenshotDir ?? './screenshots',
-  }
-}
-
-async function loadReport(reportPath: string, reportData: ReportData): Promise<void> {
-  try {
-    const raw = await readJsonFile(reportPath)
-    if (raw === null) {
-      console.log('No report.json found, using empty state')
-      return
-    }
-
-    const parsed = safeParse(LoadedReportDataSchema, raw)
-    if (parsed !== null) {
-      reportData.tests = parsed.tests ?? {}
-      reportData.isUpdateMode = parsed.isUpdateMode ?? false
-    }
-  } catch {
-    console.log('No report.json found, using empty state')
-  }
 }
 
 async function handleParsedWebSocketMessage(ctx: HandlerContext, msg: IncomingWebSocketMessage): Promise<void> {
@@ -213,20 +177,13 @@ async function resolveStaticDir(staticDir?: string): Promise<string> {
   return candidates[0]!
 }
 
-async function resolveReportPath(reportPath: string): Promise<{ reportFile: string; offlineReportDir: string }> {
-  if (await isDirectory(reportPath)) {
-    return { reportFile: join(reportPath, 'report.json'), offlineReportDir: reportPath }
-  }
-  return { reportFile: reportPath, offlineReportDir: dirname(reportPath) }
-}
-
 async function seedRunContext(routesContext: RoutesContext, options: ServerOptions): Promise<void> {
   if (routesContext.runContext !== undefined) {
     return
   }
-  const configFile = await resolveSeedConfigFile(options.playwrightConfig, process.cwd())
-  if (configFile !== null) {
-    routesContext.runContext = { configFile, cwd: process.cwd() }
+  const runContext = await resolveSeedRunContext(options.playwrightConfig, process.cwd())
+  if (runContext !== null) {
+    routesContext.runContext = runContext
   }
 }
 
@@ -257,9 +214,28 @@ async function setupRoutesContext(
   return { routesContext, launcher, localLauncher, configuredRunMode }
 }
 
+/** Fire-and-forget startup listing for a discovered Vitest project: the sidebar
+ * pre-populates when it lands; the run controls stay enabled even if it fails. */
+function startVitestDiscovery(
+  runContext: RoutesContext['runContext'],
+  reportData: ReportData,
+  wsClients: Set<RuntimeWebSocket>,
+): void {
+  void seedDiscoveredTests({
+    runContext,
+    reportData,
+    broadcast: (message): void => {
+      broadcastToBrowsers(wsClients, message)
+    },
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[VitestDiscovery] test listing failed:', message)
+  })
+}
+
 export async function createServerApp(options: ServerOptions = {}): Promise<ServerApp> {
   const port = options.port ?? 3000
-  const reportData = createReportData(options)
+  const reportData = createReportData(options.screenshotDir)
   const reportPathOption = options.reportPath ?? './report.json'
   const { reportFile, offlineReportDir } = await resolveReportPath(reportPathOption)
   const staticDir = await resolveStaticDir(options.staticDir)
@@ -289,6 +265,8 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
 
   await loadReport(reportFile, reportData)
   await loadOfflineReports(reportData, offlineReportDir)
+
+  startVitestDiscovery(routesContext.runContext, reportData, wsClients)
 
   return {
     port,
