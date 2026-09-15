@@ -1,0 +1,7 @@
+node_modules
+
+# runtime output (the reporter's offline artifacts and portable screenshots)
+.vitest-attachments/
+crvy-rprtr-*.json
+crvy-rprtr.html
+screenshots/

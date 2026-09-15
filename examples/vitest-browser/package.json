@@ -1,0 +1,17 @@
+{
+  "name": "crvy-rprtr-example-vitest-browser",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:ci": "CI=true vitest run",
+    "update-snapshots": "vitest run --update",
+    "reporter": "crvy-rprtr"
+  },
+  "devDependencies": {
+    "@crvy/rprtr": "^0.3.3",
+    "@vitest/browser-playwright": "4.1.11",
+    "playwright": "1.59.0",
+    "vitest": "4.1.11"
+  }
+}
