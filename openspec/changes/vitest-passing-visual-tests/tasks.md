@@ -9,8 +9,8 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 2. Reporter emits passing-visual data (test-first)
 
-- [ ] 2.1 Write failing `tests/vitest-reporter.test.ts` case: a passed `TestCase` with extracted declarations produces `attachments: ['<image>-expected.png' with reference path]`, `visualNames`, and `approvalTargets[image] = referencePath`; missing reference file on disk emits no expected attachment and logs; non-visual passing test emits neither. Verify: `cd tests && bun test vitest-reporter.test.ts` (new cases fail)
-- [ ] 2.2 Implement in `src/vitest.ts` `onTestCaseResult`: merge extracted-declaration entries (passing tests) with artifact/error-derived entries (failures), preserving the existing failing-path payload byte-for-byte. Verify: tests from 2.1 pass && existing `vitest-reporter.test.ts`, `vitest-helpers.test.ts`, `vitest-browser-integration.test.ts` still green
+- [x] 2.1 Write failing `tests/vitest-reporter.test.ts` case: a passed `TestCase` with extracted declarations produces `attachments: ['<image>-expected.png' with reference path]`, `visualNames`, and `approvalTargets[image] = referencePath`; missing reference file on disk emits no expected attachment and logs; non-visual passing test emits neither. Verify: `cd tests && bun test vitest-reporter.test.ts` (new cases fail)
+- [x] 2.2 Implement in `src/vitest.ts` `onTestCaseResult`: merge extracted-declaration entries (passing tests) with artifact/error-derived entries (failures), preserving the existing failing-path payload byte-for-byte. Verify: tests from 2.1 pass && existing `vitest-reporter.test.ts`, `vitest-helpers.test.ts`, `vitest-browser-integration.test.ts` still green
 
 ## 3. Passing-run integration coverage
 

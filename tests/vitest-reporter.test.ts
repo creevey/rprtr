@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -132,6 +132,20 @@ async function createFixtureTree(): Promise<ReporterFixturePaths> {
   await writeFile(referencePath, TINY_PNG)
   await writeFile(actualPath, TINY_PNG)
   await writeFile(diffPath, TINY_PNG)
+  await mkdir(join(testFile, '..'), { recursive: true })
+  await writeFile(
+    testFile,
+    [
+      `import { describe, expect, test } from 'vitest'`,
+      `import { page } from 'vitest/browser'`,
+      ``,
+      `describe('visual', () => {`,
+      `  test('renders hero section', async () => {`,
+      `    await expect(page.getByTestId('hero')).toMatchScreenshot('hero-section')`,
+      `  })`,
+      `})`,
+    ].join('\n'),
+  )
   return { actualPath, diffPath, referencePath, root, testFile }
 }
 
@@ -473,6 +487,140 @@ describe('CrvyRprtrVitestReporter', () => {
           `hero-section-chromium-${process.platform}-diff.png`,
         ),
       )
+    } finally {
+      harness.close()
+    }
+  })
+
+  test('dev mode surfaces a passing visual test via source-extracted declarations', async () => {
+    process.env.CI = ''
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+
+    try {
+      const reporter = new CrvyRprtrVitestReporter({
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await harness.waitForCount(1)
+
+      const testCase = createTestCase({
+        id: 'vitest-pass-1',
+        name: 'renders hero section',
+        file: fixture.paths.testFile,
+        state: 'passed',
+      })
+
+      reporter.onTestCaseReady?.(testCase as never)
+      reporter.onTestCaseResult?.(testCase as never)
+      await harness.waitForCount(3)
+      await reporter.onTestRunEnd?.([], [], 'passed')
+
+      const endData = TestEndDataSchema.parse(eventsOfType(harness.received, 'test-end')[0]?.data)
+      expect(endData.status).toBe('passed')
+      expect(endData.visualNames).toEqual(['hero-section'])
+      expect(endData.attachments).toEqual([
+        { name: 'hero-section-expected.png', path: fixture.paths.referencePath, contentType: 'image/png' },
+      ])
+      expect(endData.approvalTargets).toEqual({ 'hero-section': fixture.paths.referencePath })
+      expect(endData.visualDeclarations).toEqual([
+        {
+          kind: 'named',
+          visualName: 'hero-section',
+          declaredName: 'hero-section',
+          snapshotBaseName: 'hero-section',
+          occurrenceIndex: 1,
+        },
+      ])
+
+      const image = attachmentsToImages(endData.attachments)['hero-section']
+      expect(image?.source).toBe('baseline-only')
+      expect(image?.expect).toBe(`/file/${encodeURIComponent(fixture.paths.referencePath)}`)
+      expect(image?.actual).toBeUndefined()
+      expect(image?.diff).toBeUndefined()
+    } finally {
+      harness.close()
+    }
+  })
+
+  test('a passing visual test whose reference file is missing emits no expected attachment', async () => {
+    process.env.CI = ''
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+    const logSpy = spyOn(console, 'log')
+    process.env.DEBUG = '1'
+
+    try {
+      await rm(fixture.paths.referencePath)
+      const reporter = new CrvyRprtrVitestReporter({
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await harness.waitForCount(1)
+
+      const testCase = createTestCase({
+        id: 'vitest-pass-missing',
+        name: 'renders hero section',
+        file: fixture.paths.testFile,
+        state: 'passed',
+      })
+
+      reporter.onTestCaseReady?.(testCase as never)
+      reporter.onTestCaseResult?.(testCase as never)
+      await harness.waitForCount(3)
+      await reporter.onTestRunEnd?.([], [], 'passed')
+
+      const endData = TestEndDataSchema.parse(eventsOfType(harness.received, 'test-end')[0]?.data)
+      expect(endData.status).toBe('passed')
+      expect(endData.attachments).toEqual([])
+      expect(endData.visualNames).toEqual([])
+      expect('approvalTargets' in endData).toBe(false)
+      expect(logSpy.mock.calls.map((call) => call.map(String).join(' ')).join('\n')).toContain('hero-section')
+    } finally {
+      logSpy.mockRestore()
+      harness.close()
+    }
+  })
+
+  test('a passing non-visual test emits neither attachments nor visual names', async () => {
+    process.env.CI = ''
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+
+    try {
+      const reporter = new CrvyRprtrVitestReporter({
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await harness.waitForCount(1)
+
+      const testCase = createTestCase({
+        id: 'vitest-pass-plain',
+        name: 'plain assertion test',
+        file: fixture.paths.testFile,
+        state: 'passed',
+      })
+
+      reporter.onTestCaseReady?.(testCase as never)
+      reporter.onTestCaseResult?.(testCase as never)
+      await harness.waitForCount(3)
+      await reporter.onTestRunEnd?.([], [], 'passed')
+
+      const endData = TestEndDataSchema.parse(eventsOfType(harness.received, 'test-end')[0]?.data)
+      expect(endData.status).toBe('passed')
+      expect(endData.attachments).toEqual([])
+      expect(endData.visualNames).toEqual([])
+      expect('approvalTargets' in endData).toBe(false)
+      expect('visualDeclarations' in endData).toBe(false)
     } finally {
       harness.close()
     }

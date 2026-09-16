@@ -1,3 +1,4 @@
+import { existsSync } from 'fs'
 import { isAbsolute, relative, resolve } from 'path'
 
 import pLimit from 'p-limit'
@@ -5,14 +6,17 @@ import type { Reporter, ResolvedConfig, TestCase, TestProject, TestRunEndReason,
 
 import { log, logError } from './debug-log.ts'
 import { saveAttachments } from './reporter-artifact-ops.ts'
-import type { AttachmentData } from './reporter-utils.ts'
+import type { AttachmentData, ScreenshotDeclaration } from './reporter-utils.ts'
 import { ReporterTransport, type ReporterTransportOptions } from './transport.ts'
 import {
   approvalTargetsFromEntries,
   buildAttachmentEntries,
   collectVisualEntries,
+  mergeVisualEntries,
+  type VisualArtifactEntry,
   type VitestArtifactLayout,
 } from './vitest-artifacts.ts'
+import { extractVitestScreenshots, loadTestSource, type VitestDeclarationContext } from './vitest-declarations.ts'
 import { getBrowserName, getTitlePath, mapVitestStatus, parseVitestScreenshotError } from './vitest-helpers.ts'
 
 export interface CrvyRprtrVitestReporterOptions extends ReporterTransportOptions {
@@ -27,6 +31,13 @@ interface PendingVitestArtifact {
   nativeAttachments: AttachmentData[]
   eventData: { attachments: AttachmentData[] }
 }
+
+interface PassingVisualData {
+  readonly entries: VisualArtifactEntry[]
+  readonly declarations: ScreenshotDeclaration[]
+}
+
+const NO_PASSING_VISUAL_DATA: PassingVisualData = { entries: [], declarations: [] }
 
 function mapRunReason(reason: TestRunEndReason): 'passed' | 'failed' | 'skipped' {
   switch (reason) {
@@ -80,6 +91,7 @@ export class CrvyRprtrVitestReporter implements Reporter {
   private configFile: string | undefined
   private transportStarted = false
   private pendingArtifacts: PendingVitestArtifact[] = []
+  private moduleSources = new Map<string, string | null>()
 
   constructor(options: CrvyRprtrVitestReporterOptions = {}) {
     this.transport = new ReporterTransport(options)
@@ -102,6 +114,8 @@ export class CrvyRprtrVitestReporter implements Reporter {
   onTestRunStart(): void {
     log('[CrvyRprtrVitestReporter] Starting vitest run')
     this.ensureTransportStarted()
+    // Watch-mode runs re-read edited sources; stale extraction input must go.
+    this.moduleSources.clear()
   }
 
   onTestCaseReady(testCase: TestCase): void {
@@ -129,14 +143,20 @@ export class CrvyRprtrVitestReporter implements Reporter {
     const firstError = result.errors?.[0]
     const parsedImagePaths = parseVitestScreenshotError(firstError?.message, browser)
     const entries = collectVisualEntries(this.artifactLayout(), testCase, browser, parsedImagePaths)
-    const attachments = buildAttachmentEntries(entries)
-    const approvalTargets = approvalTargetsFromEntries(entries)
+    // Vitest records no screenshot artifacts for passing assertions, so the
+    // reference must come from the test's own source declarations. Failing
+    // tests keep their artifact/error-derived payload untouched.
+    const passing = result.state === 'passed' ? this.passingVisualData(testCase, browser) : NO_PASSING_VISUAL_DATA
+    const mergedEntries = mergeVisualEntries(entries, passing.entries)
+    const attachments = buildAttachmentEntries(mergedEntries)
+    const approvalTargets = approvalTargetsFromEntries(mergedEntries)
     const data = {
       id: testCase.id,
       title: testCase.name,
       status: mapVitestStatus(result.state),
       attachments,
-      visualNames: [...new Set(entries.map(({ imageName }) => imageName))],
+      visualNames: [...new Set(mergedEntries.map(({ imageName }) => imageName))],
+      ...(passing.declarations.length > 0 ? { visualDeclarations: passing.declarations } : {}),
       ...(approvalTargets === undefined ? {} : { approvalTargets }),
       error: firstError?.message,
       duration: testCase.diagnostic()?.duration,
@@ -205,6 +225,51 @@ export class CrvyRprtrVitestReporter implements Reporter {
       referenceDir: this.referenceDir,
       attachmentsDir: this.attachmentsDir,
     }
+  }
+
+  /**
+   * Declarations for a passing visual test, derived from its module source.
+   * Only references that exist on disk are surfaced — a missing reference is
+   * logged and omitted (Vitest's own first-run behavior reports it honestly).
+   */
+  private passingVisualData(testCase: TestCase, browser: string): PassingVisualData {
+    const source = this.moduleSource(testCase.module.moduleId)
+    if (source === null) return NO_PASSING_VISUAL_DATA
+
+    const context: VitestDeclarationContext = {
+      projectRoot: this.projectRoot,
+      referenceDir: this.referenceDir,
+      testFile: testCase.module.moduleId,
+      browser,
+    }
+    const entries: VisualArtifactEntry[] = []
+    const declarations: ScreenshotDeclaration[] = []
+    for (const { declaration, imageName, referencePath } of extractVitestScreenshots(
+      source,
+      getTitlePath(testCase),
+      testCase.name,
+      context,
+    )) {
+      if (!existsSync(referencePath)) {
+        log(
+          `[CrvyRprtrVitestReporter] Missing reference for passing screenshot "${imageName}"; ` +
+            'the image is not synthesized: ' +
+            referencePath,
+        )
+        continue
+      }
+      entries.push({ imageName, paths: { expected: referencePath } })
+      declarations.push(declaration)
+    }
+    return { entries, declarations }
+  }
+
+  private moduleSource(moduleId: string): string | null {
+    const cached = this.moduleSources.get(moduleId)
+    if (cached !== undefined) return cached
+    const source = loadTestSource(moduleId)
+    this.moduleSources.set(moduleId, source)
+    return source
   }
 
   private async flushPendingArtifacts(): Promise<void> {

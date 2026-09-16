@@ -63,6 +63,18 @@ export function buildAttachmentEntries(entries: readonly VisualArtifactEntry[]):
   )
 }
 
+/**
+ * Artifact-derived entries (failures) win; source-extracted entries (passing
+ * assertions) only fill image names that artifacts did not already provide.
+ */
+export function mergeVisualEntries(
+  artifactEntries: readonly VisualArtifactEntry[],
+  extractedEntries: readonly VisualArtifactEntry[],
+): VisualArtifactEntry[] {
+  const knownImageNames = new Set(artifactEntries.map(({ imageName }) => imageName))
+  return [...artifactEntries, ...extractedEntries.filter(({ imageName }) => !knownImageNames.has(imageName))]
+}
+
 function reconstructPath(
   layout: VitestArtifactLayout,
   testCase: TestCase,
