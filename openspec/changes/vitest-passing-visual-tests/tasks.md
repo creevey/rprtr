@@ -14,7 +14,7 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 
 ## 3. Passing-run integration coverage
 
-- [ ] 3.1 Extend `tests/fixtures/vitest-browser/` with a passing-run scenario (matching references, no color override) and extend `tests/vitest-browser-integration.test.ts`: exit 0, schema-valid offline report, baseline-only image with expected path + approval targets, attachment paths portable in CI mode. Verify: `cd tests && bun test vitest-browser-integration.test.ts`
+- [x] 3.1 Extend `tests/fixtures/vitest-browser/` with a passing-run scenario (matching references, no color override) and extend `tests/vitest-browser-integration.test.ts`: exit 0, schema-valid offline report, baseline-only image with expected path + approval targets, attachment paths portable in CI mode. Verify: `cd tests && bun test vitest-browser-integration.test.ts`
 - [ ] 3.2 Live UI verification: run the server + example Vitest project (passing run), confirm tests remain visible with baseline previews after run-end and approve round-trips (temp fixture copy, never the committed PNG). Verify: manual walkthrough matching `examples/vitest-browser/README.md` quickstart
 
 ## 4. Docs and gate

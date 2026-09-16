@@ -62,6 +62,24 @@ async function spawnFixtureVitestRun(): Promise<void> {
   await new Response(child.stderr).text()
 }
 
+async function spawnPassingFixtureVitestRun(): Promise<number> {
+  // No VITEST_HERO_COLOR override: the fixture renders its default color,
+  // which matches the committed reference, so the assertion passes.
+  const env = { ...process.env }
+  delete env.VITEST_HERO_COLOR
+  const child = Bun.spawn({
+    cmd: ['bunx', 'vitest', 'run', '--config', join(fixtureDir, 'vitest.config.ts')],
+    cwd: fixtureDir,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env,
+  })
+  const exit = await child.exited
+  await new Response(child.stdout).text()
+  await new Response(child.stderr).text()
+  return exit
+}
+
 describe('Vitest browser integration', () => {
   test('real vitest run produces a schema-valid offline report with screenshot diff artifacts', async () => {
     await cleanupOutputs()
@@ -102,6 +120,43 @@ describe('Vitest browser integration', () => {
       expect(attachment.path.startsWith('/')).toBe(false)
       expect(await Bun.file(join(outputDir, 'screenshots', attachment.path)).exists()).toBe(true)
     }
+  })
+
+  test('a passing vitest run surfaces the committed baseline as a baseline-only image', async () => {
+    await cleanupOutputs()
+    const committedBefore = await readFile(committedReferencePath)
+    expect(await spawnPassingFixtureVitestRun()).toBe(0)
+
+    const parsed: unknown = JSON.parse(await readFile(reportPath, 'utf-8'))
+    const report = OfflineReportSchema.parse(parsed)
+    expect(report.events.map((event) => event.type)).toEqual(['test-begin', 'test-end', 'run-end'])
+
+    const endData = safeParse(TestEndDataSchema, report.events[1]?.data)
+    expect(endData).not.toBeNull()
+    expect(endData?.status).toBe('passed')
+    expect(endData?.visualNames).toEqual(['hero-section'])
+    expect(endData?.approvalTargets).toEqual({ 'hero-section': committedReferencePath })
+
+    const attachments = endData?.attachments ?? []
+    expect(attachments.map((attachment) => attachment.name)).toEqual(['hero-section-expected.png'])
+
+    const images = attachmentsToImages(attachments, '/screenshots/')
+    const image = images['hero-section']
+    expect(image?.source).toBe('baseline-only')
+    expect(image?.expect?.startsWith('/screenshots/')).toBe(true)
+    expect(image?.actual).toBeUndefined()
+    expect(image?.diff).toBeUndefined()
+    // UI-visibility invariant: a passing visual test keeps a non-empty image set.
+    expect(Object.keys(images).length).toBeGreaterThan(0)
+
+    // CI mode: content-addressed copies stay portable and resolvable.
+    for (const attachment of attachments) {
+      expect(attachment.path.startsWith('/')).toBe(false)
+      expect(await Bun.file(join(outputDir, 'screenshots', attachment.path)).exists()).toBe(true)
+    }
+
+    // Passing runs read the reference; they never rewrite the committed PNG.
+    expect((await readFile(committedReferencePath)).equals(committedBefore)).toBe(true)
   })
 
   test('approving the replayed offline report updates a temp fixture reference, never the committed PNG', async () => {
