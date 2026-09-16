@@ -129,13 +129,15 @@ export default defineConfig({
 })
 ```
 
-With a server running (`npx crvy-rprtr`), failed comparisons stream live and the UI serves Vitest's own screenshot files (reference, actual, diff) without copying them. Without a server, the reporter writes the same portable `crvy-rprtr.html` plus `crvy-rprtr-*.json` artifacts as Playwright runs, with screenshots copied content-addressed into `screenshotDir`.
+With a server running (`npx crvy-rprtr`), failed comparisons stream live and the UI serves Vitest's own screenshot files (reference, actual, diff) without copying them. Passing visual tests stay visible too: the reporter reads each test's `toMatchScreenshot('name')` declarations from the test source (Vitest records no artifacts for passing assertions) and surfaces the committed reference as a `baseline-only` preview — the same shape failing tests use — so the sidebar keeps listing them with their baseline image, and they remain approvable after the run ends. Non-visual passing tests stay out of the visual sidebar. Without a server, the reporter writes the same portable `crvy-rprtr.html` plus `crvy-rprtr-*.json` artifacts as Playwright runs, with screenshots copied content-addressed into `screenshotDir`.
 
 Leave the reporter's `serverUrl` unset for dev use: the server injects `CRVY_RPRTR_SERVER_URL` into UI-launched runs, so the spawned reporter connects back to the server that launched it automatically. An explicitly configured `serverUrl` wins over the injected env, which would point a UI-launched run away from its launching server.
 
 The UI's Start/Stop and per-test run buttons launch Vitest too: full suites and update runs spawn `vitest run --config <your vitest config>` (the reporter registers its config file and project root), while per-test reruns select the test file plus a `-t` title-pattern approximation of the test's title path. Starting the server inside a Vitest project enables the run controls immediately and lists the discovered tests as pending — no first run needed to unlock the UI. See [Server CLI Options](#server-cli-options) for the provider details and the docker-mode behavior.
 
-Approvals work from the same UI buttons: the reporter declares each screenshot's baseline path, so **Approve** and **Approve All** update Vitest's `__screenshots__` references without resolver configuration. First-run baselines (a newly created reference with no diff) are approvable too — approving accepts the reference as the baseline and marks the test approved.
+Approvals work from the same UI buttons: the reporter declares each screenshot's baseline path, so **Approve** and **Approve All** update Vitest's `__screenshots__` references without resolver configuration. First-run baselines (a newly created reference with no diff) are approvable too — approving accepts the reference as the baseline and marks the test approved. Passing visual tests approve the same way: approving a baseline-only preview is a same-file no-op that marks the test approved.
+
+The extraction that powers passing tests reads literal string arguments: `toMatchScreenshot('name')` (including path-like names such as `'nested/shot'`) and argument-less `toMatchScreenshot()` calls (named from the test title with Vitest's own occurrence numbering). Template literals and variables degrade gracefully — those screenshots surface only when the assertion fails, and a missing reference file never fabricates an image.
 
 ### Vitest Reporter Options
 
@@ -154,6 +156,7 @@ Approvals work from the same UI buttons: the reporter declares each screenshot's
 - Default Vitest layouts are resolved automatically: references under `<test file dir>/__screenshots__/<test file>/` and actual/diff artifacts under `.vitest-attachments/<test file dir>/<test file>/`. Explicit `referenceDir`/`attachmentsDir` options override the defaults.
 - Custom Vitest `resolveScreenshotPath`/`resolveDiffPath` resolvers are not supported.
 - First-run baselines surface as `baseline-only` images and are viewable.
+- Passing visual tests are identified from `toMatchScreenshot` call sites in the test source; dynamically generated titles (e.g. `test.each`) and non-literal name arguments keep the failure-only behavior.
 - Per-test run selection is approximate (`-t` title-pattern matching); Playwright keeps exact `file:line` selection.
 
 ## Offline Mode
