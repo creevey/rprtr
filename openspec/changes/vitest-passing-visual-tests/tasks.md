@@ -20,4 +20,4 @@ All `bun test` commands run inside `tests/` after `bun run build`.
 ## 4. Docs and gate
 
 - [ ] 4.1 Update `README.md` Vitest Browser Mode section and `examples/vitest-browser/README.md`: passing visual tests appear with baseline preview and stay approvable; first-run UX unchanged. Verify: manual review against spec scenarios
-- [ ] 4.2 Full gate + browser regression. Verify: `bun run check && bun run test:playwright && cd tests && bun test`
+- [x] 4.2 Full gate + browser regression. Verify: `bun run check && bun run test:playwright && cd tests && bun test`
