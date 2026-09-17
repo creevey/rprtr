@@ -13,10 +13,10 @@
 
 ## 3. Server handling, broadcast, and persistence
 
-- [ ] 3.1 Write failing tests in `tests/server-handlers.test.ts`: `handleRunBegin` clears announced tests, leaves non-announced tests and their approvals intact, broadcasts the cleared state through the existing `sync` message, and schedules a report save; extend the existing re-run test (currently "flips an existing test back to running") to assert the previous result and approval are gone — verify: `cd tests && bun test server-handlers.test.ts`
-- [ ] 3.2 Implement `handleRunBegin` in `src/server/handlers.ts` and add the `run-begin` dispatch case in `src/server/app.ts` — verify: `cd tests && bun test server-handlers.test.ts && bun run typecheck`
-- [ ] 3.3 Write a failing integration test in a new `tests/run-begin-integration.test.ts` (harness from `tests/vitest-discovery-app.test.ts`): seed a report with results via `createServerApp`, then drive `register` → `run-begin` → `test-begin` over the app's WebSocket message handler and assert `/api/report` and the persisted `report.json` carry cleared announced tests and untouched non-announced tests — verify: `cd tests && bun test run-begin-integration.test.ts`
-- [ ] 3.4 Add a backward-compatibility case in the integration test: a reporter that never sends `run-begin` still clears a re-run test on its `test-begin`, and a test outside the announcement keeps its recorded results — verify: `cd tests && bun test run-begin-integration.test.ts`
+- [x] 3.1 Write failing tests in `tests/server-handlers.test.ts`: `handleRunBegin` clears announced tests, leaves non-announced tests and their approvals intact, broadcasts the cleared state through the existing `sync` message, and schedules a report save; extend the existing re-run test (currently "flips an existing test back to running") to assert the previous result and approval are gone — verify: `cd tests && bun test server-handlers.test.ts`
+- [x] 3.2 Implement `handleRunBegin` in `src/server/handlers.ts` and add the `run-begin` dispatch case in `src/server/app.ts` — verify: `cd tests && bun test server-handlers.test.ts && bun run typecheck`
+- [x] 3.3 Write a failing integration test in a new `tests/run-begin-integration.test.ts` (harness from `tests/vitest-discovery-app.test.ts`): seed a report with results via `createServerApp`, then drive `register` → `run-begin` → `test-begin` over the app's WebSocket message handler and assert `/api/report` and the persisted `report.json` carry cleared announced tests and untouched non-announced tests — verify: `cd tests && bun test run-begin-integration.test.ts`
+- [x] 3.4 Add a backward-compatibility case in the integration test: a reporter that never sends `run-begin` still clears a re-run test on its `test-begin`, and a test outside the announcement keeps its recorded results — verify: `cd tests && bun test run-begin-integration.test.ts`
 
 ## 4. Docs, examples, and full gate
 

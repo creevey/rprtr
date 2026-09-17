@@ -1,11 +1,14 @@
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
+import type { z } from 'zod'
+
 import { loadOfflineReports } from '../offline-reports.ts'
 import type { FontRendering } from '../rendering.ts'
 import {
   IncomingWebSocketMessageSchema,
   RegisterDataSchema,
+  RunBeginDataSchema,
   RunEndDataSchema,
   TestBeginDataSchema,
   TestEndDataSchema,
@@ -18,6 +21,7 @@ import { fileExists } from './file-utils.ts'
 import {
   handleTestBegin,
   handleTestEnd,
+  handleRunBegin,
   handleRunEnd,
   handleApprove,
   handleSync,
@@ -82,35 +86,34 @@ export interface ServerApp {
   handleWebSocketMessage: (message: string) => Promise<void>
 }
 
+function parseReporterData<T>(schema: z.ZodType<T>, data: unknown, type: string): T | null {
+  const parsed = safeParse(schema, data)
+  if (parsed === null) {
+    console.error(`Invalid ${type} message data`, data)
+  }
+  return parsed
+}
+
 async function handleParsedWebSocketMessage(ctx: HandlerContext, msg: IncomingWebSocketMessage): Promise<void> {
   switch (msg.type) {
     case 'test-begin': {
-      const parsed = safeParse(TestBeginDataSchema, msg.data)
-      if (parsed === null) {
-        console.error('Invalid test-begin message data', msg.data)
-        break
-      }
-
-      handleTestBegin(ctx, parsed)
+      const parsed = parseReporterData(TestBeginDataSchema, msg.data, msg.type)
+      if (parsed !== null) handleTestBegin(ctx, parsed)
       break
     }
     case 'test-end': {
-      const parsed = safeParse(TestEndDataSchema, msg.data)
-      if (parsed === null) {
-        console.error('Invalid test-end message data', msg.data)
-        break
-      }
-
-      handleTestEnd(ctx, parsed)
+      const parsed = parseReporterData(TestEndDataSchema, msg.data, msg.type)
+      if (parsed !== null) handleTestEnd(ctx, parsed)
       break
     }
     case 'run-end': {
-      const parsed = safeParse(RunEndDataSchema, msg.data)
-      if (parsed === null) {
-        console.error('Invalid run-end message data', msg.data)
-        break
-      }
-      await handleRunEnd(ctx, parsed)
+      const parsed = parseReporterData(RunEndDataSchema, msg.data, msg.type)
+      if (parsed !== null) await handleRunEnd(ctx, parsed)
+      break
+    }
+    case 'run-begin': {
+      const parsed = parseReporterData(RunBeginDataSchema, msg.data, msg.type)
+      if (parsed !== null) handleRunBegin(ctx, parsed)
       break
     }
     case 'approve':
@@ -120,12 +123,8 @@ async function handleParsedWebSocketMessage(ctx: HandlerContext, msg: IncomingWe
       handleSync(ctx)
       break
     case 'register': {
-      const parsed = safeParse(RegisterDataSchema, msg.data)
-      if (parsed === null) {
-        console.error('Invalid register message data', msg.data)
-        break
-      }
-      handleRegister(ctx, parsed)
+      const parsed = parseReporterData(RegisterDataSchema, msg.data, msg.type)
+      if (parsed !== null) handleRegister(ctx, parsed)
       break
     }
   }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { createMutableReportState, applyTestBeginEvent } from '../src/report-state'
 import { WebSocketMessageSchema } from '../src/schemas'
 import {
+  handleRunBegin,
   handleRunEnd,
   handleSync,
   handleTestBegin,
@@ -95,7 +96,7 @@ describe('server broadcast payloads', () => {
     expect(parsed.data.data.results).toBeUndefined()
   })
 
-  test('handleTestBegin flips an existing test back to running on re-run', () => {
+  test('handleTestBegin starts a re-run with no previous result or approval', () => {
     applyTestBeginEvent(ctx, {
       id: 'test-1',
       title: 'renders header',
@@ -109,6 +110,7 @@ describe('server broadcast payloads', () => {
       attachments: [],
       visualNames: [],
     })
+    ctx.reportData.tests['test-1']!.approved = { header: 1 }
     clients.forEach((c) => (c.sent = []))
 
     handleTestBegin(ctx, {
@@ -126,6 +128,91 @@ describe('server broadcast payloads', () => {
       throw new Error('expected test-begin message')
     }
     expect(parsed.data.data.status).toBe('running')
+    expect(parsed.data.data.results).toBeUndefined()
+    expect(parsed.data.data.approved).toBeUndefined()
+  })
+
+  test('handleRunBegin clears announced tests and broadcasts the cleared state', () => {
+    applyTestBeginEvent(ctx, {
+      id: 'test-1',
+      title: 'announced',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 10 },
+    })
+    handleTestEnd(ctx, {
+      id: 'test-1',
+      status: 'passed',
+      attachments: [],
+      visualNames: ['header'],
+      visualDeclarations: [
+        {
+          visualName: 'header',
+          kind: 'named',
+          declaredName: 'header',
+          snapshotBaseName: 'header',
+          occurrenceIndex: 1,
+        },
+      ],
+    })
+    ctx.reportData.tests['test-1']!.approved = { header: 1 }
+    applyTestBeginEvent(ctx, {
+      id: 'test-2',
+      title: 'outside the run',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'tests/example.spec.ts', line: 20 },
+    })
+    handleTestEnd(ctx, {
+      id: 'test-2',
+      status: 'failed',
+      attachments: [{ name: 'diff-actual.png', path: 'test-2/diff-actual.png', contentType: 'image/png' }],
+      visualNames: ['diff'],
+    })
+    ctx.reportData.tests['test-2']!.approved = { diff: 2 }
+    clients.forEach((c) => (c.sent = []))
+    scheduleCalls.value = 0
+
+    handleRunBegin(ctx, { testIds: ['test-1'] })
+
+    expect(scheduleCalls.value).toBe(1)
+    const messages = readMessages(clients)
+    expect(messages).toHaveLength(1)
+    const parsed = WebSocketMessageSchema.safeParse(messages[0])
+    if (!(parsed.success && parsed.data.type === 'sync')) {
+      throw new Error('expected sync message')
+    }
+    const cleared = parsed.data.data.tests['test-1']
+    expect(cleared?.status).toBe('pending')
+    expect(cleared?.results).toBeUndefined()
+    expect(cleared?.approved).toBeUndefined()
+    expect(cleared?.title).toBe('announced')
+
+    const kept = parsed.data.data.tests['test-2']
+    expect(kept?.status).toBe('failed')
+    expect(kept?.results).toHaveLength(1)
+    expect(kept?.approved).toEqual({ diff: 2 })
+  })
+
+  test('handleRunBegin ignores unknown ids and still broadcasts and saves', () => {
+    applyTestBeginEvent(ctx, {
+      id: 'test-1',
+      title: 'keeps',
+      titlePath: ['Suite'],
+      browser: 'chromium',
+      location: { file: 'a.ts', line: 1 },
+    })
+    clients.forEach((c) => (c.sent = []))
+    scheduleCalls.value = 0
+
+    handleRunBegin(ctx, { testIds: ['missing'] })
+
+    expect(scheduleCalls.value).toBe(1)
+    const parsed = WebSocketMessageSchema.safeParse(readMessages(clients)[0])
+    if (!(parsed.success && parsed.data.type === 'sync')) {
+      throw new Error('expected sync message')
+    }
+    expect(parsed.data.data.tests['test-1']?.status).toBe('running')
   })
 
   test('handleTestEnd broadcasts the resolved test with status, results, and images', () => {

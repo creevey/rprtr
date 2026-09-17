@@ -2,8 +2,8 @@ import { existsSync } from 'fs'
 import { dirname, resolve } from 'path'
 
 import type { RunEnvironments } from '../browser-pins.ts'
-import { applyTestBeginEvent, applyTestEndEvent, finalizeRunEvent } from '../report-state.ts'
-import type { RegisterData, RunEndData, TestBeginData, TestEndData } from '../schemas.ts'
+import { applyRunBeginEvent, applyTestBeginEvent, applyTestEndEvent, finalizeRunEvent } from '../report-state.ts'
+import type { RegisterData, RunBeginData, RunEndData, TestBeginData, TestEndData } from '../schemas.ts'
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
 import { resolveBaselineSnapshotPath, type ApprovalRouting } from './artifact-routes.ts'
 import { rewriteContainerPath, type ContainerPathMapping } from './docker-support.ts'
@@ -33,6 +33,19 @@ export interface HandlerContext {
   approvalRouting?: ApprovalRouting
   routesContext: RoutesContext
   runController: RunController
+}
+
+/**
+ * The run about to start owns the results and approvals of the tests it
+ * announced. Clear them up front — before any result streams — persist the
+ * cleared state, and push it to connected browsers. Tests outside the
+ * announcement keep theirs: a filtered run only supersedes its subset.
+ */
+export function handleRunBegin(ctx: HandlerContext, data: RunBeginData): void {
+  applyRunBeginEvent(ctx, data)
+  ctx.scheduleReportSave()
+  console.log(`[Server] Run begin — ${data.testIds.length} announced test(s)`)
+  broadcastSync(ctx)
 }
 
 export function handleTestBegin(ctx: HandlerContext, data: TestBeginData): void {
