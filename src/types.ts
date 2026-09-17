@@ -47,6 +47,13 @@ export interface TestResult {
 export interface TestData {
   id: string
   titlePath: string[]
+  /**
+   * Root-relative file path tokens ('tests', 'button.test.ts') grouping tests
+   * in the sidebar tree. Reporters and discovery populate it identically so
+   * the tree keeps the same shape before, during, and after a run. Absent in
+   * data from older reporters; those render flat under the title only.
+   */
+  fileTokens?: string[]
   browser: string
   /**
    * Raw Playwright project name. Used for snapshot path resolution so the

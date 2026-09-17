@@ -5,8 +5,8 @@ import { join } from 'path'
 import { createServerApp, type ServerApp } from '../src/server/app'
 import { RunController, type ChildProcessLike, type RunControllerDeps } from '../src/server/run-controller'
 import { mergeDiscoveredTests, type VitestListEntry } from '../src/server/vitest-discovery'
-import { dropDiscoveredTests, resolveSeedRunContext, withoutDiscoveredTests } from '../src/server/vitest-seeding'
-import type { ClientWebSocketMessage, TestData } from '../src/types'
+import { resolveSeedRunContext, withoutDiscoveredTests } from '../src/server/vitest-seeding'
+import type { TestData } from '../src/types'
 
 const TMP_ROOT = join(import.meta.dir, 'fixtures', 'vitest-discovery-tmp')
 const VITEST_CONFIG = `import { defineConfig } from 'vitest/config'\nexport default defineConfig({})\n`
@@ -256,53 +256,13 @@ describe('mergeDiscoveredTests', () => {
     expect(mergeDiscoveredTests(reportData, entries, root)).toBe(false)
     expect(Object.keys(reportData.tests).length).toBe(afterFirst)
   })
-})
 
-describe('dropDiscoveredTests', () => {
-  const discoveredId = 'discovered:tests/a.test.ts:chromium:stale'
-
-  function discoveredEntry(): TestData {
-    return { id: discoveredId, titlePath: [], title: 'stale', browser: 'chromium', status: 'pending' }
-  }
-
-  test('drops discovered entries, keeps real results, and broadcasts the cleaned tree', () => {
-    const real: TestData = { id: 'run-id-1', titlePath: [], title: 'real test', browser: 'chromium', status: 'success' }
-    const reportData = {
-      isRunning: false,
-      isUpdateMode: false,
-      tests: { [discoveredId]: discoveredEntry(), 'run-id-1': real },
-    }
-    const broadcasts: ClientWebSocketMessage[] = []
-
-    dropDiscoveredTests(reportData, (message) => {
-      broadcasts.push(message)
-    })
-
-    expect(Object.keys(reportData.tests)).toEqual(['run-id-1'])
-    expect(broadcasts.length).toBe(1)
-    const sync = broadcasts[0]
-    expect(sync?.type).toBe('sync')
-    if (sync?.type !== 'sync') return
-    expect(sync.data.tests['run-id-1']).toBeDefined()
-    expect(sync.data.tests[discoveredId]).toBeUndefined()
-  })
-
-  test('no broadcast when there is nothing discovered', () => {
-    const reportData = { isRunning: false, isUpdateMode: false, tests: { 'run-id-1': {} as TestData } }
-    let broadcasts = 0
-    dropDiscoveredTests(reportData, () => {
-      broadcasts += 1
-    })
-    expect(broadcasts).toBe(0)
-  })
-})
-
-describe('run-start replacement', () => {
-  test('starting a run drops discovered entries before streamed events land', () => {
+  test('starting a run from the UI keeps discovered entries so the sidebar structure stays put', () => {
     const discoveredId = 'discovered:tests/a.test.ts:chromium:stale'
     const discovered: TestData = {
       id: discoveredId,
       titlePath: [],
+      fileTokens: ['tests', 'a.test.ts'],
       title: 'stale',
       browser: 'chromium',
       status: 'pending',
@@ -323,16 +283,14 @@ describe('run-start replacement', () => {
         mode: 'local',
         launch: () => ({ cmd: 'bun', args: ['x', 'vitest'], env: {} }),
       },
-      onRunStart: (): void => {
-        dropDiscoveredTests(reportData, () => {})
-      },
     }
     const controller = new RunController(deps)
 
     const result = controller.start({})
 
     expect(result).toEqual({ ok: true })
-    expect(Object.keys(reportData.tests)).toEqual([])
+    expect(reportData.tests[discoveredId]).toBeDefined()
+    expect(reportData.tests[discoveredId]?.status).toBe('pending')
   })
 })
 

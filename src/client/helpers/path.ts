@@ -28,8 +28,8 @@ export function browserKeyFor(browser: string): string {
   return browser === '' ? DEFAULT_BROWSER_KEY : browser
 }
 
-export function getTestPath(test: Pick<TestData, 'browser' | 'title' | 'titlePath'>): string[] {
-  return [...test.titlePath, test.title, test.browser].filter(isDefined)
+export function getTestPath(test: Pick<TestData, 'browser' | 'title' | 'titlePath' | 'fileTokens'>): string[] {
+  return [...(test.fileTokens ?? []), ...test.titlePath, test.title, test.browser].filter(isDefined)
 }
 
 export function getSuiteByPath(suite: CrvyRprtrSuite, path: string[]): CrvyRprtrSuite | CrvyRprtrTest | undefined {
@@ -88,6 +88,43 @@ export function parseFilterString(value: string): {
   return { status, subStrings }
 }
 
+function appendTestToTree(rootSuite: CrvyRprtrSuite, test: TestData): void {
+  const titlePath = test.titlePath ?? []
+  const fileTokens = test.fileTokens ?? []
+  const browser = browserKeyFor(test.browser ?? '')
+  const title = test.title
+
+  const pathParts: string[] = [...fileTokens, ...titlePath, title, browser].filter(
+    (p): p is string => p !== undefined && p !== '',
+  )
+  const [browserName, ...testPathParts] = pathParts.reverse()
+  if (browserName === undefined) return
+
+  const lastSuite = testPathParts.reverse().reduce((suite, token) => {
+    suite.children = suite.children ?? {}
+    suite.children[token] ??= {
+      path: [...suite.path, token],
+      skip: false,
+      opened: false,
+      checked: true,
+      indeterminate: false,
+      children: {},
+    }
+    const subSuite = suite.children[token]
+    if (subSuite === undefined || isTest(subSuite)) return suite
+    subSuite.status = calcStatus(subSuite.status, test.status)
+    suite.status = calcStatus(suite.status, subSuite.status)
+    if (test.skip === false) subSuite.skip = false
+    return subSuite
+  }, rootSuite)
+
+  lastSuite.children = lastSuite.children ?? {}
+  lastSuite.children[browserName] = {
+    ...test,
+    checked: true,
+  } as CrvyRprtrTest
+}
+
 export function treeifyTests(testsById: Record<string, TestData>): CrvyRprtrSuite {
   const rootSuite: CrvyRprtrSuite = {
     path: [],
@@ -100,38 +137,7 @@ export function treeifyTests(testsById: Record<string, TestData>): CrvyRprtrSuit
 
   Object.values(testsById).forEach((test) => {
     if (test === undefined) return
-
-    const titlePath = test.titlePath ?? []
-    const browser = browserKeyFor(test.browser ?? '')
-    const title = test.title
-
-    const pathParts: string[] = [...titlePath, title, browser].filter((p): p is string => p !== undefined && p !== '')
-    const [browserName, ...testPathParts] = pathParts.reverse()
-    if (browserName === undefined) return
-
-    const lastSuite = testPathParts.reverse().reduce((suite, token) => {
-      suite.children = suite.children ?? {}
-      suite.children[token] ??= {
-        path: [...suite.path, token],
-        skip: false,
-        opened: false,
-        checked: true,
-        indeterminate: false,
-        children: {},
-      }
-      const subSuite = suite.children[token]
-      if (subSuite === undefined || isTest(subSuite)) return suite
-      subSuite.status = calcStatus(subSuite.status, test.status)
-      suite.status = calcStatus(suite.status, subSuite.status)
-      if (test.skip === false) subSuite.skip = false
-      return subSuite
-    }, rootSuite)
-
-    lastSuite.children = lastSuite.children ?? {}
-    lastSuite.children[browserName] = {
-      ...test,
-      checked: true,
-    } as CrvyRprtrTest
+    appendTestToTree(rootSuite, test)
   })
 
   return rootSuite

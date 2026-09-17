@@ -33,6 +33,16 @@ export function browserLabelFromProjectName(projectName: string | undefined, fal
   return projectName === undefined || projectName === '' ? fallback : projectName
 }
 
+/**
+ * Root-relative file path tokens ('tests', 'button.test.ts') for sidebar
+ * grouping. Reporters and Vitest discovery both derive them from the test
+ * file's path relative to the runner's root, so the sidebar tree keeps the
+ * same shape before, during, and after a run.
+ */
+export function relativeFileTokens(root: string, file: string): string[] {
+  return relative(root, file).split(/[/\\]/)
+}
+
 export function getBrowserName(testCase: TestCase): string {
   return browserLabelFromProjectName(
     testCase.project.name,

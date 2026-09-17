@@ -95,6 +95,7 @@ describe('Vitest browser integration', () => {
     expect(begin?.provider).toBe('vitest')
     expect(begin?.browser).toBe('chromium')
     expect(begin?.titlePath).toEqual([])
+    expect(begin?.fileTokens).toEqual(['vitest.integration.browser.test.ts'])
     expect(begin?.location.file).toBe(testFile)
     expect(begin?.location.line).toBe(1)
 

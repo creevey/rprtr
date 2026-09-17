@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { mergeOfflineReportsIntoTests } from '../src/offline-reports'
 import { applyTestBeginEvent, applyTestEndEvent, createMutableReportState } from '../src/report-state'
 import { ReportApiResponseSchema, TestEndDataSchema, safeParse } from '../src/schemas'
-import type { OfflineReport } from '../src/types'
+import type { OfflineReport, TestData } from '../src/types'
 
 describe('report-state visual classification', () => {
   test('keeps skipped test and result statuses consistent', () => {
@@ -705,5 +705,104 @@ describe('report-state approval metadata', () => {
     expect(image?.actual).toBe('/file/%2Ftmp%2Flegacy%2Fheader-actual.png')
     expect(image?.approveFromPath).toBeUndefined()
     expect(image?.approveToPath).toBeUndefined()
+  })
+})
+
+describe('discovered test replacement on test-begin', () => {
+  const discoveredId = 'discovered:tests/a.test.ts:chromium:renders the thing'
+  const liveId = 'runtime-1'
+  const testFile = '/proj/tests/a.test.ts'
+
+  function discoveredTest(): TestData {
+    return {
+      id: discoveredId,
+      titlePath: [],
+      fileTokens: ['tests', 'a.test.ts'],
+      title: 'renders the thing',
+      browser: 'chromium',
+      projectName: 'chromium',
+      status: 'pending',
+    }
+  }
+
+  test('a matching test-begin replaces the discovered entry in place', () => {
+    const state = createMutableReportState('./screenshots')
+    state.reportData.tests[discoveredId] = discoveredTest()
+
+    applyTestBeginEvent(state, {
+      id: liveId,
+      title: 'renders the thing',
+      titlePath: [],
+      fileTokens: ['tests', 'a.test.ts'],
+      browser: 'chromium',
+      location: { file: testFile, line: 3 },
+    })
+
+    expect(state.reportData.tests[liveId]).toBeDefined()
+    expect(state.reportData.tests[discoveredId]).toBeUndefined()
+    expect(state.reportData.tests[liveId]?.status).toBe('running')
+    expect(state.reportData.tests[liveId]?.fileTokens).toEqual(['tests', 'a.test.ts'])
+  })
+
+  test('a non-matching test-begin leaves the discovered entry untouched', () => {
+    const state = createMutableReportState('./screenshots')
+    state.reportData.tests[discoveredId] = discoveredTest()
+
+    applyTestBeginEvent(state, {
+      id: liveId,
+      title: 'a different test',
+      titlePath: [],
+      fileTokens: ['tests', 'a.test.ts'],
+      browser: 'chromium',
+      location: { file: testFile, line: 30 },
+    })
+
+    expect(state.reportData.tests[discoveredId]).toBeDefined()
+    expect(state.reportData.tests[liveId]).toBeDefined()
+  })
+
+  test('replacement matches on the full title path, not just the title', () => {
+    const state = createMutableReportState('./screenshots')
+    state.reportData.tests['discovered:tests/a.test.ts:chromium:outer > renders the thing'] = {
+      ...discoveredTest(),
+      id: 'discovered:tests/a.test.ts:chromium:outer > renders the thing',
+      titlePath: ['outer'],
+      title: 'renders the thing',
+    }
+
+    applyTestBeginEvent(state, {
+      id: liveId,
+      title: 'renders the thing',
+      titlePath: ['outer'],
+      fileTokens: ['tests', 'a.test.ts'],
+      browser: 'chromium',
+      location: { file: testFile, line: 8 },
+    })
+
+    expect(state.reportData.tests[liveId]).toBeDefined()
+    expect(Object.keys(state.reportData.tests).some((id) => id.startsWith('discovered:'))).toBe(false)
+  })
+
+  test('a re-run of the same live id keeps a single entry and flips status to running', () => {
+    const state = createMutableReportState('./screenshots')
+
+    applyTestBeginEvent(state, {
+      id: liveId,
+      title: 'renders the thing',
+      titlePath: [],
+      browser: 'chromium',
+      location: { file: testFile, line: 3 },
+    })
+    applyTestEndEvent(state, { id: liveId, status: 'passed', attachments: [], visualNames: [] })
+    applyTestBeginEvent(state, {
+      id: liveId,
+      title: 'renders the thing',
+      titlePath: [],
+      browser: 'chromium',
+      location: { file: testFile, line: 3 },
+    })
+
+    expect(Object.keys(state.reportData.tests)).toEqual([liveId])
+    expect(state.reportData.tests[liveId]?.status).toBe('running')
   })
 })

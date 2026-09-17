@@ -178,13 +178,14 @@ describe('runVitestList', () => {
 describe('synthesizeDiscoveredTests', () => {
   const root = '/proj'
 
-  test('flat file entry groups under the root-relative file path with pending status', () => {
+  test('flat file entry carries root-relative file tokens with pending status', () => {
     const [discovered] = synthesizeDiscoveredTests(
       [{ name: 'matches the button baseline', file: '/proj/tests/button.test.ts', projectName: 'chromium' }],
       root,
     )
     expect(discovered).toMatchObject({
-      titlePath: ['tests', 'button.test.ts'],
+      fileTokens: ['tests', 'button.test.ts'],
+      titlePath: [],
       title: 'matches the button baseline',
       browser: 'chromium',
       projectName: 'chromium',
@@ -194,22 +195,24 @@ describe('synthesizeDiscoveredTests', () => {
     expect(discovered?.id.startsWith('discovered:')).toBe(true)
   })
 
-  test('nested-directory files nest suite tokens', () => {
+  test('nested-directory files carry every directory token', () => {
     const [discovered] = synthesizeDiscoveredTests(
       [{ name: 'reaches the bottom', file: '/proj/src/a/b/deep.test.ts' }],
       root,
     )
-    expect(discovered?.titlePath).toEqual(['src', 'a', 'b', 'deep.test.ts'])
+    expect(discovered?.fileTokens).toEqual(['src', 'a', 'b', 'deep.test.ts'])
+    expect(discovered?.titlePath).toEqual([])
     expect(discovered?.title).toBe('reaches the bottom')
     expect(discovered?.browser).toBe('browser')
   })
 
-  test('suite nesting inside the full name becomes suite tokens and a leaf title', () => {
+  test('suite nesting inside the full name becomes titlePath tokens and a leaf title', () => {
     const [discovered] = synthesizeDiscoveredTests(
       [{ name: 'outer > inner > does the thing', file: '/proj/tests/nested.test.ts', projectName: 'firefox' }],
       root,
     )
-    expect(discovered?.titlePath).toEqual(['tests', 'nested.test.ts', 'outer', 'inner'])
+    expect(discovered?.fileTokens).toEqual(['tests', 'nested.test.ts'])
+    expect(discovered?.titlePath).toEqual(['outer', 'inner'])
     expect(discovered?.title).toBe('does the thing')
     expect(discovered?.browser).toBe('firefox')
   })

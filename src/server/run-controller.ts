@@ -62,8 +62,6 @@ export interface RunControllerDeps {
   port: number
   broadcast(message: ClientWebSocketMessage): void
   setReportRunning(running: boolean): void
-  /** Called after a run spawns successfully; drops stale discovered entries before events stream. */
-  onRunStart?: () => void
   /** Records whether the in-progress run is filtered, so run-end can preserve unrelated tests. */
   setRunFiltered?(filtered: boolean): void
   containerPathMapping?: ContainerPathMapping
@@ -230,7 +228,6 @@ export class RunController {
     child.on('error', () => {
       this.handleChildExit(null)
     })
-    this.deps.onRunStart?.()
     this.deps.setReportRunning(true)
     this.deps.setRunFiltered?.(filters.tests !== undefined)
     this.deps.broadcast({ type: 'run-status', data: { running: true, mode: launcher.mode } })

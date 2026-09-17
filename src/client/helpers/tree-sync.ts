@@ -47,10 +47,13 @@ export function collectTestsById(suite: CrvyRprtrSuite): Record<string, TestData
 
 function pathTokensFor(test: TestData): { suitePath: string[]; browserKey: string } | null {
   const titlePath = test.titlePath ?? []
+  const fileTokens = test.fileTokens ?? []
   const title = test.title
   if (title === undefined || title === '') return null
   const browser = browserKeyFor(test.browser ?? '')
-  const pathParts: string[] = [...titlePath, title, browser].filter((p): p is string => p !== undefined && p !== '')
+  const pathParts: string[] = [...fileTokens, ...titlePath, title, browser].filter(
+    (p): p is string => p !== undefined && p !== '',
+  )
   const reversed = pathParts.reverse()
   const browserKey = reversed[0]
   if (browserKey === undefined) return null
@@ -107,6 +110,28 @@ function recalcAncestorStatuses(root: CrvyRprtrSuite, parentSuitePath: string[])
   root.status = rootChildStatuses.length === 0 ? undefined : rootChildStatuses.reduce(calcStatus)
 }
 
+function pruneRemovedTests(
+  oldTests: Map<string, OldTestEntry>,
+  expectedIds: Set<string>,
+  touchedSuitePaths: Set<string>,
+): boolean {
+  let changed = false
+  for (const [id, oldEntry] of oldTests) {
+    if (!expectedIds.has(id)) {
+      // Only clear the slot when it still holds this exact test — a streamed
+      // replacement may already occupy the same path + browser key, and that
+      // node must survive its discovered predecessor's removal.
+      const slot = oldEntry.parent.children?.[oldEntry.browserKey]
+      if (slot !== undefined && isTest(slot) && slot.id === id) {
+        delete oldEntry.parent.children?.[oldEntry.browserKey]
+      }
+      touchedSuitePaths.add(oldEntry.parentPath.join('\u0000'))
+      changed = true
+    }
+  }
+  return changed
+}
+
 function applyTestsToTree(
   target: CrvyRprtrSuite,
   testsById: Record<string, TestData>,
@@ -143,13 +168,7 @@ function applyTestsToTree(
       touchedSuitePaths.add(tokens.suitePath.join('\u0000'))
     }
   }
-  for (const [id, oldEntry] of oldTests) {
-    if (!expectedIds.has(id)) {
-      delete oldEntry.parent.children?.[oldEntry.browserKey]
-      touchedSuitePaths.add(oldEntry.parentPath.join('\u0000'))
-      changed = true
-    }
-  }
+  if (pruneRemovedTests(oldTests, expectedIds, touchedSuitePaths)) changed = true
   return changed
 }
 

@@ -33,6 +33,57 @@ function findTest(
   return null
 }
 
+describe('fileTokens tree grouping', () => {
+  test('fileTokens nest the test under directory and file suites in treeifyTests', () => {
+    const tree = treeifyTests({
+      'test-1': makeTest({ id: 'test-1', fileTokens: ['tests', 'example.spec.ts'] }),
+    })
+
+    const tests = tree.children?.['tests']
+    expect(tests).toBeDefined()
+    if (tests === undefined || 'id' in tests) return
+    const file = tests.children?.['example.spec.ts']
+    expect(file).toBeDefined()
+    if (file === undefined || 'id' in file) return
+    const suite = file.children?.['Suite']
+    expect(suite).toBeDefined()
+    if (suite === undefined || 'id' in suite) return
+    const title = suite.children?.['Test']
+    expect(title).toBeDefined()
+    if (title === undefined || 'id' in title) return
+    expect(title.children?.['chromium']).toBeDefined()
+  })
+
+  test('a discovered test and its streamed replacement land on the same tree path', () => {
+    const tree = treeifyTests({
+      'discovered:tests/example.spec.ts:chromium:Test': makeTest({
+        id: 'discovered:tests/example.spec.ts:chromium:Test',
+        fileTokens: ['tests', 'example.spec.ts'],
+        titlePath: [],
+        status: 'pending',
+        results: undefined,
+      }),
+    })
+    const before = findTest(tree, 'discovered:tests/example.spec.ts:chromium:Test')
+    expect(before).not.toBeNull()
+
+    syncTreeState(tree, {
+      'live-1': makeTest({
+        id: 'live-1',
+        fileTokens: ['tests', 'example.spec.ts'],
+        titlePath: [],
+        status: 'success',
+        results: [{ status: 'success', retries: 0 }],
+      }),
+    })
+
+    expect(findTest(tree, 'discovered:tests/example.spec.ts:chromium:Test')).toBeNull()
+    const after = findTest(tree, 'live-1')
+    expect(after).not.toBeNull()
+    expect(after?.browserKey).toBe(before?.browserKey)
+  })
+})
+
 describe('syncTreeState', () => {
   test('preserves the same test object reference when data is unchanged', () => {
     const initial: Record<string, TestData> = {

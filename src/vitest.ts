@@ -17,7 +17,13 @@ import {
   type VitestArtifactLayout,
 } from './vitest-artifacts.ts'
 import { extractVitestScreenshots, loadTestSource, type VitestDeclarationContext } from './vitest-declarations.ts'
-import { getBrowserName, getTitlePath, mapVitestStatus, parseVitestScreenshotError } from './vitest-helpers.ts'
+import {
+  getBrowserName,
+  getTitlePath,
+  mapVitestStatus,
+  parseVitestScreenshotError,
+  relativeFileTokens,
+} from './vitest-helpers.ts'
 
 export interface CrvyRprtrVitestReporterOptions extends ReporterTransportOptions {
   /** Overrides vitest's default reference directory (`__screenshots__`). */
@@ -125,6 +131,9 @@ export class CrvyRprtrVitestReporter implements Reporter {
         id: testCase.id,
         title: testCase.name,
         titlePath: getTitlePath(testCase),
+        // Root-relative file tokens match discovery's grouping so the sidebar
+        // tree keeps the same shape before, during, and after a run.
+        fileTokens: relativeFileTokens(this.projectRoot, testCase.module.moduleId),
         browser: getBrowserName(testCase),
         projectName: testCase.project.name,
         location: {

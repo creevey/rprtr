@@ -84,20 +84,6 @@ export async function seedDiscoveredTests(deps: SeedDiscoveredTestsDeps): Promis
 }
 
 /**
- * Drops every `discovered:`-prefixed entry — called when a run starts, so the
- * streamed events fully replace the discovery snapshot and stale identities
- * disappear. Connected clients get a sync so their trees drop the entries too.
- */
-export function dropDiscoveredTests(
-  reportData: { tests: Record<string, TestData>; isUpdateMode: boolean },
-  broadcast: (message: ClientWebSocketMessage) => void,
-): void {
-  if (!hasDiscoveredIds(reportData.tests)) return
-  reportData.tests = filterDiscoveredIds(reportData.tests)
-  broadcast({ type: 'sync', data: { tests: reportData.tests, isUpdateMode: reportData.isUpdateMode } })
-}
-
-/**
  * The persisted view of the report state: discovered-but-never-run entries are
  * filtered out so report.json — and through it offline JSON review and the
  * static HTML artifact — stays derived from actual run events only.

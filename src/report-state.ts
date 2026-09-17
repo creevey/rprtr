@@ -12,6 +12,7 @@ import {
 } from './report-utils.ts'
 import type { ScreenshotDeclaration } from './reporter-utils.ts'
 import type { TestBeginData, TestEndData } from './schemas.ts'
+import { DISCOVERED_ID_PREFIX } from './server/vitest-discovery.ts'
 import type { Images, TestData, TestResult } from './types.ts'
 
 export interface MutableReportData {
@@ -140,8 +141,46 @@ export function createMutableReportState(screenshotDir = './screenshots'): Mutab
   }
 }
 
+/**
+ * Sidebar-tree identity of a test: (fileTokens, titlePath, title, browser) —
+ * the same slot discovery and streamed results occupy. A real run's
+ * test-begin replaces the discovered placeholder sitting in this slot.
+ */
+function treeSlotIdentity(test: {
+  fileTokens?: string[]
+  titlePath?: string[]
+  title: string
+  browser: string
+}): string {
+  return [...(test.fileTokens ?? []), ...(test.titlePath ?? []), test.title, test.browser].join('\u0000')
+}
+
+/**
+ * Removes the discovered placeholder occupying the same sidebar slot as the
+ * incoming streamed test, so the tree never shows the test twice and the
+ * streamed entry takes over the exact same position — the structure stays
+ * stable during the run.
+ */
+function removeDiscoveredPlaceholder(tests: Record<string, TestData>, identity: string): Record<string, TestData> {
+  for (const [candidateId, candidate] of Object.entries(tests)) {
+    if (!candidateId.startsWith(DISCOVERED_ID_PREFIX)) continue
+    if (
+      treeSlotIdentity({
+        fileTokens: candidate.fileTokens,
+        titlePath: candidate.titlePath,
+        title: candidate.title,
+        browser: candidate.browser,
+      }) === identity
+    ) {
+      const { [candidateId]: _placeholder, ...remaining } = tests
+      return remaining
+    }
+  }
+  return tests
+}
+
 export function applyTestBeginEvent(state: MutableReportState, data: TestBeginData): TestData {
-  const { id, title, titlePath, browser, projectName, location, provider } = data
+  const { id, title, titlePath, fileTokens, browser, projectName, location, provider } = data
   state.currentRunIds.add(id)
   const existing = state.reportData.tests[id]
   if (existing !== undefined) {
@@ -152,9 +191,15 @@ export function applyTestBeginEvent(state: MutableReportState, data: TestBeginDa
     return existing
   }
 
+  state.reportData.tests = removeDiscoveredPlaceholder(
+    state.reportData.tests,
+    treeSlotIdentity({ fileTokens, titlePath, title: title ?? '', browser: browser ?? '' }),
+  )
+
   const created: TestData = {
     id,
     titlePath: titlePath ?? [],
+    ...(fileTokens === undefined ? {} : { fileTokens }),
     browser: browser ?? '',
     // Older reporters sent the raw project name in `browser` and had no
     // `projectName` field. Preserve that value for snapshot path resolution

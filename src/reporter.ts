@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
-import { dirname, join } from 'path'
+import { dirname, join, relative } from 'path'
 
 import type {
   FullConfig,
@@ -109,6 +109,16 @@ export class CrvyRprtr implements Reporter {
       : ['', test.parent.project()?.name ?? '', test.location.file, ...this.describeTitlePath(test), test.title]
   }
 
+  /**
+   * Root-relative file path tokens ('tests', 'example.spec.ts') grouping tests
+   * in the sidebar tree. Derived from the same config-dir root the register
+   * reports, so the tree matches Vitest's discovery-driven grouping and stays
+   * stable before, during, and after a run.
+   */
+  private fileTokens(test: TestCase): string[] {
+    return relative(this.configDir, test.location.file).split(/[/\\]/)
+  }
+
   onTestBegin(test: TestCase): void {
     const project = test.parent.project()
     this.testMetadata.set(test.id, {
@@ -120,6 +130,7 @@ export class CrvyRprtr implements Reporter {
         id: test.id,
         title: test.title,
         titlePath: this.describeTitlePath(test),
+        fileTokens: this.fileTokens(test),
         browser: this.resolveBrowserLabel(project),
         projectName: project?.name ?? '',
         location: { file: test.location.file, line: test.location.line, column: test.location.column },

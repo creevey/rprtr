@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import { safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
-import { browserLabelFromProjectName } from '../vitest-helpers.ts'
+import { browserLabelFromProjectName, relativeFileTokens } from '../vitest-helpers.ts'
 import { resolveLocalCommand } from './run-launcher.ts'
 
 export interface VitestListEntry {
@@ -135,19 +135,18 @@ export function discoveredTestIdentity(file: string, fullName: string): string {
   return `${file}\u0000${fullName}`
 }
 
-function toTitlePath(relativeFile: string, fullName: string): string[] {
-  const fileTokens = relativeFile.split(/[/\\]/)
-  const nameParts = fullName.split(' > ')
-  return [...fileTokens, ...nameParts.slice(0, -1)]
+function toTitlePath(fullName: string): string[] {
+  return fullName.split(' > ').slice(0, -1)
 }
 
 /**
  * Maps flat `vitest list` entries onto the tree the streamed results produce:
- * suites from the Vitest-root-relative file path (plus the entry's own suite
- * nesting), `pending` status, browser label from the project name, and a
- * `discovered:`-prefixed id so provenance stays explicit. Multi-project configs
- * emit one entry per project; the project-derived browser label keeps them
- * distinct, mirroring how streamed results separate browsers.
+ * `fileTokens` from the Vitest-root-relative file path, describe suites from
+ * the entry's full name, `pending` status, browser label from the project
+ * name, and a `discovered:`-prefixed id so provenance stays explicit.
+ * Multi-project configs emit one entry per project; the project-derived
+ * browser label keeps them distinct, mirroring how streamed results separate
+ * browsers.
  */
 export function synthesizeDiscoveredTests(entries: VitestListEntry[], root: string): TestData[] {
   const byId = new Map<string, TestData>()
@@ -161,7 +160,8 @@ export function synthesizeDiscoveredTests(entries: VitestListEntry[], root: stri
     const location = entry.location
     byId.set(id, {
       id,
-      titlePath: toTitlePath(relativeFile, entry.name),
+      fileTokens: relativeFileTokens(root, entry.file),
+      titlePath: toTitlePath(entry.name),
       browser,
       projectName: entry.projectName,
       title: nameParts[nameParts.length - 1] ?? entry.name,

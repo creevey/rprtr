@@ -84,10 +84,11 @@ export const TestResultSchema = z.object({
 
 export type TestResult = z.infer<typeof TestResultSchema>
 
-// Test data schema
+// Test data schema; `fileTokens` groups sidebar tree slots (absent in older reporters).
 export const TestDataSchema = z.object({
   id: z.string(),
   titlePath: z.array(z.string()),
+  fileTokens: z.array(z.string()).optional(),
   browser: z.string(),
   projectName: z.string().optional(),
   title: z.string(),
@@ -180,6 +181,7 @@ export const TestBeginDataSchema = z.object({
   id: z.string(),
   title: z.string(),
   titlePath: z.array(z.string()),
+  fileTokens: z.array(z.string()).optional(),
   browser: z.string(),
   projectName: z.string().optional(),
   location: LocationSchema,

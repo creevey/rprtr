@@ -345,6 +345,40 @@ describe('CrvyRprtrVitestReporter', () => {
     }
   })
 
+  test('dev mode streams root-relative file tokens so the sidebar tree stays stable across runs', async () => {
+    process.env.CI = ''
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const harness = startWsServer()
+
+    try {
+      const reporter = new CrvyRprtrVitestReporter({
+        serverUrl: `ws://127.0.0.1:${harness.port}`,
+        screenshotDir: fixture.screenshotDir,
+      })
+      reporter.onInit(createMockVitest(fixture.paths.root) as never)
+      reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
+      await harness.waitForCount(1)
+
+      const testCase = createTestCase({
+        id: 'vitest-file-tokens',
+        name: 'renders hero section',
+        file: fixture.paths.testFile,
+        state: 'passed',
+      })
+
+      reporter.onTestCaseReady?.(testCase as never)
+      await harness.waitForCount(2)
+
+      const begin = TestBeginDataSchema.parse(eventsOfType(harness.received, 'test-begin')[0]?.data)
+      expect(begin.fileTokens).toEqual(['tests', 'hero.test.ts'])
+      expect(begin.titlePath).toEqual(['visual'])
+      expect(begin.location.file).toBe(fixture.paths.testFile)
+    } finally {
+      harness.close()
+    }
+  })
+
   test('dev mode surfaces a first-run reference-only artifact as a baseline-only image', async () => {
     process.env.CI = ''
     const fixture = await createReporterFixture()
@@ -815,6 +849,48 @@ describe('CrvyRprtrVitestReporter register payload', () => {
 })
 
 describe('CrvyRprtr Playwright reporter', () => {
+  test('streams file tokens relative to the config directory for a stable sidebar tree', async () => {
+    const { CrvyRprtr } = await import('../src/reporter')
+
+    const reporter = new CrvyRprtr({
+      screenshotDir: join(tmpdir(), 'crvy-playwright-file-tokens'),
+      ci: true,
+    })
+
+    const sent: unknown[] = []
+    type TestReporter = {
+      send: (message: unknown) => void
+      onBegin: (config: object, suite: object) => void
+      onTestBegin: (test: object) => void
+    }
+    const reporterAny = reporter as unknown as TestReporter
+    reporterAny.send = (message: unknown): void => {
+      sent.push(message)
+    }
+
+    reporterAny.onBegin(
+      { configFile: '/proj/playwright.config.ts', rootDir: '/proj', projects: [] },
+      { allTests: () => [] },
+    )
+    reporterAny.onTestBegin({
+      id: 'pw-file-tokens',
+      title: 'renders hero section',
+      location: { file: '/proj/tests/example.spec.ts', line: 10 },
+      parent: {
+        project: () => ({ name: 'chromium' }),
+      },
+    })
+
+    const beginMessage = sent.find((message): message is { type: string; data: Record<string, unknown> } => {
+      const typed = message as { type?: string }
+      return typed.type === 'test-begin'
+    })
+    expect(beginMessage).toBeDefined()
+    expect(beginMessage?.data.fileTokens).toEqual(['tests', 'example.spec.ts'])
+    expect(beginMessage?.data.titlePath).toEqual([])
+    expect(beginMessage?.data.location).toEqual({ file: '/proj/tests/example.spec.ts', line: 10 })
+  })
+
   test('emits no approvalTargets field on test-end payloads', async () => {
     const { CrvyRprtr } = await import('../src/reporter')
 
