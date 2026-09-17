@@ -29,7 +29,13 @@ import {
   type CrvyRprtrOptions,
   type PendingPortableArtifact,
 } from './reporter-helpers.ts'
-import { type AttachmentData, type ScreenshotDeclaration, extractScreenshotDeclarations } from './reporter-utils.ts'
+import {
+  type AttachmentData,
+  type ScreenshotDeclaration,
+  describeTitlePath,
+  extractScreenshotDeclarations,
+  reporterTitlePath,
+} from './reporter-utils.ts'
 import {
   type ResolvedBaselineTarget,
   type SnapshotResolverInput,
@@ -86,7 +92,10 @@ export class CrvyRprtr implements Reporter {
     log(`[CrvyRprtr] Starting run with ${suite.allTests().length} tests`)
     this.environments = this.resolveEnvironments(config)
     this.transport.start()
-    if (!this.ci) this.sendRegister(config)
+    if (!this.ci) {
+      this.sendRegister(config)
+      this.sendRunBegin(suite)
+    }
   }
 
   /**
@@ -139,11 +148,12 @@ export class CrvyRprtr implements Reporter {
     })
   }
 
-  private describeTitlePath(test: TestCase): string[] {
-    const titlePath: string[] = []
-    for (let suite: Suite | undefined = test.parent; suite?.type === 'describe'; suite = suite.parent)
-      titlePath.unshift(suite.title)
-    return titlePath
+  /**
+   * Announces the identities of the tests this run will execute, so the server
+   * can clear their previous results and approvals before the run streams in.
+   */
+  private sendRunBegin(suite: Suite): void {
+    this.send({ type: 'run-begin', data: { testIds: suite.allTests().map((test) => test.id) } })
   }
 
   /** Resolves a non-empty browser label for UI display, falling back to the
@@ -153,13 +163,6 @@ export class CrvyRprtr implements Reporter {
     const name = project?.name
     if (name !== undefined && name !== '') return name
     return project?.use?.browserName ?? project?.use?.defaultBrowserType ?? 'chromium'
-  }
-
-  private reporterTitlePath(test: TestCase): string[] {
-    // Index 1 is the raw Playwright project name ("" for the default project).
-    return typeof test.titlePath === 'function'
-      ? test.titlePath()
-      : ['', test.parent.project()?.name ?? '', test.location.file, ...this.describeTitlePath(test), test.title]
   }
 
   /**
@@ -175,14 +178,14 @@ export class CrvyRprtr implements Reporter {
   onTestBegin(test: TestCase): void {
     const project = test.parent.project()
     this.testMetadata.set(test.id, {
-      reporterTitlePath: this.reporterTitlePath(test),
+      reporterTitlePath: reporterTitlePath(test),
     })
     this.send({
       type: 'test-begin',
       data: {
         id: test.id,
         title: test.title,
-        titlePath: this.describeTitlePath(test),
+        titlePath: describeTitlePath(test),
         fileTokens: this.fileTokens(test),
         browser: this.resolveBrowserLabel(project),
         projectName: project?.name ?? '',
@@ -192,11 +195,8 @@ export class CrvyRprtr implements Reporter {
   }
 
   async onTestEnd(test: TestCase, result: TestResult): Promise<void> {
-    const reporterTitlePath = this.testMetadata.get(test.id)?.reporterTitlePath ?? this.reporterTitlePath(test)
-    const screenshotDeclarations = withResolvedVisualNames(
-      extractScreenshotDeclarations(result.steps),
-      reporterTitlePath,
-    )
+    const titlePath = this.testMetadata.get(test.id)?.reporterTitlePath ?? reporterTitlePath(test)
+    const screenshotDeclarations = withResolvedVisualNames(extractScreenshotDeclarations(result.steps), titlePath)
     const nativeAttachments = collectNativeImageAttachments(result)
     const data = {
       id: test.id,
@@ -235,7 +235,7 @@ export class CrvyRprtr implements Reporter {
     if (project === undefined || typeof project.testDir !== 'string' || typeof snapshotDir !== 'string') return null
     return {
       testFile: test.location.file,
-      reporterTitlePath: this.testMetadata.get(test.id)?.reporterTitlePath ?? this.reporterTitlePath(test),
+      reporterTitlePath: this.testMetadata.get(test.id)?.reporterTitlePath ?? reporterTitlePath(test),
       declarations: shots,
       config: {
         configDir: this.configDir,

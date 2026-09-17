@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { RunEnvironmentsSchema } from './schemas/pins.ts'
 
 export * from './schemas/http.ts'
+export * from './schemas/messages.ts'
 export * from './schemas/offline.ts'
 export * from './schemas/pins.ts'
 
@@ -142,7 +143,7 @@ export const CrvyRprtrSuiteSchema: z.ZodType<CrvyRprtrSuite> = z.lazy(() =>
 
 // Incoming: reporter -> server. data is parsed per-type by the handler.
 export const IncomingWebSocketMessageSchema = z.object({
-  type: z.enum(['test-begin', 'test-end', 'run-end', 'approve', 'sync', 'register']),
+  type: z.enum(['run-begin', 'test-begin', 'test-end', 'run-end', 'approve', 'sync', 'register']),
   data: z.unknown(),
 })
 export type IncomingWebSocketMessage = z.infer<typeof IncomingWebSocketMessageSchema>

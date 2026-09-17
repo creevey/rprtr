@@ -1,4 +1,4 @@
-import type { TestStep } from '@playwright/test/reporter'
+import type { Suite, TestCase, TestStep } from '@playwright/test/reporter'
 
 const NAMED_SCREENSHOT_STEP_TITLE = /toHaveScreenshot\((.+?)\)/
 const UNNAMED_SCREENSHOT_STEP_TITLE = /^Expect "toHaveScreenshot"(?:\s|$)/
@@ -100,6 +100,25 @@ function visitStep(step: TestStep, state: ExtractionState): boolean {
   }
 
   return hasNestedScreenshotDeclaration
+}
+
+/** Describe-block titles of a test, outermost first. */
+export function describeTitlePath(test: TestCase): string[] {
+  const titlePath: string[] = []
+  for (let suite: Suite | undefined = test.parent; suite?.type === 'describe'; suite = suite.parent)
+    titlePath.unshift(suite.title)
+  return titlePath
+}
+
+/**
+ * Playwright's raw title path: ['', projectName, file, ...describeTitles, title].
+ * Index 1 is the raw Playwright project name ('' for the default project).
+ * Older reporters/tests without `titlePath` fall back to the same shape.
+ */
+export function reporterTitlePath(test: TestCase): string[] {
+  return typeof test.titlePath === 'function'
+    ? test.titlePath()
+    : ['', test.parent.project()?.name ?? '', test.location.file, ...describeTitlePath(test), test.title]
 }
 
 export function extractScreenshotDeclarations(steps: readonly TestStep[]): ScreenshotDeclaration[] {
