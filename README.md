@@ -36,6 +36,13 @@ Other package-manager launchers work too: `pnpm dlx crvy-rprtr`, `yarn dlx crvy-
 
 Open http://localhost:3000 in your browser.
 
+A long-lived server scopes results to the run that produced them: when a new run starts, the
+previous results and approvals of the tests that run will execute are cleared up front, before
+the new results stream in. Tests outside the run — a filtered or single-test rerun, for
+example — keep their recorded results and approvals. This applies to live server sessions
+only: `crvy-rprtr.html` artifacts, offline JSON reports, and downloaded CI artifacts always
+replay one complete run.
+
 Every test run also writes a browser-openable static artifact:
 
 - `./crvy-rprtr.html`

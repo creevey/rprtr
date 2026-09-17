@@ -20,7 +20,7 @@
 
 ## 4. Docs, examples, and full gate
 
-- [ ] 4.1 Update `README.md` (and `CHANGELOG.md` if the repo convention requires a manual entry) to state that a new run clears the results and approvals of the tests it executes, while other results persist — verify: `rg -n "clear|approv" README.md`
-- [ ] 4.2 Confirm `docs/offline-mode.md` and the static/offline artifact tests still describe untouched behavior (`cd tests && bun test offline.test.ts offline-reports.test.ts offline-artifact.test.ts`) and adjust wording only if it became wrong — verify: `cd tests && bun test offline.test.ts offline-reports.test.ts offline-artifact.test.ts`
-- [ ] 4.3 Run the example project against a live server and confirm the sidebar goes clean at run start for a full run and keeps non-filtered results for a single-test run — verify: `bun run example:ct` (or `bun run example`) with the server running
-- [ ] 4.4 Full gate: `bun run check` and `bun run test:playwright`, fixing any lint/type/duplication/knip fallout from the new message and handler — verify: `bun run check && bun run test:playwright`
+- [x] 4.1 Update `README.md` (and `CHANGELOG.md` if the repo convention requires a manual entry) to state that a new run clears the results and approvals of the tests it executes, while other results persist — verify: `rg -n "clear|approv" README.md`
+- [x] 4.2 Confirm `docs/offline-mode.md` and the static/offline artifact tests still describe untouched behavior (`cd tests && bun test offline.test.ts offline-reports.test.ts offline-artifact.test.ts`) and adjust wording only if it became wrong — verify: `cd tests && bun test offline.test.ts offline-reports.test.ts offline-artifact.test.ts`
+- [x] 4.3 Run the example project against a live server and confirm the sidebar goes clean at run start for a full run and keeps non-filtered results for a single-test run — verify: `bun run example:ct` (or `bun run example`) with the server running
+- [x] 4.4 Full gate: `bun run check` and `bun run test:playwright`, fixing any lint/type/duplication/knip fallout from the new message and handler — verify: `bun run check && bun run test:playwright`
