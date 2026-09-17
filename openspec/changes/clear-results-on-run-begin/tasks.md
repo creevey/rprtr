@@ -1,8 +1,8 @@
 ## 1. Report-state clearing
 
-- [ ] 1.1 Write failing tests in `tests/report-state.test.ts`: `applyRunBeginEvent` clears `results`, clears `approved`, sets `status: 'pending'`, keeps identity fields, ignores unknown ids, and leaves tests outside the announced ids untouched; revise the existing re-run tests so `applyTestBeginEvent` is expected to start from no results and no approval — verify: `cd tests && bun test report-state.test.ts`
-- [ ] 1.2 Implement `applyRunBeginEvent` and the clear-on-begin behavior in `src/report-state.ts` (extract a shared "clear a test's run-scoped state" helper) — verify: `cd tests && bun test report-state.test.ts && bun run typecheck`
-- [ ] 1.3 Add report-state coverage that a previous `baseline-only` expectation is not carried into a new run's result while `enrichDeclaredBaselines`-style resolution from disk remains possible — verify: `cd tests && bun test report-state.test.ts`
+- [x] 1.1 Write failing tests in `tests/report-state.test.ts`: `applyRunBeginEvent` clears `results`, clears `approved`, sets `status: 'pending'`, keeps identity fields, ignores unknown ids, and leaves tests outside the announced ids untouched; revise the existing re-run tests so `applyTestBeginEvent` is expected to start from no results and no approval — verify: `cd tests && bun test report-state.test.ts`
+- [x] 1.2 Implement `applyRunBeginEvent` and the clear-on-begin behavior in `src/report-state.ts` (extract a shared "clear a test's run-scoped state" helper) — verify: `cd tests && bun test report-state.test.ts && bun run typecheck`
+- [x] 1.3 Add report-state coverage that a previous `baseline-only` expectation is not carried into a new run's result while `enrichDeclaredBaselines`-style resolution from disk remains possible — verify: `cd tests && bun test report-state.test.ts`
 
 ## 2. Protocol and reporter announcement
 

@@ -4,7 +4,6 @@ import type { RunEnvironments } from './browser-pins.ts'
 import { isAnyAbsolutePath } from './path-utils.ts'
 import {
   attachmentsToImages,
-  classifyImage,
   copyVisualDeclarations,
   getDeclaredVisualNames,
   mapStatus,
@@ -12,7 +11,7 @@ import {
   parseImageAttachmentName,
 } from './report-utils.ts'
 import type { ScreenshotDeclaration } from './reporter-utils.ts'
-import type { TestBeginData, TestEndData } from './schemas.ts'
+import type { RunBeginData, TestBeginData, TestEndData } from './schemas.ts'
 import { DISCOVERED_ID_PREFIX } from './server/vitest-discovery.ts'
 import type { Images, TestData, TestResult } from './types.ts'
 
@@ -40,51 +39,15 @@ type ReportStateTestEndData = TestEndData & {
   visualDeclarations?: readonly ScreenshotDeclaration[]
 }
 
-function isCurrentArtifact(image: Images | undefined): boolean {
-  return image?.actual !== undefined || image?.expect !== undefined || image?.diff !== undefined
-}
-
-function isReusablePassingImage(image: Images): boolean {
-  const source = image.source ?? classifyImage(image)
-  return source === 'baseline-only'
-}
-
-function hasReusablePassingImages(images: Partial<Record<string, Images>>): boolean {
-  return Object.values(images).some((img) => img !== null && img !== undefined && isReusablePassingImage(img))
-}
-
-function preservePreviousPassingImages(
-  test: TestData,
-  status: TestEndData['status'],
-  images: Partial<Record<string, Images>>,
-): Partial<Record<string, Images>> {
-  if (status !== 'passed') {
-    return images
-  }
-
-  const previousImages = test.results?.[0]?.images ?? {}
-  if (!hasReusablePassingImages(previousImages)) {
-    return images
-  }
-
-  return Object.entries(previousImages).reduce((currentImages, [name, previousImage]) => {
-    if (
-      !Object.hasOwn(currentImages, name) ||
-      previousImage === undefined ||
-      !isReusablePassingImage(previousImage) ||
-      isCurrentArtifact(currentImages[name])
-    ) {
-      return currentImages
-    }
-
-    return {
-      ...currentImages,
-      [name]: {
-        expect: previousImage.expect,
-        source: 'baseline-only',
-      },
-    }
-  }, images)
+/**
+ * Strips a test's run-scoped state — recorded results and approval — while
+ * keeping its identity, so the sidebar keeps its shape and the test starts
+ * from a clean slate. Callers set the status they want next.
+ */
+function clearTestRunState(test: TestData): void {
+  delete test.results
+  delete test.approved
+  test.status = 'pending'
 }
 
 function countDiffImages(images: Partial<Record<string, Images>>): number {
@@ -183,14 +146,30 @@ function removeDiscoveredPlaceholder(tests: Record<string, TestData>, identity: 
   return tests
 }
 
+/**
+ * Clears the run-scoped state of every announced test that exists in the
+ * report: the run about to start owns those tests' results and approvals.
+ * Tests outside the announcement keep their recorded state — a filtered run
+ * only supersedes the subset it executes.
+ */
+export function applyRunBeginEvent(state: MutableReportState, data: RunBeginData): void {
+  for (const id of data.testIds) {
+    const test = state.reportData.tests[id]
+    if (test !== undefined) {
+      clearTestRunState(test)
+    }
+  }
+}
+
 export function applyTestBeginEvent(state: MutableReportState, data: TestBeginData): TestData {
   const { id, title, titlePath, fileTokens, browser, projectName, location, provider } = data
   state.currentRunIds.add(id)
   const existing = state.reportData.tests[id]
   if (existing !== undefined) {
-    // A re-run reuses the same id; flip it back to 'running' so the UI shows
-    // the in-progress state instead of the previous run's status. Prior results
-    // stay intact until the new run's test-end arrives.
+    // A re-run reuses the same id; start it fresh — no prior result or approval
+    // may leak into the new run — and flip it to 'running' so the UI shows the
+    // in-progress state instead of the previous run's status.
+    clearTestRunState(existing)
     existing.status = 'running'
     return existing
   }
@@ -232,13 +211,9 @@ export function applyTestEndEvent(
   const resultStatus: TestResult['status'] =
     data.status === 'passed' ? 'success' : data.status === 'failed' ? 'failed' : 'pending'
   const visualDeclarations = copyVisualDeclarations(data.visualDeclarations)
-  const images = preservePreviousPassingImages(
-    test,
-    data.status,
-    mergeDeclaredImages(
-      attachmentsToImages(data.attachments, options.screenshotsBaseUrl),
-      getDeclaredVisualNames(data.visualNames, visualDeclarations),
-    ),
+  const images = mergeDeclaredImages(
+    attachmentsToImages(data.attachments, options.screenshotsBaseUrl),
+    getDeclaredVisualNames(data.visualNames, visualDeclarations),
   )
   stampApprovalTargets(images, data, state.reportData.screenshotDir)
 

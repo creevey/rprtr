@@ -1,9 +1,44 @@
 import { describe, expect, test } from 'bun:test'
 
 import { mergeOfflineReports } from '../src/offline-reports'
-import { applyTestBeginEvent, applyTestEndEvent, createMutableReportState } from '../src/report-state'
-import { ReportApiResponseSchema, TestEndDataSchema, safeParse } from '../src/schemas'
+import {
+  applyRunBeginEvent,
+  applyTestBeginEvent,
+  applyTestEndEvent,
+  createMutableReportState,
+} from '../src/report-state'
+import { ReportApiResponseSchema, TestEndDataSchema, safeParse, type TestBeginData } from '../src/schemas'
+import { resolveBaselineSnapshotPath } from '../src/server/artifact-routes'
 import type { OfflineReport, TestData } from '../src/types'
+
+function seedCompletedTest(
+  state: ReturnType<typeof createMutableReportState>,
+  id: string,
+  overrides: Partial<TestBeginData> = {},
+): TestData {
+  applyTestBeginEvent(state, {
+    id,
+    title: 'visual',
+    titlePath: ['Suite'],
+    fileTokens: ['tests', 'example.spec.ts'],
+    browser: 'chromium',
+    projectName: 'chromium',
+    location: { file: 'tests/example.spec.ts', line: 10 },
+    ...overrides,
+  })
+  applyTestEndEvent(state, {
+    id,
+    status: 'failed',
+    attachments: [{ name: 'header-actual.png', path: `/tmp/${id}/header-actual.png`, contentType: 'image/png' }],
+    visualNames: ['header'],
+    visualDeclarations: [
+      { visualName: 'header', kind: 'named', declaredName: 'header', snapshotBaseName: 'header', occurrenceIndex: 1 },
+    ],
+  })
+  const seeded = state.reportData.tests[id]
+  if (seeded === undefined) throw new Error(`seed failed for ${id}`)
+  return seeded
+}
 
 describe('report-state visual classification', () => {
   test('keeps skipped test and result statuses consistent', () => {
@@ -66,7 +101,7 @@ describe('report-state visual classification', () => {
     expect(images['footer']?.source).toBe('declared-only')
   })
 
-  test('keeps carry-forward only for image names still present in a later passing run', () => {
+  test('does not carry a previous run image into a later passing run', () => {
     const state = createMutableReportState('./screenshots')
 
     applyTestBeginEvent(state, {
@@ -98,6 +133,7 @@ describe('report-state visual classification', () => {
       },
       { screenshotsBaseUrl: '/screenshots/' },
     )
+    expect(state.reportData.tests['test-1']?.results?.[0]?.images?.['header']?.source).toBe('baseline-only')
 
     applyTestBeginEvent(state, {
       id: 'test-1',
@@ -106,6 +142,7 @@ describe('report-state visual classification', () => {
       browser: 'chromium',
       location: { file: 'tests/example.spec.ts', line: 10 },
     })
+    expect(state.reportData.tests['test-1']?.results).toBeUndefined()
 
     applyTestEndEvent(
       state,
@@ -120,8 +157,10 @@ describe('report-state visual classification', () => {
 
     const images = state.reportData.tests['test-1']?.results?.[0]?.images ?? {}
 
-    expect(images['header']?.source).toBe('baseline-only')
-    expect(images['header']?.expect).toBe('/screenshots/test-1/header-expected')
+    // The header stays declared-only: the previous run's baseline preview must
+    // not leak into the new result, and the footer is gone with the old run.
+    expect(images['header']?.source).toBe('declared-only')
+    expect(images['header']?.expect).toBeUndefined()
     expect(images['footer']).toBeUndefined()
   })
 
@@ -168,6 +207,7 @@ describe('report-state visual classification', () => {
       browser: 'chromium',
       location: { file: 'tests/example.spec.ts', line: 10 },
     })
+    expect(state.reportData.tests['t-stale']?.results).toBeUndefined()
 
     applyTestEndEvent(state, {
       id: 't-stale',
@@ -189,66 +229,113 @@ describe('report-state visual classification', () => {
     expect(passedImage?.actual).toBeUndefined()
     expect(passedImage?.source).toBe('declared-only')
   })
+})
 
-  test('strips stale actual and diff fields from a previously mixed-source baseline-only image', () => {
+describe('report-state run-begin clearing', () => {
+  test('clears announced tests, keeping their identity and leaving others untouched', () => {
     const state = createMutableReportState('./screenshots')
+    seedCompletedTest(state, 'announced')
+    seedCompletedTest(state, 'kept')
+    const announced = state.reportData.tests['announced']
+    expect(announced?.results).toHaveLength(1)
+    expect(announced?.status).toBe('failed')
+    state.reportData.tests['announced']!.approved = { header: 1 }
+    state.reportData.tests['kept']!.approved = { header: 2 }
 
-    applyTestBeginEvent(state, {
-      id: 't-mixed',
+    applyRunBeginEvent(state, { testIds: ['announced'] })
+
+    const cleared = state.reportData.tests['announced']
+    expect(cleared?.status).toBe('pending')
+    expect(cleared?.results).toBeUndefined()
+    expect(cleared?.approved).toBeUndefined()
+    expect(cleared?.title).toBe('visual')
+    expect(cleared?.titlePath).toEqual(['Suite'])
+    expect(cleared?.fileTokens).toEqual(['tests', 'example.spec.ts'])
+    expect(cleared?.browser).toBe('chromium')
+    expect(cleared?.projectName).toBe('chromium')
+    expect(cleared?.location).toEqual({ file: 'tests/example.spec.ts', line: 10 })
+
+    expect(state.reportData.tests['kept']?.status).toBe('failed')
+    expect(state.reportData.tests['kept']?.results).toHaveLength(1)
+    expect(state.reportData.tests['kept']?.approved).toEqual({ header: 2 })
+  })
+
+  test('ignores announced ids without a recorded entry', () => {
+    const state = createMutableReportState('./screenshots')
+    const kept = seedCompletedTest(state, 'known')
+
+    expect(() => applyRunBeginEvent(state, { testIds: ['missing'] })).not.toThrow()
+
+    expect(state.reportData.tests['known']).toBe(kept)
+    expect(kept.status).toBe('failed')
+    expect(kept.results).toHaveLength(1)
+  })
+
+  test('does not carry a previous baseline-only expectation but keeps it resolvable from disk', () => {
+    const state = createMutableReportState('./screenshots')
+    const begin: TestBeginData = {
+      id: 't-baseline',
       title: 'visual',
       titlePath: ['Suite'],
       browser: 'chromium',
-      location: { file: 'tests/example.spec.ts', line: 10 },
-    })
-
-    applyTestEndEvent(state, {
-      id: 't-mixed',
-      status: 'passed',
-      attachments: [
-        {
-          name: 'header-expected',
-          path: 't-mixed/header-expected',
-          contentType: 'image/png',
-        },
-      ],
-      visualNames: ['header'],
-    })
-
-    // Simulate a polluted prior record (e.g. legacy report loaded from disk that
-    // carries both an expect URL and a stale actual URL from a previous failure).
-    const testRecord = state.reportData.tests['t-mixed']
-    const priorImage = testRecord?.results?.[0]?.images?.['header']
-    expect(priorImage).toBeDefined()
-    if (priorImage !== undefined) {
-      priorImage.actual = '/file/%2Ftmp%2Ftest-results%2Ft-mixed%2Fheader-actual.png'
-      priorImage.diff = '/file/%2Ftmp%2Ftest-results%2Ft-mixed%2Fheader-diff.png'
+      projectName: 'chromium',
+      location: { file: '/proj/tests/example.spec.ts', line: 10 },
     }
 
-    applyTestBeginEvent(state, {
-      id: 't-mixed',
-      title: 'visual',
-      titlePath: ['Suite'],
-      browser: 'chromium',
-      location: { file: 'tests/example.spec.ts', line: 10 },
-    })
+    applyTestBeginEvent(state, begin)
+    applyTestEndEvent(
+      state,
+      {
+        id: 't-baseline',
+        status: 'passed',
+        attachments: [
+          { name: 'header-expected.png', path: 't-baseline/header-expected.png', contentType: 'image/png' },
+        ],
+        visualNames: ['header'],
+      },
+      { screenshotsBaseUrl: '/screenshots/' },
+    )
+    const previous = state.reportData.tests['t-baseline']?.results?.[0]?.images?.['header']
+    expect(previous?.source).toBe('baseline-only')
+    expect(previous?.expect).toBe('/screenshots/t-baseline/header-expected.png')
 
+    applyRunBeginEvent(state, { testIds: ['t-baseline'] })
+    applyTestBeginEvent(state, begin)
     applyTestEndEvent(state, {
-      id: 't-mixed',
+      id: 't-baseline',
       status: 'passed',
       attachments: [],
       visualNames: ['header'],
+      visualDeclarations: [
+        {
+          visualName: 'header',
+          kind: 'named',
+          declaredName: 'header',
+          snapshotBaseName: 'header',
+          occurrenceIndex: 1,
+        },
+      ],
     })
 
-    const preserved = state.reportData.tests['t-mixed']?.results?.[0]?.images?.['header']
-    expect(preserved?.source).toBe('baseline-only')
-    expect(preserved?.expect).toBe('/screenshots/t-mixed/header-expected')
-    expect(preserved?.actual).toBeUndefined()
-    expect(preserved?.diff).toBeUndefined()
+    const refreshed = state.reportData.tests['t-baseline']
+    const image = refreshed?.results?.[0]?.images?.['header']
+    expect(image?.source).toBe('declared-only')
+    expect(image?.expect).toBeUndefined()
+
+    // The refreshed record keeps the identity and declaration the server's
+    // enrichDeclaredBaselines pass needs to resolve the baseline from disk.
+    const snapshotPath = resolveBaselineSnapshotPath(
+      { configDir: '/proj', playwrightTestDir: '/proj/tests', playwrightSnapshotDir: '/proj/tests' },
+      refreshed!,
+      0,
+      'header',
+    )
+    expect(snapshotPath).toBe(`/proj/tests/example.spec.ts-snapshots/header-chromium-${process.platform}.png`)
   })
 })
 
 describe('report-state re-run status', () => {
-  test('applyTestBeginEvent flips an existing test back to running', () => {
+  test('applyTestBeginEvent starts a re-run from no results and no approval', () => {
     const state = createMutableReportState('./screenshots')
 
     applyTestBeginEvent(state, {
@@ -264,10 +351,12 @@ describe('report-state re-run status', () => {
       attachments: [],
       visualNames: [],
     })
+    state.reportData.tests['t-rerun']!.approved = { header: 1 }
     expect(state.reportData.tests['t-rerun']?.status).toBe('success')
 
     // A second run re-uses the same id; begin must flip it to 'running' so the
-    // UI reflects the in-progress state instead of the stale 'success'.
+    // UI reflects the in-progress state, and drop the superseded result and
+    // approval so the new run cannot inherit them.
     applyTestBeginEvent(state, {
       id: 't-rerun',
       title: 'visual',
@@ -277,8 +366,8 @@ describe('report-state re-run status', () => {
     })
 
     expect(state.reportData.tests['t-rerun']?.status).toBe('running')
-    // Prior results remain visible until the new run's test-end arrives.
-    expect(state.reportData.tests['t-rerun']?.results).toHaveLength(1)
+    expect(state.reportData.tests['t-rerun']?.results).toBeUndefined()
+    expect(state.reportData.tests['t-rerun']?.approved).toBeUndefined()
   })
 })
 
@@ -804,5 +893,6 @@ describe('discovered test replacement on test-begin', () => {
 
     expect(Object.keys(state.reportData.tests)).toEqual([liveId])
     expect(state.reportData.tests[liveId]?.status).toBe('running')
+    expect(state.reportData.tests[liveId]?.results).toBeUndefined()
   })
 })
