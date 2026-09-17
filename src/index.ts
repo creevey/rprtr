@@ -4,6 +4,7 @@ import type { ApprovalResult, BulkApprovalResult } from './approval-api'
 import { readApproveAllResult, readApproveResult } from './approval-api'
 import App from './client/App.svelte'
 import { treeifyTests } from './client/helpers'
+import type { RunEnvironments } from './schemas'
 import { ClientBootstrapDataSchema, ReportApiResponseSchema, safeParse } from './schemas'
 import type { CrvyRprtrSuite } from './types'
 
@@ -17,6 +18,7 @@ interface InitialState {
   runEnabled: boolean
   isRunning: boolean
   runMode?: 'local' | 'docker'
+  environments?: RunEnvironments
 }
 
 function loadBootstrapData(): InitialState | null {
@@ -45,6 +47,7 @@ function loadBootstrapData(): InitialState | null {
     approvalMessage: parsed.approvalMessage,
     runEnabled: parsed.runEnabled ?? false,
     isRunning: parsed.report.isRunning ?? false,
+    environments: parsed.report.environments,
   }
 }
 
@@ -66,6 +69,7 @@ async function loadReportData(): Promise<InitialState> {
     runEnabled: parsed.runEnabled ?? false,
     isRunning: parsed.isRunning ?? false,
     runMode: parsed.runMode,
+    environments: parsed.environments,
   }
 }
 
@@ -102,6 +106,7 @@ mount(App, {
     runEnabled: initialState.runEnabled,
     isRunning: initialState.isRunning,
     runMode: initialState.runMode,
+    environments: initialState.environments,
     onApprove: handleApprove,
     onApproveAll: handleApproveAll,
   },

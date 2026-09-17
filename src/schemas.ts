@@ -1,7 +1,10 @@
 import { z } from 'zod'
 
+import { RunEnvironmentsSchema } from './schemas/pins.ts'
+
 export * from './schemas/http.ts'
 export * from './schemas/offline.ts'
+export * from './schemas/pins.ts'
 
 // Location schema
 export const LocationSchema = z.object({
@@ -161,6 +164,7 @@ export const WebSocketMessageSchema = z.discriminatedUnion('type', [
     data: z.object({
       tests: z.record(z.string(), TestDataSchema),
       isUpdateMode: z.boolean().optional(),
+      environments: RunEnvironmentsSchema.optional(),
     }),
   }),
   z.object({ type: z.literal('approve'), data: z.unknown() }),
@@ -213,6 +217,7 @@ export type TestEndData = z.infer<typeof TestEndDataSchema>
 // Run end data schema (reporter -> server)
 export const RunEndDataSchema = z.object({
   status: z.enum(['passed', 'failed', 'skipped']),
+  environments: RunEnvironmentsSchema.optional(),
 })
 export type RunEndData = z.infer<typeof RunEndDataSchema>
 
@@ -230,6 +235,9 @@ export const RegisterDataSchema = z.object({
   // Runner kind declaring the register payload. Playwright reporters never
   // send it; absent means Playwright.
   runner: z.literal('vitest').optional(),
+  // Effective browser environments for the run, keyed by project. Absent for
+  // older reporters; consumers treat missing data as unknown.
+  environments: RunEnvironmentsSchema.optional(),
 })
 export type RegisterData = z.infer<typeof RegisterDataSchema>
 
@@ -240,6 +248,7 @@ export const ReportDataSchema = z.object({
   browsers: z.array(z.string()),
   isUpdateMode: z.boolean(),
   screenshotDir: z.string(),
+  environments: RunEnvironmentsSchema.optional(),
 })
 
 export type ReportData = z.infer<typeof ReportDataSchema>
@@ -248,6 +257,7 @@ export type ReportData = z.infer<typeof ReportDataSchema>
 export const LoadedReportDataSchema = z.object({
   tests: z.record(z.string(), TestDataSchema).optional(),
   isUpdateMode: z.boolean().optional(),
+  environments: RunEnvironmentsSchema.optional(),
 })
 
 export type LoadedReportData = z.infer<typeof LoadedReportDataSchema>
@@ -259,6 +269,7 @@ export const ReportApiResponseSchema = z.object({
   isRunning: z.boolean().optional(),
   runEnabled: z.boolean().optional(),
   runMode: z.enum(['local', 'docker']).optional(),
+  environments: RunEnvironmentsSchema.optional(),
 })
 
 export type ReportApiResponse = z.infer<typeof ReportApiResponseSchema>
@@ -281,20 +292,4 @@ export const ImagesViewModeSchema = z.enum(['side-by-side', 'swap', 'slide', 'bl
 
 export type ImagesViewMode = z.infer<typeof ImagesViewModeSchema>
 
-// Helper function to safely parse with zod
-export function safeParse<T>(schema: z.ZodType<T>, data: unknown): T | null {
-  const result = schema.safeParse(data)
-  if (result.success) {
-    return result.data
-  }
-  return null
-}
-
-// Helper function to parse or throw
-export function parseOrThrow<T>(schema: z.ZodType<T>, data: unknown, errorMessage: string): T {
-  const result = schema.safeParse(data)
-  if (result.success) {
-    return result.data
-  }
-  throw new Error(`${errorMessage}: ${result.error.message}`)
-}
+export { parseOrThrow, safeParse } from './schema-utils.ts'

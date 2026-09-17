@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 
-import { findOfflineReportPaths, mergeOfflineReportsIntoTests } from '../src/offline-reports'
+import { findOfflineReportPaths, mergeOfflineReports } from '../src/offline-reports'
 import type { OfflineReport, TestData } from '../src/types'
 
 describe('Offline report loading', () => {
@@ -121,10 +121,10 @@ describe('Offline report loading', () => {
       ],
     }
 
-    const mergedTests = mergeOfflineReportsIntoTests(existingTests, [firstWorkerReport, secondWorkerReport], {
+    const mergedTests = mergeOfflineReports(existingTests, [firstWorkerReport, secondWorkerReport], {
       screenshotDir: './screenshots',
       screenshotsBaseUrl: '/screenshots/',
-    })
+    }).tests
 
     expect(Object.keys(mergedTests).sort()).toEqual(['existing', 'test-1', 'test-2'])
     expect(mergedTests['test-1']?.title).toBe('First test')

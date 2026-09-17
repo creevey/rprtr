@@ -1,7 +1,18 @@
 <script lang="ts">
   import { isDefined, type CrvyRprtrSuite, type CrvyRprtrTest, type TestStatus } from '../../types';
-  import { countTestsStatus, filterTests, hasScreenshots, isTreeVisible, parseFilterString, type CrvyRprtrViewFilter } from '../helpers';
-  import { cn, statusDotClass } from '../cn';
+  import type { RunEnvironments } from '../../schemas';
+  import {
+    countTestsStatus,
+    filterTests,
+    hasScreenshots,
+    isTreeVisible,
+    parseFilterString,
+    environmentBadgeEntries,
+    describeEnvironment,
+    pinStatusLabel,
+    type CrvyRprtrViewFilter,
+  } from '../helpers';
+  import { cn, pinBadgeClass, statusDotClass } from '../cn';
   import TreeItem from './TreeItem.svelte';
 
   interface Props {
@@ -17,6 +28,7 @@
     runMessage?: string | null;
     filter: CrvyRprtrViewFilter;
     canApprove: boolean;
+    environments?: RunEnvironments;
     onFilterChange: (filter: CrvyRprtrViewFilter) => void;
     onSelect: (test: CrvyRprtrTest) => void;
     onOpen: (path: string[], opened: boolean) => void;
@@ -34,6 +46,7 @@
 
   let {
     tests, selectedId, focusedPath, isReport, isRunning, isUpdateMode, approvalEnabled, approvalMessage, runEnabled, runMessage, filter, canApprove,
+    environments,
     onFilterChange, onSelect, onOpen, onToggle, onStart, onStop, onUpdate, onRun, onApprove, onNext, onApproveAll,
     runMode, isPreparing,
   }: Props = $props();
@@ -48,6 +61,7 @@
       .filter(isDefined)
       .filter((c) => isTreeVisible(c as CrvyRprtrSuite | CrvyRprtrTest))
   );
+  let environmentBadges = $derived(environmentBadgeEntries(environments));
 
   function handleFilterInput(e: Event): void {
     const value = (e.target as HTMLInputElement).value;
@@ -96,6 +110,21 @@
         {#if isUpdateMode}
           <div class="text-xs mb-2 px-2 py-1 text-success bg-success/10 rounded-sm">
             Review and approve screenshots
+          </div>
+        {/if}
+        {#if environmentBadges.length > 0}
+          <div class="flex flex-wrap gap-1 mb-2" data-testid="environment-badges">
+            {#each environmentBadges as [projectName, environment] (projectName)}
+              <span
+                class={cn(
+                  'px-1.5 py-0.5 rounded-sm border text-[10px] leading-none whitespace-nowrap',
+                  pinBadgeClass(environment.status),
+                )}
+                data-testid="environment-badge"
+                data-pin-status={environment.status}
+                title={describeEnvironment(projectName, environment)}
+              >{projectName} · {pinStatusLabel(environment.status)}</span>
+            {/each}
           </div>
         {/if}
         <div class="flex gap-2 text-xs mb-3 tabular-nums">
@@ -180,6 +209,7 @@
         {isUpdateMode}
         {runEnabled}
         {isRunning}
+        {environments}
         {onSelect}
         {onOpen}
         {onToggle}

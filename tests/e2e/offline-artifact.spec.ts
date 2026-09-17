@@ -96,9 +96,10 @@ if (isPlaywright()) {
       await reporterAny.onEnd({ status: 'failed' })
 
       const fileUrl = pathToFileURL(reportHtmlPath)
-      fileUrl.searchParams.set('testPath[0]', 'Suite')
-      fileUrl.searchParams.set('testPath[1]', 'Visual diff test')
-      fileUrl.searchParams.set('testPath[2]', 'chromium')
+      fileUrl.searchParams.set('testPath[0]', 'test.spec.ts')
+      fileUrl.searchParams.set('testPath[1]', 'Suite')
+      fileUrl.searchParams.set('testPath[2]', 'Visual diff test')
+      fileUrl.searchParams.set('testPath[3]', 'chromium')
 
       await page.goto(fileUrl.href)
 
@@ -185,9 +186,10 @@ if (isPlaywright()) {
       await reporterAny.onEnd({ status: 'failed' })
 
       const artifactUrl = new URL(`http://localhost:3001/tests/e2e/${basename(artifactDir)}/crvy-rprtr.html`)
-      artifactUrl.searchParams.set('testPath[0]', 'Suite')
-      artifactUrl.searchParams.set('testPath[1]', 'Cyrillic visual test')
-      artifactUrl.searchParams.set('testPath[2]', 'chromium')
+      artifactUrl.searchParams.set('testPath[0]', 'test.spec.ts')
+      artifactUrl.searchParams.set('testPath[1]', 'Suite')
+      artifactUrl.searchParams.set('testPath[2]', 'Cyrillic visual test')
+      artifactUrl.searchParams.set('testPath[3]', 'chromium')
 
       await page.goto(artifactUrl.href)
 

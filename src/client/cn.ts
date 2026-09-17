@@ -23,3 +23,15 @@ export function statusDotClass(status?: string): string {
       return 'bg-fg-muted'
   }
 }
+
+/** @public — used by Svelte components (knip does not trace .svelte imports) */
+export function pinBadgeClass(status: string): string {
+  switch (status) {
+    case 'pinned':
+      return 'border-success/40 bg-success/10 text-success'
+    case 'drift':
+      return 'border-error/40 bg-error/10 text-error'
+    default:
+      return 'border-edge bg-surface-input text-fg-muted'
+  }
+}

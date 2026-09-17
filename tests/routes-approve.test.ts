@@ -28,6 +28,7 @@ function createContext(
       browsers: ['chromium'],
       isUpdateMode: false,
       screenshotDir: SCREENSHOT_DIR,
+      environments: {},
     },
     staticDir: './dist',
     saveReport: async (): Promise<void> => {},

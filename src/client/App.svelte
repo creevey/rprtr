@@ -15,7 +15,6 @@
     filterTests,
     flattenSuite,
     getSuiteByPath,
-    hasScreenshots,
     recalcSuiteStatuses,
     recalcAllSuiteStatuses,
     syncTreeState,
@@ -25,6 +24,7 @@
   } from './helpers';
   import { captureTestStatuses, restoreTestStatuses } from './helpers/run-snapshot';
   import type { ClientWebSocketMessage, TestData } from '../types';
+  import type { RunEnvironments } from '../schemas';
   import { WebSocketMessageSchema, safeParse } from '../schemas';
   import { getViewMode } from './viewMode';
   import Sidebar from './components/Sidebar.svelte';
@@ -54,16 +54,19 @@
     runEnabled: boolean;
     isRunning: boolean;
     runMode?: 'local' | 'docker';
+    environments?: RunEnvironments;
     onApprove: (id: string, retry: number, image: string) => Promise<ApprovalResult>;
     onApproveAll: () => Promise<BulkApprovalResult>;
   }
 
-  let { initialTests, isReport, isUpdateMode, liveUpdates, approvalEnabled, approvalMessage, runEnabled, isRunning: initialIsRunning, runMode, onApprove, onApproveAll }: Props = $props();
+  let { initialTests, isReport, isUpdateMode, liveUpdates, approvalEnabled, approvalMessage, runEnabled, isRunning: initialIsRunning, runMode, environments: initialEnvironments, onApprove, onApproveAll }: Props = $props();
 
   // svelte-ignore state_referenced_locally — intentionally capture initial value for local mutation
   let tests = $state(initialTests);
   // svelte-ignore state_referenced_locally — intentionally capture initial value for local mutation
   let isRunning = $state(initialIsRunning);
+  // svelte-ignore state_referenced_locally — intentionally capture initial value for local mutation
+  let environments = $state<RunEnvironments | undefined>(initialEnvironments);
   let runMessage = $state<string | null>(null);
   let isPreparing = $state(false);
   let runSnapshot: Map<string, TestStatus | undefined> | null = null;
@@ -75,7 +78,7 @@
   let isDark = $state(localStorage.getItem('crvy-rprtr-theme') !== 'light');
 
   let openedTest = $derived(getTestByPath(tests, openedTestPath));
-  let failedTests = $derived(getFailedTests(tests).filter(hasScreenshots));
+  let failedTests = $derived(getFailedTests(tests));
   let retry = $state(0);
   let imageName = $state('');
 
@@ -440,6 +443,9 @@
           break;
         }
         case 'sync': {
+          if (msg.data.environments !== undefined) {
+            environments = msg.data.environments;
+          }
           syncTreeState(tests, msg.data.tests);
           break;
         }
@@ -487,6 +493,7 @@
     {runMessage}
     {filter}
     {canApprove}
+    {environments}
     onFilterChange={(f) => filter = f}
     onSelect={handleOpenTest}
     onOpen={handleSuiteOpen}

@@ -150,6 +150,24 @@ same reason: a host path does not exist in the container.
   glyph advance widths — the 3px line shift documented in the previous report. Keep using one
   image flavor for that.
 
+## The remaining axis: the browser build itself
+
+Even with one image and one AA mode, the browser binary decides pixel output, and Playwright
+upgrades change it silently. Declare which build the baselines belong to and let rprtr check
+it on every run:
+
+```ts
+metadata: { crvyRprtr: { browser: 'chromium', version: '147' } }
+```
+
+`version` is a prefix (`147`, `147.0`, `147.0.7727.15`). The reporter resolves the effective
+build offline from the installed Playwright's manifest, records it with the run, and reports
+`pinned` / `drift` / `unpinned` / `unverifiable` — branded channels and explicit executables
+are `unverifiable`, never drift. `crvy-rprtr browsers check --strict` is the CI gate, and
+`crvy-rprtr browsers resolve <engine>@<prefix>` names the Playwright version and Docker image
+tag that ship the pinned build. Details and the creevey `browserVersion` migration note:
+[Browser Pinning](../README.md#browser-pinning).
+
 ## Diagnostic cheat sheet
 
 ```bash

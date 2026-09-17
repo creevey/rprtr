@@ -1,5 +1,6 @@
 import { dirname, join } from 'path'
 
+import type { RunEnvironments } from '../browser-pins.ts'
 import { LoadedReportDataSchema, safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { isDirectory, readJsonFile } from './file-utils.ts'
@@ -10,6 +11,7 @@ export interface ReportData {
   browsers: string[]
   isUpdateMode: boolean
   screenshotDir: string
+  environments: RunEnvironments
 }
 
 export function createReportData(screenshotDir?: string): ReportData {
@@ -19,6 +21,7 @@ export function createReportData(screenshotDir?: string): ReportData {
     browsers: ['chromium'],
     isUpdateMode: false,
     screenshotDir: screenshotDir ?? './screenshots',
+    environments: {},
   }
 }
 
@@ -34,6 +37,7 @@ export async function loadReport(reportPath: string, reportData: ReportData): Pr
     if (parsed !== null) {
       reportData.tests = parsed.tests ?? {}
       reportData.isUpdateMode = parsed.isUpdateMode ?? false
+      reportData.environments = parsed.environments ?? {}
     }
   } catch {
     console.log('No report.json found, using empty state')

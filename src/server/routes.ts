@@ -1,5 +1,6 @@
 import { join } from 'path'
 
+import type { RunEnvironments } from '../browser-pins.ts'
 import type { TestData } from '../types.ts'
 import { handleApiApprove, handleApiApproveAll } from './approval.ts'
 import { handleArtifactRoute } from './artifact-routes.ts'
@@ -15,6 +16,7 @@ export interface RoutesContext {
     browsers: string[]
     isUpdateMode: boolean
     screenshotDir: string
+    environments: RunEnvironments
   }
   staticDir: string
   saveReport: () => Promise<void>

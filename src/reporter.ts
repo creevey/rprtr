@@ -2,6 +2,7 @@ import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import { dirname, join, relative } from 'path'
 
+import { chromium, firefox, webkit } from '@playwright/test'
 import type {
   FullConfig,
   FullProject,
@@ -13,6 +14,14 @@ import type {
 } from '@playwright/test/reporter'
 import pLimit from 'p-limit'
 
+import {
+  buildRunEnvironments,
+  evaluateBrowserPinPolicy,
+  resolveProjectPins,
+  type BrowserPinPolicy,
+  type PinBrowser,
+  type RunEnvironments,
+} from './browser-pins.ts'
 import { log } from './debug-log.ts'
 import { copyResolvedBaseline, sanitizeId, saveAttachments } from './reporter-artifact-ops.ts'
 import {
@@ -31,6 +40,15 @@ import { ReporterTransport } from './transport.ts'
 
 export type { CrvyRprtrOptions }
 
+export interface BrowserTypeLike {
+  executablePath(): string
+}
+
+export interface ReporterSeams {
+  /** Injectable browser types for tests; defaults to @playwright/test's. */
+  browserTypes?: Partial<Record<PinBrowser, BrowserTypeLike>>
+}
+
 export class CrvyRprtr implements Reporter {
   private readonly transport: ReporterTransport
   private readonly serverUrl: string
@@ -43,8 +61,11 @@ export class CrvyRprtr implements Reporter {
   private readonly ci: boolean
   private readonly portableArtifacts = process.env.CRVY_RPRTR_PORTABLE_ARTIFACTS === '1'
   private pendingArtifacts: PendingPortableArtifact[] = []
+  private readonly browserPinPolicy: BrowserPinPolicy
+  private readonly browserTypes: Record<PinBrowser, BrowserTypeLike>
+  private environments: RunEnvironments | undefined
 
-  constructor(options: CrvyRprtrOptions = {}) {
+  constructor(options: CrvyRprtrOptions = {}, seams: ReporterSeams = {}) {
     this.transport = new ReporterTransport(options)
     this.serverUrl = this.transport.serverUrl
     this.screenshotDir = this.transport.screenshotDir
@@ -52,13 +73,44 @@ export class CrvyRprtr implements Reporter {
     this.playwrightSnapshotDir = options.playwrightSnapshotDir
     this.playwrightSnapshotPathTemplate = options.playwrightSnapshotPathTemplate
     this.playwrightToHaveScreenshotPathTemplate = options.playwrightToHaveScreenshotPathTemplate
+    this.browserPinPolicy = options.browserPinPolicy ?? 'warn'
+    this.browserTypes = {
+      chromium: seams.browserTypes?.chromium ?? chromium,
+      firefox: seams.browserTypes?.firefox ?? firefox,
+      webkit: seams.browserTypes?.webkit ?? webkit,
+    }
   }
 
   onBegin(config: FullConfig, suite: Suite): void {
     this.configDir = config.configFile === undefined ? config.rootDir : dirname(config.configFile)
     log(`[CrvyRprtr] Starting run with ${suite.allTests().length} tests`)
+    this.environments = this.resolveEnvironments(config)
     this.transport.start()
     if (!this.ci) this.sendRegister(config)
+  }
+
+  /**
+   * Reads declared pins, resolves the effective build for every project, and
+   * applies `browserPinPolicy`. Invalid pins throw here — before any test runs.
+   */
+  private resolveEnvironments(config: FullConfig): RunEnvironments {
+    const projects = resolveProjectPins({ configMetadata: config.metadata, projects: config.projects })
+    const environments = buildRunEnvironments({
+      cwd: this.configDir,
+      projects,
+      executablePathFor: (browser) => this.browserTypes[browser].executablePath(),
+      dockerImage: process.env.CRVY_RPRTR_DOCKER_IMAGE,
+    })
+    for (const [projectName, environment] of Object.entries(environments)) {
+      const decision = evaluateBrowserPinPolicy({
+        policy: this.browserPinPolicy,
+        projectName,
+        environment,
+      })
+      if (decision.action === 'fail') throw new Error(decision.message)
+      if (decision.action === 'warn') console.warn(`[CrvyRprtr] ${decision.message}`)
+    }
+    return environments
   }
 
   private connect(): void {
@@ -82,6 +134,7 @@ export class CrvyRprtr implements Reporter {
         playwrightToHaveScreenshotPathTemplate: this.playwrightToHaveScreenshotPathTemplate,
         configFile: config.configFile,
         cwd: config.configFile === undefined ? process.cwd() : dirname(config.configFile),
+        ...(this.environments === undefined ? {} : { environments: this.environments }),
       },
     })
   }
@@ -215,7 +268,10 @@ export class CrvyRprtr implements Reporter {
   }
 
   async onEnd(result: FullResult): Promise<void> {
-    await this.transport.finish({ status: result.status }, () => this.flushPendingArtifacts())
+    await this.transport.finish(
+      { status: result.status, ...(this.environments === undefined ? {} : { environments: this.environments }) },
+      () => this.flushPendingArtifacts(),
+    )
   }
 
   private async flushPendingArtifacts(): Promise<void> {

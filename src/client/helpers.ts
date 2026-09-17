@@ -25,6 +25,18 @@ export {
 export { syncTreeState, collectTestsById } from './helpers/tree-sync'
 
 export {
+  pinStatusLabel,
+  pinStatusLabels,
+  isVisiblePinStatus,
+  environmentForProject,
+  environmentForTest,
+  testPinStatus,
+  isDriftedTest,
+  environmentBadgeEntries,
+  describeEnvironment,
+} from './helpers/browser-pins'
+
+export {
   checkSuite,
   openSuite,
   filterTests,

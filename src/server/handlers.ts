@@ -1,8 +1,9 @@
 import { existsSync } from 'fs'
 import { dirname, resolve } from 'path'
 
+import type { RunEnvironments } from '../browser-pins.ts'
 import { applyTestBeginEvent, applyTestEndEvent, finalizeRunEvent } from '../report-state.ts'
-import type { RegisterData, TestBeginData, TestEndData } from '../schemas.ts'
+import type { RegisterData, RunEndData, TestBeginData, TestEndData } from '../schemas.ts'
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
 import { resolveBaselineSnapshotPath, type ApprovalRouting } from './artifact-routes.ts'
 import { rewriteContainerPath, type ContainerPathMapping } from './docker-support.ts'
@@ -18,6 +19,7 @@ export interface HandlerContext {
     browsers: string[]
     isUpdateMode: boolean
     screenshotDir: string
+    environments: RunEnvironments
   }
   wsClients: Set<RuntimeWebSocket>
   currentRunIds: Set<string>
@@ -84,10 +86,10 @@ export function handleTestEnd(ctx: HandlerContext, data: TestEndData): void {
   broadcastToBrowsers(ctx.wsClients, message)
 }
 
-export async function handleRunEnd(
-  ctx: HandlerContext,
-  data: { status: 'passed' | 'failed' | 'skipped' },
-): Promise<void> {
+export async function handleRunEnd(ctx: HandlerContext, data: RunEndData): Promise<void> {
+  if (data.environments !== undefined) {
+    Object.assign(ctx.reportData.environments, data.environments)
+  }
   const removedTestIds = ctx.isFilteredRun
     ? []
     : Object.keys(ctx.reportData.tests).filter((id) => !ctx.currentRunIds.has(id))
@@ -110,14 +112,7 @@ export function handleApprove(): void {
 export function handleSync(ctx: HandlerContext): void {
   // Sync messages request a state synchronization
   console.log('[Server] Received sync message')
-  const message: ClientWebSocketMessage = {
-    type: 'sync',
-    data: {
-      tests: ctx.reportData.tests,
-      isUpdateMode: ctx.reportData.isUpdateMode,
-    },
-  }
-  broadcastToBrowsers(ctx.wsClients, message)
+  broadcastSync(ctx)
 }
 
 function applyContainerPathMapping(rawData: RegisterData, mapping: ContainerPathMapping): RegisterData {
@@ -150,9 +145,28 @@ function collectRegisterRoots(data: RegisterData): string[] {
   return roots
 }
 
+/** Pushes current state (tests + provenance) to connected browsers. */
+function broadcastSync(ctx: HandlerContext): void {
+  const message: ClientWebSocketMessage = {
+    type: 'sync',
+    data: {
+      tests: ctx.reportData.tests,
+      isUpdateMode: ctx.reportData.isUpdateMode,
+      ...(Object.keys(ctx.reportData.environments).length === 0 ? {} : { environments: ctx.reportData.environments }),
+    },
+  }
+  broadcastToBrowsers(ctx.wsClients, message)
+}
+
 export function handleRegister(ctx: HandlerContext, rawData: RegisterData): void {
   const mapping = ctx.routesContext.containerPathMapping
   const data: RegisterData = mapping === undefined ? rawData : applyContainerPathMapping(rawData, mapping)
+
+  if (data.environments !== undefined) {
+    Object.assign(ctx.reportData.environments, data.environments)
+    // Push provenance to already-connected browsers; the run's tests stream next.
+    broadcastSync(ctx)
+  }
 
   const roots = collectRegisterRoots(data)
 

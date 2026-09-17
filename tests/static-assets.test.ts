@@ -38,6 +38,7 @@ describe('Static asset routing', () => {
         browsers: ['chromium'],
         isUpdateMode: false,
         screenshotDir: './screenshots',
+        environments: {},
       },
       staticDir,
       saveReport: async () => {},

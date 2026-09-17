@@ -1,6 +1,7 @@
 // Core types used throughout the application
 // These types serve as the single source of truth
 
+import type { RunEnvironments } from './browser-pins.ts'
 import type { ScreenshotDeclaration } from './reporter-utils.ts'
 
 export type VisualSource = 'comparison' | 'baseline-only' | 'declared-only'
@@ -103,6 +104,7 @@ export interface WebSocketRunEndData {
 export interface WebSocketSyncData {
   tests: Record<string, TestData>
   isUpdateMode?: boolean
+  environments?: RunEnvironments
 }
 
 export type ClientWebSocketMessage =
@@ -174,6 +176,7 @@ export interface ClientBootstrapData {
   report: {
     tests: Record<string, TestData>
     isUpdateMode: boolean
+    environments?: RunEnvironments
   }
   liveUpdates: boolean
   approvalEnabled: boolean

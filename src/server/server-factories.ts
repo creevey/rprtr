@@ -1,4 +1,3 @@
-import type { TestData } from '../types.ts'
 import type { HandlerContext } from './handlers.ts'
 import type { ReportPersistence } from './report-persistence.ts'
 import type { RoutesContext } from './routes.ts'
@@ -8,13 +7,7 @@ import type { RunMode } from './run-mode.ts'
 import { broadcastToBrowsers } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
-interface ServerFactoryReportData {
-  isRunning: boolean
-  tests: Record<string, TestData>
-  browsers: string[]
-  isUpdateMode: boolean
-  screenshotDir: string
-}
+type ServerFactoryReportData = RoutesContext['reportData']
 
 function createServerRunController(
   routesContext: RoutesContext,

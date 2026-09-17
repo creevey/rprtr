@@ -1,11 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'path'
 
-import {
-  extractVitestScreenshots,
-  extractVitestScreenshotsFromModule,
-  loadTestSource,
-} from '../src/vitest-declarations'
+import { extractVitestScreenshots, loadTestSource } from '../src/vitest-declarations'
 
 const PLATFORM = process.platform
 
@@ -378,10 +374,12 @@ describe('extractVitestScreenshots', () => {
   })
 })
 
-describe('extractVitestScreenshotsFromModule', () => {
+describe('loadTestSource', () => {
   test('reads the module from disk and extracts declarations', () => {
     const modulePath = join(import.meta.dir, 'fixtures', 'vitest-declarations-sample.ts')
-    const extracted = extractVitestScreenshotsFromModule(modulePath, [], 'renders hero section', context)
+    const source = loadTestSource(modulePath)
+    expect(source).not.toBeNull()
+    const extracted = extractVitestScreenshots(source ?? '', [], 'renders hero section', context)
     expect(extracted).toEqual([
       {
         declaration: {
@@ -398,14 +396,8 @@ describe('extractVitestScreenshotsFromModule', () => {
   })
 
   test('an unreadable module degrades to no declarations', () => {
-    expect(loadTestSource(join(context.projectRoot, 'missing', 'hero.test.ts'))).toBeNull()
-    expect(
-      extractVitestScreenshotsFromModule(
-        join(context.projectRoot, 'missing', 'hero.test.ts'),
-        [],
-        'renders hero section',
-        context,
-      ),
-    ).toEqual([])
+    const missing = loadTestSource(join(context.projectRoot, 'missing', 'hero.test.ts'))
+    expect(missing).toBeNull()
+    expect(extractVitestScreenshots(missing ?? '', [], 'renders hero section', context)).toEqual([])
   })
 })

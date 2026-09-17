@@ -178,14 +178,3 @@ export function loadTestSource(moduleId: string): string | null {
     return null
   }
 }
-
-export function extractVitestScreenshotsFromModule(
-  moduleId: string,
-  titlePath: readonly string[],
-  testName: string,
-  context: VitestDeclarationContext,
-): ExtractedVitestScreenshot[] {
-  const source = loadTestSource(moduleId)
-  if (source === null) return []
-  return extractVitestScreenshots(source, titlePath, testName, context)
-}

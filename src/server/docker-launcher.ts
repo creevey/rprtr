@@ -1,4 +1,6 @@
-import { collectForwardedEnvNames } from './docker-env.ts'
+import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
+import { assertDockerPinsSatisfied } from './docker-preflight.ts'
+import { buildDockerRunArgs, stripCi } from './docker-run-args.ts'
 import {
   createDockerExec,
   detectProjectAgent,
@@ -8,21 +10,16 @@ import {
   pullDockerImage,
   resolveContainerCommand,
   resolveDockerImage,
-  rewritePlaywrightArgs,
   DEFAULT_CONTAINER_COMMAND,
   type DetectAgent,
   type DockerExec,
   type Warn,
 } from './docker-support.ts'
-import { CONTAINER_FONTCONFIG_PATH, ensureGrayscaleFontconfig } from './fontconfig.ts'
 import type { RunContext } from './run-controller.ts'
 import { resolvePlaywrightVersion } from './run-controller.ts'
 import type { LaunchParams, LaunchSpec, RunLauncher } from './run-launcher.ts'
 
 export const DOCKER_WORK_DIR = '/work'
-
-/** Module-private: only the arg vector and server URL built here use it. */
-const DOCKER_HOST_GATEWAY = 'host.docker.internal'
 
 export interface DockerOptions {
   image?: string
@@ -54,6 +51,10 @@ export interface DockerLauncherOptions {
   warn?: Warn
   /** Injectable host-platform seam for tests; defaults to process.platform. */
   platform?: NodeJS.Platform
+  /** Injectable pin reader for tests; defaults to spawning `playwright test --list --reporter=json`. */
+  readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  /** Injectable executable-path seam for tests; defaults to the installed browser types. */
+  browserExecutablePaths?: Partial<Record<PinBrowser, string>>
 }
 
 export class DockerUnavailableError extends Error {
@@ -77,18 +78,8 @@ interface PrepareDeps {
   detectAgent?: DetectAgent
   warn: Warn
   platform: NodeJS.Platform
-}
-
-interface LaunchDeps {
-  docker?: DockerOptions
-  workDir: string
-  containerName: string
-  port: number
-  env: Record<string, string | undefined>
-  image: string
-  command: readonly string[]
-  warn: Warn
-  platform: NodeJS.Platform
+  readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  browserExecutablePaths?: Partial<Record<PinBrowser, string>>
 }
 
 function defaultWarn(message: string): void {
@@ -125,6 +116,14 @@ async function prepareDocker(
   }
   state.image = image
 
+  await assertDockerPinsSatisfied({
+    cwd: ctx.cwd,
+    image,
+    warn: deps.warn,
+    readProjectPins: deps.readProjectPins,
+    browserExecutablePaths: deps.browserExecutablePaths,
+  })
+
   state.command = resolveContainerCommand({
     command: deps.docker?.command,
     hasCustomImage: deps.docker?.image !== undefined,
@@ -140,48 +139,6 @@ async function prepareDocker(
   }
 }
 
-function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], deps: LaunchDeps): string[] {
-  const { args: rewrittenArgs, bindMounts } = rewritePlaywrightArgs(playwrightArgs, ctx, deps.workDir, deps.warn)
-  const args = [
-    'run',
-    '--rm',
-    '--init',
-    '--name',
-    deps.containerName,
-    '--add-host',
-    `${DOCKER_HOST_GATEWAY}:host-gateway`,
-    '--ipc=host',
-  ]
-  if (deps.docker?.platform !== undefined) {
-    args.push('--platform', deps.docker.platform)
-  }
-  args.push('-v', `${ctx.cwd}:${deps.workDir}:rw`, '-w', deps.workDir)
-  for (const mount of bindMounts) {
-    args.push('-v', mount)
-  }
-  args.push('-e', `CRVY_RPRTR_SERVER_URL=ws://${DOCKER_HOST_GATEWAY}:${deps.port}`)
-  args.push('-e', 'CRVY_RPRTR_PORTABLE_ARTIFACTS=1', '-e', 'TZ=UTC', '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8')
-  args.push('-e', 'PLAYWRIGHT_HTML_OPEN=never')
-  if (deps.docker?.fontRendering !== 'inherit') {
-    args.push('-v', `${ensureGrayscaleFontconfig()}:${CONTAINER_FONTCONFIG_PATH}:ro`)
-  }
-  for (const key of collectForwardedEnvNames(deps.env, deps.platform)) {
-    args.push('-e', key)
-  }
-  if (deps.docker?.extraArgs !== undefined) args.push(...deps.docker.extraArgs)
-  args.push(deps.image, ...deps.command, 'playwright', ...rewrittenArgs)
-  return args
-}
-
-function stripCi(env: Record<string, string | undefined>): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = {}
-  for (const [key, value] of Object.entries(env)) {
-    if (key === 'CI') continue
-    out[key] = value
-  }
-  return out
-}
-
 interface LauncherDeps {
   exec: DockerExec
   workDir: string
@@ -193,6 +150,8 @@ interface LauncherDeps {
   platform: NodeJS.Platform
   docker?: DockerOptions
   port: number
+  readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  browserExecutablePaths?: Partial<Record<PinBrowser, string>>
 }
 
 function createState(docker?: DockerOptions): LauncherState {
@@ -205,6 +164,35 @@ function createState(docker?: DockerOptions): LauncherState {
   }
 }
 
+function prepareLauncher(
+  state: LauncherState,
+  deps: LauncherDeps,
+  ctx: RunContext,
+  onProgress: (phase: string) => void,
+): Promise<void> {
+  state.prepared ??= prepareDocker(
+    state,
+    deps.exec,
+    ctx,
+    {
+      docker: deps.docker,
+      getPlaywrightVersion: deps.getVersion,
+      detectAgent: deps.detectAgent,
+      warn: deps.warn,
+      platform: deps.platform,
+      readProjectPins: deps.readProjectPins,
+      browserExecutablePaths: deps.browserExecutablePaths,
+    },
+    onProgress,
+  ).catch((error: unknown) => {
+    // Reset so a later run re-probes after the user fixes the problem.
+    state.prepared = null
+    state.warnedWin32 = false
+    throw error
+  })
+  return state.prepared
+}
+
 function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
   return {
     mode: 'docker',
@@ -212,25 +200,7 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
       return state.available
     },
     prepare({ ctx, onProgress }): Promise<void> {
-      state.prepared ??= prepareDocker(
-        state,
-        deps.exec,
-        ctx,
-        {
-          docker: deps.docker,
-          getPlaywrightVersion: deps.getVersion,
-          detectAgent: deps.detectAgent,
-          warn: deps.warn,
-          platform: deps.platform,
-        },
-        onProgress,
-      ).catch((error: unknown) => {
-        // Reset so a later run re-probes after the user fixes the problem.
-        state.prepared = null
-        state.warnedWin32 = false
-        throw error
-      })
-      return state.prepared
+      return prepareLauncher(state, deps, ctx, onProgress)
     },
     launch({ ctx, playwrightArgs }: LaunchParams): LaunchSpec {
       const image = state.image ?? resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
@@ -268,5 +238,7 @@ export function createDockerLauncher(options: DockerLauncherOptions): RunLaunche
     platform: options.platform ?? process.platform,
     docker: options.docker,
     port: options.port,
+    readProjectPins: options.readProjectPins,
+    browserExecutablePaths: options.browserExecutablePaths,
   })
 }

@@ -2,6 +2,7 @@
 import { join } from 'path'
 import { parseArgs } from 'util'
 
+import { createDefaultBrowsersDeps, runBrowsersCommand } from './cli-browsers.ts'
 import { isDirectExecution } from './is-direct-execution.ts'
 import type { FontRendering } from './rendering.ts'
 import { startServer, type ServerOptions } from './server.ts'
@@ -51,6 +52,21 @@ export function printHelp(): void {
 
 export function wantsHelp(args: string[]): boolean {
   return args.includes('--help') || args.includes('-h')
+}
+
+export type CliInvocation =
+  | { kind: 'help' }
+  | { kind: 'browsers'; args: string[] }
+  | { kind: 'server'; options: ResolvedCliOptions }
+
+/**
+ * Routes the `browsers` command group before artifact-dir mode, so
+ * `crvy-rprtr browsers list` never parses `browsers` as an artifact directory.
+ */
+export function parseCliInvocation(args: string[]): CliInvocation {
+  if (wantsHelp(args)) return { kind: 'help' }
+  if (args[0] === 'browsers') return { kind: 'browsers', args: args.slice(1) }
+  return { kind: 'server', options: resolveCliOptions(args) }
 }
 
 function parseRunMode(value: string | undefined): RunMode | undefined {
@@ -125,11 +141,13 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
 }
 
 if (isDirectExecution(import.meta.url)) {
-  const args = process.argv.slice(2)
+  const invocation = parseCliInvocation(process.argv.slice(2))
 
-  if (wantsHelp(args)) {
+  if (invocation.kind === 'help') {
     printHelp()
+  } else if (invocation.kind === 'browsers') {
+    process.exitCode = await runBrowsersCommand(invocation.args, createDefaultBrowsersDeps())
   } else {
-    await startServer(resolveCliOptions(args))
+    await startServer(invocation.options)
   }
 }

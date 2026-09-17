@@ -1,7 +1,5 @@
 import { spawn } from 'child_process'
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { isAbsolute, join, relative, sep } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 
 import { detect } from 'package-manager-detector/detect'
 
@@ -212,20 +210,6 @@ export function rewritePlaywrightArgs(
     }
   }
   return { args, bindMounts }
-}
-
-/** Reads the installed `@playwright/test` version from cwd; null when unresolvable (→ positional fallback). */
-export function resolvePlaywrightVersion(cwd: string): string | null {
-  try {
-    const req = createRequire(join(cwd, 'package.json'))
-    const pkgPath = req.resolve('@playwright/test/package.json')
-    const pkg: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'))
-    return typeof pkg === 'object' && pkg !== null && 'version' in pkg && typeof pkg.version === 'string'
-      ? pkg.version
-      : null
-  } catch {
-    return null
-  }
 }
 
 /**

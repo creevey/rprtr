@@ -1,11 +1,7 @@
+import { resolvePlaywrightVersion } from '../browser-pins.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
-import {
-  buildTestListEntries,
-  rewriteContainerTestDescriptors,
-  resolvePlaywrightVersion,
-  type ContainerPathMapping,
-} from './docker-support.ts'
+import { buildTestListEntries, rewriteContainerTestDescriptors, type ContainerPathMapping } from './docker-support.ts'
 import {
   defaultDeleteTempFile,
   defaultWriteTempFile,
@@ -19,7 +15,7 @@ import { createRealSpawn, createRealTimers } from './run-process.ts'
 
 export { resolvePlaywrightLaunch } from './run-launcher.ts'
 export { buildTestListEntries } from './docker-support.ts'
-export { resolvePlaywrightVersion } from './docker-support.ts'
+export { resolvePlaywrightVersion } from '../browser-pins.ts'
 export { createRealSpawn, createRealTimers } from './run-process.ts'
 
 export type RunnerKind = 'playwright' | 'vitest'

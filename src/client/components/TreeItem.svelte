@@ -1,7 +1,16 @@
 <script lang="ts">
   import { isTest, isDefined, type CrvyRprtrSuite, type CrvyRprtrTest } from '../../types';
-  import { getTestPath, hasScreenshots, isTreeVisible } from '../helpers';
-  import { cn, statusDotClass } from '../cn';
+  import type { RunEnvironments } from '../../schemas';
+  import {
+    getTestPath,
+    hasScreenshots,
+    isTreeVisible,
+    environmentForTest,
+    testPinStatus,
+    describeEnvironment,
+    pinStatusLabel,
+  } from '../helpers';
+  import { cn, pinBadgeClass, statusDotClass } from '../cn';
   import TreeItem from './TreeItem.svelte';
 
   interface Props {
@@ -12,13 +21,14 @@
     isUpdateMode: boolean;
     runEnabled: boolean;
     isRunning: boolean;
+    environments?: RunEnvironments;
     onSelect: (test: CrvyRprtrTest) => void;
     onOpen: (path: string[], opened: boolean) => void;
     onToggle: (path: string[], checked: boolean) => void;
     onRun: (item: CrvyRprtrSuite | CrvyRprtrTest) => void;
   }
 
-  let { item, level, selectedId, focusedPath, isUpdateMode, runEnabled, isRunning, onSelect, onOpen, onToggle, onRun }: Props = $props();
+  let { item, level, selectedId, focusedPath, isUpdateMode, runEnabled, isRunning, environments, onSelect, onOpen, onToggle, onRun }: Props = $props();
 
   let itemIsTest = $derived(isTest(item));
   let suiteItem = $derived(item as CrvyRprtrSuite);
@@ -32,6 +42,13 @@
     path.length === focusedPath.length &&
     path.every((p, i) => p === focusedPath[i])
   );
+  // The leaf node carries the project (browser) label, so it is the project node.
+  let pinStatus = $derived(itemIsTest ? testPinStatus(environments, testItem) : 'unknown');
+  let pinEnvironment = $derived(itemIsTest ? environmentForTest(environments, testItem) : undefined);
+  let showPinBadge = $derived(
+    pinStatus === 'pinned' || pinStatus === 'drift' || pinStatus === 'unverifiable'
+  );
+  let isDrifted = $derived(pinStatus === 'drift');
 
   let rowEl: HTMLDivElement | undefined = $state();
 
@@ -53,6 +70,7 @@
     'group flex items-center py-1 cursor-pointer transition-colors select-none gap-1 hover:bg-surface-hover',
     isSelected && 'bg-surface-selected',
     isFocused && 'outline outline-1 outline-accent -outline-offset-1',
+    isDrifted && 'bg-error/10',
   )}
   style:padding-left="{16 + level * 16}px"
   style:padding-right="16px"
@@ -60,6 +78,7 @@
   onkeydown={(e) => { if (e.key === 'Enter') handleClick(); }}
   role="treeitem"
   aria-selected={isSelected}
+  data-drift={isDrifted ? 'true' : undefined}
   tabindex="-1"
 >
   {#if hasChildren}
@@ -68,6 +87,17 @@
   <span class="flex-1 text-ui whitespace-nowrap overflow-hidden text-ellipsis">
     {itemIsTest ? (testItem.browser ?? testItem.title) : suiteItem.path[suiteItem.path.length - 1] ?? 'Tests'}
   </span>
+  {#if showPinBadge}
+    <span
+      class={cn(
+        'shrink-0 px-1.5 py-0.5 rounded-sm border text-[10px] leading-none whitespace-nowrap',
+        pinBadgeClass(pinStatus),
+      )}
+      data-testid="test-pin-badge"
+      data-pin-status={pinStatus}
+      title={pinEnvironment === undefined ? undefined : describeEnvironment(testItem.browser, pinEnvironment)}
+    >{pinStatusLabel(pinStatus)}</span>
+  {/if}
   {#if runEnabled}
     <button
       class={cn(
@@ -98,6 +128,7 @@
       {isUpdateMode}
       {runEnabled}
       {isRunning}
+      {environments}
       {onSelect}
       {onOpen}
       {onToggle}

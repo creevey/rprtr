@@ -3,7 +3,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { mergeOfflineReportsIntoTests } from '../src/offline-reports'
+import { mergeOfflineReports } from '../src/offline-reports'
 import { attachmentsToImages } from '../src/report-utils'
 import { OfflineReportSchema, TestBeginDataSchema, TestEndDataSchema, safeParse } from '../src/schemas'
 import { handleHttpRequest } from '../src/server/routes'
@@ -183,10 +183,10 @@ describe('Vitest browser integration', () => {
     const replayReport = OfflineReportSchema.parse(
       JSON.parse((await readFile(reportPath, 'utf-8')).replaceAll(fixtureDir, tempFixtureDir)) as unknown,
     )
-    const replayedTests = mergeOfflineReportsIntoTests({}, [replayReport], {
+    const replayedTests = mergeOfflineReports({}, [replayReport], {
       screenshotDir: join(outputDir, 'screenshots'),
       screenshotsBaseUrl: '/screenshots/',
-    })
+    }).tests
 
     const testId = Object.keys(replayedTests)[0]
     if (testId === undefined) {
@@ -206,6 +206,7 @@ describe('Vitest browser integration', () => {
           browsers: ['chromium'],
           isUpdateMode: false,
           screenshotDir: join(outputDir, 'screenshots'),
+          environments: {},
         },
         staticDir: './dist',
         saveReport: async (): Promise<void> => {},

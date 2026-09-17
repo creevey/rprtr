@@ -1,3 +1,4 @@
+import type { RunEnvironments } from './browser-pins.ts'
 import { isCI } from './ci.ts'
 import { log, logError } from './debug-log.ts'
 import { type RunEvent, writeOfflineReport, writeStaticArtifact } from './reporter-artifact-ops.ts'
@@ -83,7 +84,10 @@ export class ReporterTransport {
     }
   }
 
-  async finish(runEndData: { status: string }, flushPendingArtifacts?: () => Promise<void>): Promise<void> {
+  async finish(
+    runEndData: { status: string; environments?: RunEnvironments },
+    flushPendingArtifacts?: () => Promise<void>,
+  ): Promise<void> {
     this.send({ type: 'run-end', data: runEndData })
     if (this.ci) {
       await flushPendingArtifacts?.()

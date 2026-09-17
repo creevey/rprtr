@@ -147,6 +147,33 @@ re-run on the current commit resolves them.
   flavors (via CI `--update-snapshots` or approving actuals from the artifacts report).
 - Keep generation and verification in the same image going forward (the "Run & update
   baselines" button in docker mode already does this).
+- ✅ Pin the browser build so a later Playwright upgrade cannot silently change it (below).
+
+## Pin the browser build, not just the image
+
+Matching the image covers OS-level rendering (fonts, fontconfig, libraries); the browser
+build inside it comes from the installed Playwright revision. **A Playwright upgrade changes
+the bundled browser** and re-splits every baseline under a new build even when the image tag
+is unchanged — the same failure signature as this report, from a different axis.
+
+A browser pin makes that axis explicit and checked:
+
+```ts
+metadata: { crvyRprtr: { browser: 'chromium', version: '147' } }
+```
+
+The value is a prefix (`147`, `147.0`, `147.0.7727.15`). The reporter resolves the effective
+build from the installed Playwright's own manifest (offline, honoring platform
+`revisionOverrides`) and records it with the run; the live UI, static artifact, and offline
+reports show the pinned build and status, and drifted tests are marked in the sidebar.
+`crvy-rprtr browsers resolve chromium@147` reports the Playwright version (and therefore the
+Docker image tag) that ships the pinned build, and `crvy-rprtr browsers check --strict` gates
+CI on it. With `browserPinPolicy: 'fail'` a drifting pin fails the run at reporter init; in
+Docker mode it rejects the run before a container starts.
+
+**Migrating from creevey:** creevey's `browserVersion` option had the same purpose. It is not
+read by rprtr — translate it to the `metadata.crvyRprtr` pin above. See
+[Browser Pinning](../README.md#browser-pinning).
 
 ## Reproduction / diagnostic cheat sheet
 

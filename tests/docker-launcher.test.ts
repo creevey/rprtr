@@ -183,6 +183,8 @@ describe('DockerLauncher.launch', () => {
       '-e',
       'CRVY_RPRTR_SERVER_URL=ws://host.docker.internal:3000',
       '-e',
+      'CRVY_RPRTR_DOCKER_IMAGE=mcr.microsoft.com/playwright:v1.59.0-noble',
+      '-e',
       'CRVY_RPRTR_PORTABLE_ARTIFACTS=1',
       '-e',
       'TZ=UTC',

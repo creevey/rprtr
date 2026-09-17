@@ -13,6 +13,7 @@ function createCtx(mapping?: ContainerPathMapping): { ctx: HandlerContext; route
       browsers: ['chromium'],
       isUpdateMode: false,
       screenshotDir: './screenshots',
+      environments: {},
     },
     staticDir: '.',
     saveReport: () => Promise.resolve(),

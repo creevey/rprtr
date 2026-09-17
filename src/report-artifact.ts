@@ -3,7 +3,13 @@ import { dirname, relative, resolve, sep } from 'path'
 import { fileURLToPath } from 'url'
 
 import { applyTestBeginEvent, applyTestEndEvent, createMutableReportState, finalizeRunEvent } from './report-state.ts'
-import { ClientBootstrapDataSchema, TestBeginDataSchema, TestEndDataSchema, safeParse } from './schemas.ts'
+import {
+  ClientBootstrapDataSchema,
+  RunEndDataSchema,
+  TestBeginDataSchema,
+  TestEndDataSchema,
+  safeParse,
+} from './schemas.ts'
 import type { ClientBootstrapData, OfflineEvent } from './types.ts'
 
 const DEFAULT_REPORT_HTML_PATH = './crvy-rprtr.html'
@@ -88,14 +94,11 @@ async function getPackagedAssetPath(fileName: string): Promise<string> {
   )
 }
 
-function buildStaticBootstrapData(
+function replayEvents(
+  state: ReturnType<typeof createMutableReportState>,
   events: Array<{ type: OfflineEvent['type']; data: unknown }>,
-  screenshotDir: string,
-  htmlPath: string,
-): ClientBootstrapData {
-  const screenshotBaseUrl = toBrowserDirPath(relative(dirname(htmlPath), resolve(screenshotDir)))
-  const state = createMutableReportState(screenshotDir)
-
+  screenshotsBaseUrl: string,
+): void {
   for (const event of events) {
     switch (event.type) {
       case 'test-begin': {
@@ -108,20 +111,38 @@ function buildStaticBootstrapData(
       case 'test-end': {
         const parsed = safeParse(TestEndDataSchema, event.data)
         if (parsed !== null) {
-          applyTestEndEvent(state, parsed, { screenshotsBaseUrl: screenshotBaseUrl })
+          applyTestEndEvent(state, parsed, { screenshotsBaseUrl })
         }
         break
       }
-      case 'run-end':
+      case 'run-end': {
+        const parsed = safeParse(RunEndDataSchema, event.data)
+        if (parsed?.environments !== undefined) {
+          Object.assign(state.reportData.environments, parsed.environments)
+        }
         finalizeRunEvent(state)
         break
+      }
     }
   }
+}
+
+function buildStaticBootstrapData(
+  events: Array<{ type: OfflineEvent['type']; data: unknown }>,
+  screenshotDir: string,
+  htmlPath: string,
+): ClientBootstrapData {
+  const screenshotBaseUrl = toBrowserDirPath(relative(dirname(htmlPath), resolve(screenshotDir)))
+  const state = createMutableReportState(screenshotDir)
+  replayEvents(state, events, screenshotBaseUrl)
 
   const bootstrapData: ClientBootstrapData = {
     report: {
       tests: state.reportData.tests,
       isUpdateMode: state.reportData.isUpdateMode,
+      ...(Object.keys(state.reportData.environments).length === 0
+        ? {}
+        : { environments: state.reportData.environments }),
     },
     liveUpdates: false,
     approvalEnabled: false,

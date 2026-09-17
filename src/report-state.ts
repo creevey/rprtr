@@ -1,5 +1,6 @@
 import { join } from 'path'
 
+import type { RunEnvironments } from './browser-pins.ts'
 import { isAnyAbsolutePath } from './path-utils.ts'
 import {
   attachmentsToImages,
@@ -21,6 +22,8 @@ export interface MutableReportData {
   browsers: string[]
   isUpdateMode: boolean
   screenshotDir: string
+  /** Effective browser environments keyed by project; empty when the reporter sent none. */
+  environments: RunEnvironments
 }
 
 export interface MutableReportState {
@@ -136,6 +139,7 @@ export function createMutableReportState(screenshotDir = './screenshots'): Mutab
       browsers: ['chromium'],
       isUpdateMode: false,
       screenshotDir,
+      environments: {},
     },
     currentRunIds: new Set<string>(),
   }

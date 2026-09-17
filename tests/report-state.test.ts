@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { mergeOfflineReportsIntoTests } from '../src/offline-reports'
+import { mergeOfflineReports } from '../src/offline-reports'
 import { applyTestBeginEvent, applyTestEndEvent, createMutableReportState } from '../src/report-state'
 import { ReportApiResponseSchema, TestEndDataSchema, safeParse } from '../src/schemas'
 import type { OfflineReport, TestData } from '../src/types'
@@ -653,10 +653,10 @@ describe('report-state approval metadata', () => {
       ],
     }
 
-    const tests = mergeOfflineReportsIntoTests({}, [offlineReport], {
+    const tests = mergeOfflineReports({}, [offlineReport], {
       screenshotDir: '/srv/offline/screenshots',
       screenshotsBaseUrl: '/screenshots/',
-    })
+    }).tests
 
     const image = tests['test-replay-targets']?.results?.[0]?.images?.['header']
     expect(image?.approveFromPath).toBe('/srv/offline/screenshots/test-replay-targets/actual-hash.png')
@@ -698,7 +698,7 @@ describe('report-state approval metadata', () => {
       ],
     }
 
-    const tests = mergeOfflineReportsIntoTests({}, [legacyReport], { screenshotsBaseUrl: '/screenshots/' })
+    const tests = mergeOfflineReports({}, [legacyReport], { screenshotsBaseUrl: '/screenshots/' }).tests
 
     const image = tests['test-legacy']?.results?.[0]?.images?.['header']
     expect(image?.source).toBe('comparison')

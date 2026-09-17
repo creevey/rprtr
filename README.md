@@ -50,15 +50,85 @@ npx crvy-rprtr ./artifacts
 
 ## Reporter Options
 
-| Option                                   | Type     | Default                        | Description                                                                                            |
-| ---------------------------------------- | -------- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `serverUrl`                              | `string` | `"ws://localhost:3000"`        | WebSocket URL of the Crvy Rprtr server                                                                 |
-| `screenshotDir`                          | `string` | `"./screenshots"`              | Directory for saving screenshot artifacts                                                              |
-| `offlineReportPath`                      | `string` | `"./crvy-rprtr-{worker}.json"` | Path for offline report when server is unavailable                                                     |
-| `reportHtmlPath`                         | `string` | `"./crvy-rprtr.html"`          | Path for the browser-openable static report HTML                                                       |
-| `playwrightSnapshotDir`                  | `string` | `undefined`                    | Override the Playwright snapshot directory used for passed-baseline display lookup                     |
-| `playwrightSnapshotPathTemplate`         | `string` | `undefined`                    | Mirror Playwright `snapshotPathTemplate` for passed-baseline display resolution                        |
-| `playwrightToHaveScreenshotPathTemplate` | `string` | `undefined`                    | Mirror Playwright `expect.toHaveScreenshot.pathTemplate` for passed-baseline display; takes precedence |
+| Option                                   | Type               | Default                        | Description                                                                                            |
+| ---------------------------------------- | ------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `serverUrl`                              | `string`           | `"ws://localhost:3000"`        | WebSocket URL of the Crvy Rprtr server                                                                 |
+| `screenshotDir`                          | `string`           | `"./screenshots"`              | Directory for saving screenshot artifacts                                                              |
+| `offlineReportPath`                      | `string`           | `"./crvy-rprtr-{worker}.json"` | Path for offline report when server is unavailable                                                     |
+| `reportHtmlPath`                         | `string`           | `"./crvy-rprtr.html"`          | Path for the browser-openable static report HTML                                                       |
+| `playwrightSnapshotDir`                  | `string`           | `undefined`                    | Override the Playwright snapshot directory used for passed-baseline display lookup                     |
+| `playwrightSnapshotPathTemplate`         | `string`           | `undefined`                    | Mirror Playwright `snapshotPathTemplate` for passed-baseline display resolution                        |
+| `playwrightToHaveScreenshotPathTemplate` | `string`           | `undefined`                    | Mirror Playwright `expect.toHaveScreenshot.pathTemplate` for passed-baseline display; takes precedence |
+| `browserPinPolicy`                       | `"warn" \| "fail"` | `"warn"`                       | What a drifted browser pin does: `warn` annotates the run, `fail` fails it at reporter init            |
+
+## Browser Pinning
+
+Screenshot baselines are only comparable when the browser build that produced them is the
+same. A Playwright upgrade silently changes the bundled browser revision, which shows up as
+mass diffs that are impossible to tell apart from real regressions. A browser pin declares
+which build a project's baselines belong to, and rprtr verifies every run against it:
+
+```ts
+// playwright.config.ts
+export default defineConfig({
+  projects: [
+    {
+      name: 'chromium',
+      metadata: { crvyRprtr: { browser: 'chromium', version: '147' } },
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+})
+```
+
+- `browser` is `chromium`, `firefox`, or `webkit`, and must match the project's configured
+  browser. A pin on the config root (`metadata.crvyRprtr`) applies to projects without their
+  own pin; the project-level pin wins.
+- `version` is a **prefix**: one or more dot-separated numeric segments. `147` and `147.0`
+  both match `147.0.7727.15`; `147.0.77` does not. An invalid pin fails reporter
+  initialization with the project name and the offending value.
+- Pins are matched against the build Playwright actually resolves on the current platform
+  (offline, from the installed `playwright-core/browsers.json`), never a cross-platform
+  default. Projects that launch a branded channel or an explicit executable are reported as
+  `unverifiable` instead of drifting.
+- Statuses: `pinned`, `drift`, `unpinned`, `unverifiable`, and `unknown` (data from
+  artifacts written by older rprtr versions). The live UI, the static `crvy-rprtr.html`
+  artifact, and offline JSON reports all carry the recorded environment (Playwright version,
+  browser version and revision, Docker image) and the status; drifted tests are marked in
+  the sidebar.
+
+With the default `warn` policy a drifted pin only annotates the run — tests still pass, and
+drifted screenshots remain reviewable and approvable. `browserPinPolicy: 'fail'` makes a
+drift fail the run at reporter init with the project, declared pin, effective build, and a
+remedy. In Docker mode a drifting pin rejects the run before any container starts.
+
+### Migrating from creevey
+
+Creevey's `browserVersion` config option pinned the browser build for a project. In rprtr
+the equivalent is the `metadata.crvyRprtr` pin above — creevey's config file is not read.
+Translate a creevey `browserVersion: '147'` into
+`metadata: { crvyRprtr: { browser: 'chromium', version: '147' } }` on the same project, then
+run `npx crvy-rprtr browsers check --strict` in CI to keep the pin enforced. If you do not
+want to convert yet, remove the pin: unpinned projects behave exactly as before.
+
+### `browsers` CLI
+
+The CLI resolves pins against a build map (cached in the user cache directory for 24 hours;
+`--refresh` forces a reload) without the reporter ever doing network access:
+
+```bash
+npx crvy-rprtr browsers list                 # stable Playwright releases and their builds
+npx crvy-rprtr browsers list --all           # include pre-releases
+npx crvy-rprtr browsers resolve chromium@147 # build, revision, the Playwright version that ships it,
+                                             # plus the installed environment's state and a remedy
+npx crvy-rprtr browsers check                # evaluate declared pins against the installed environment
+npx crvy-rprtr browsers check --strict       # exit non-zero when a pin drifted (CI gate)
+```
+
+`resolve` recommends the newest matching build and lists alternatives when a prefix matches
+several; it fails with the nearest major versions when nothing matches. `check` is fully
+offline, reports each pinned project's declared pin, effective build, and status, and never
+fails on `unpinned` or `unverifiable` projects.
 
 ## Server CLI Options
 
@@ -72,7 +142,9 @@ If `artifact-dir` is provided, the CLI treats it as the directory containing:
 - `screenshots/`
 - `crvy-rprtr-*.json`
 
-Explicit flags override the paths derived from `artifact-dir`.
+Explicit flags override the paths derived from `artifact-dir`. The same binary also exposes
+the `browsers` command group for pin resolution and CI checks — see
+[Browser Pinning](#browser-pinning).
 
 | Option             | Short | Default         | Description                                                                                                                                                                                                                                                                             |
 | ------------------ | ----- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

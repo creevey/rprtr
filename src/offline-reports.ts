@@ -3,9 +3,11 @@ import { join } from 'path'
 
 import pLimit from 'p-limit'
 
+import type { RunEnvironments } from './browser-pins.ts'
 import { applyTestBeginEvent, applyTestEndEvent, createMutableReportState, finalizeRunEvent } from './report-state.ts'
 import {
   OfflineReportSchema,
+  RunEndDataSchema,
   TestBeginDataSchema,
   TestEndDataSchema,
   safeParse,
@@ -62,7 +64,7 @@ async function readOfflineReport(filePath: string): Promise<ParsedOfflineReport 
 }
 
 export async function loadOfflineReports(
-  reportData: { tests: Record<string, TestData>; screenshotDir: string },
+  reportData: { tests: Record<string, TestData>; screenshotDir: string; environments?: RunEnvironments },
   offlineReportDir: string,
 ): Promise<void> {
   const offlineReportPaths = await findOfflineReportPaths(offlineReportDir)
@@ -77,17 +79,30 @@ export async function loadOfflineReports(
     return
   }
 
-  reportData.tests = mergeOfflineReportsIntoTests(reportData.tests, validReports, {
+  const merged = mergeOfflineReports(reportData.tests, validReports, {
     screenshotDir: reportData.screenshotDir,
     screenshotsBaseUrl: '/screenshots/',
   })
+  reportData.tests = merged.tests
+  reportData.environments = merged.environments
 }
 
-export function mergeOfflineReportsIntoTests(
+export interface MergeOfflineReportsOptions {
+  screenshotDir?: string
+  screenshotsBaseUrl?: string
+}
+
+export interface MergeOfflineReportsResult {
+  tests: Record<string, TestData>
+  environments: RunEnvironments
+}
+
+/** Replays offline reports into tests plus the run's effective environments (from `run-end`). */
+export function mergeOfflineReports(
   existingTests: Record<string, TestData>,
   offlineReports: ParsedOfflineReport[],
-  options: { screenshotDir?: string; screenshotsBaseUrl?: string } = {},
-): Record<string, TestData> {
+  options: MergeOfflineReportsOptions = {},
+): MergeOfflineReportsResult {
   const state = createMutableReportState(options.screenshotDir)
   let shouldFinalize = false
 
@@ -108,9 +123,14 @@ export function mergeOfflineReportsIntoTests(
           }
           break
         }
-        case 'run-end':
+        case 'run-end': {
+          const parsed = safeParse(RunEndDataSchema, event.data)
+          if (parsed?.environments !== undefined) {
+            Object.assign(state.reportData.environments, parsed.environments)
+          }
           shouldFinalize = true
           break
+        }
       }
     }
   }
@@ -120,7 +140,10 @@ export function mergeOfflineReportsIntoTests(
   }
 
   return {
-    ...existingTests,
-    ...state.reportData.tests,
+    tests: {
+      ...existingTests,
+      ...state.reportData.tests,
+    },
+    environments: state.reportData.environments,
   }
 }
