@@ -30,9 +30,13 @@ describe('RunResponseSchema', () => {
     expect(parsed).toEqual({ ok: false, reason: 'docker-unavailable' })
   })
 
-  test('accepts docker-unsupported-for-runner reason', () => {
-    const parsed = safeParse(RunResponseSchema, { ok: false, reason: 'docker-unsupported-for-runner' })
-    expect(parsed).toEqual({ ok: false, reason: 'docker-unsupported-for-runner' })
+  test('accepts docker-missing-browser-hook reason', () => {
+    const parsed = safeParse(RunResponseSchema, { ok: false, reason: 'docker-missing-browser-hook' })
+    expect(parsed).toEqual({ ok: false, reason: 'docker-missing-browser-hook' })
+  })
+
+  test('rejects the superseded docker-unsupported-for-runner reason', () => {
+    expect(safeParse(RunResponseSchema, { ok: false, reason: 'docker-unsupported-for-runner' })).toBeNull()
   })
 })
 

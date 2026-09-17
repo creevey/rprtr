@@ -330,8 +330,8 @@
           ? 'A run is already in progress'
           : body?.reason === 'no-tests'
             ? 'No tests selected'
-            : body?.reason === 'docker-unsupported-for-runner'
-              ? 'Vitest runs are not supported in docker mode — start the server with --run-mode local or auto'
+            : body?.reason === 'docker-missing-browser-hook'
+              ? 'Vitest docker mode needs the browser-endpoint hook — add the CRVY_RPRTR_BROWSER_WS snippet to vitest.config.ts (see docs/docker-screenshot-determinism.md)'
               : 'Connect a test reporter to enable running';
     }
   }

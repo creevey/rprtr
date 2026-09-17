@@ -119,9 +119,15 @@ tests/__screenshots__/<test file>/<name>-<browser>-<platform>.png
 
 Actual/diff artifacts land in `.vitest-attachments/` (gitignored); the reporter's offline output (`screenshots/`, `crvy-rprtr-*.json`, `crvy-rprtr.html`) is gitignored too.
 
+## Docker mode (sidecar browsers)
+
+With `--run-mode docker` (or auto mode with a reachable daemon), the server routes this example's runs through a **managed `playwright run-server` sidecar**: it pulls `mcr.microsoft.com/playwright:v<playwright-version>-noble`, starts a warm container with the same grayscale fontconfig/locale pinning as Playwright docker mode, and exports the container's loopback endpoint through `CRVY_RPRTR_BROWSER_WS`. Vitest itself still runs on the host — only the browser moves into the image — so the config above is all the cooperation needed, and the same snippet works in CI against a sidecar you manage yourself (set `CRVY_RPRTR_BROWSER_WS` before `vitest run`).
+
+Explicit docker mode without the snippet in the project's Vitest config fails fast with `docker-missing-browser-hook`; auto mode warns once and runs locally. See [docker screenshot determinism](../../../docs/docker-screenshot-determinism.md) for the full contract.
+
 ## Limitations
 
-- **Terminal workflow** — this example runs Vitest from your terminal (or the UI run buttons). There is no docker-mode section: Vitest runs are not containerized, so [Docker mode](../../../README.md#docker-mode) applies to Playwright runs only.
+- **Terminal workflow** — this example runs Vitest from your terminal (or the UI run buttons); docker mode is exercised through the UI server, which manages the sidecar.
 - **Per-test rerun selection is approximate** (`-t` matches the title path as a substring); Playwright keeps exact `file:line` selection.
 - **New product features reach this example only after the next npm publish** — it depends on the published `@crvy/rprtr` package (see version note).
 

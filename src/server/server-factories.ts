@@ -1,3 +1,4 @@
+import type { BrowserSidecar } from './browser-sidecar.ts'
 import type { HandlerContext } from './handlers.ts'
 import type { ReportPersistence } from './report-persistence.ts'
 import type { RoutesContext } from './routes.ts'
@@ -18,6 +19,7 @@ function createServerRunController(
   saveReport: () => Promise<void>,
   launcher: RunLauncher,
   localLauncher: RunLauncher,
+  browserSidecar: BrowserSidecar,
   configuredRunMode: RunMode,
 ): RunController {
   return new RunController({
@@ -36,6 +38,7 @@ function createServerRunController(
     timers: createRealTimers(),
     launcher,
     localLauncher,
+    browserSidecar,
     getRunMode: (): RunMode => configuredRunMode,
   })
 }
@@ -56,6 +59,7 @@ export function createRunControllerAndHandlers(
   persistence: ReportPersistence,
   launcher: RunLauncher,
   localLauncher: RunLauncher,
+  browserSidecar: BrowserSidecar,
   configuredRunMode: RunMode,
 ): { runController: RunController; getHandlerContext: () => HandlerContext } {
   let isFilteredRun = false
@@ -70,6 +74,7 @@ export function createRunControllerAndHandlers(
     persistence.saveReport,
     launcher,
     localLauncher,
+    browserSidecar,
     configuredRunMode,
   )
   const getHandlerContext = (): HandlerContext => ({

@@ -40,11 +40,12 @@ export function readInstalledBrowserManifest(cwd: string): BrowserManifest | nul
   }
 }
 
-/** Reads the installed `@playwright/test` version from cwd; null when unresolvable. */
-export function resolvePlaywrightVersion(cwd: string): string | null {
+/** Module-private: resolution order shared by the version probe and the sidecar CLI selection. */
+const PLAYWRIGHT_PACKAGES = ['playwright', '@playwright/test'] as const
+
+function readPackageVersion(req: ReturnType<typeof createRequire>, name: string): string | null {
   try {
-    const req = createRequire(join(cwd, 'package.json'))
-    const pkgPath = req.resolve('@playwright/test/package.json')
+    const pkgPath = req.resolve(`${name}/package.json`)
     const pkg: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'))
     return typeof pkg === 'object' && pkg !== null && 'version' in pkg && typeof pkg.version === 'string'
       ? pkg.version
@@ -52,6 +53,20 @@ export function resolvePlaywrightVersion(cwd: string): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Reads the installed Playwright version from cwd, trying `playwright` first
+ * (Vitest browser projects configure the provider from it) and falling back to
+ * `@playwright/test`; null when unresolvable.
+ */
+export function resolvePlaywrightVersion(cwd: string): string | null {
+  const req = createRequire(join(cwd, 'package.json'))
+  for (const name of PLAYWRIGHT_PACKAGES) {
+    const version = readPackageVersion(req, name)
+    if (version !== null) return version
+  }
+  return null
 }
 
 export interface ReadInstalledEnvironmentOptions extends Omit<

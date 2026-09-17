@@ -4,6 +4,7 @@ import { buildDockerRunArgs, stripCi } from './docker-run-args.ts'
 import {
   createDockerExec,
   detectProjectAgent,
+  DockerUnavailableError,
   forceRemoveContainer,
   isDockerImagePresent,
   probeDockerDaemon,
@@ -57,12 +58,7 @@ export interface DockerLauncherOptions {
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
 }
 
-export class DockerUnavailableError extends Error {
-  constructor() {
-    super('Docker daemon is not available')
-    this.name = 'DockerUnavailableError'
-  }
-}
+export { DockerUnavailableError }
 
 interface LauncherState {
   available: boolean | undefined

@@ -1,5 +1,6 @@
 import { isCI } from '../ci.ts'
 import type { FontRendering } from '../rendering.ts'
+import { createBrowserSidecar, type BrowserSidecar } from './browser-sidecar.ts'
 import { createDockerLauncher, DOCKER_WORK_DIR, type DockerOptions } from './docker-launcher.ts'
 import { createDockerExec, probeDockerDaemon } from './docker-support.ts'
 import type { RoutesContextOptions } from './routes-context.ts'
@@ -10,6 +11,8 @@ export interface ResolvedRunBackend {
   launcher: RunLauncher
   /** Always-local launcher; Vitest runs fall back to it even in docker mode. */
   localLauncher: RunLauncher
+  /** Warm `playwright run-server` sidecar backing docker-mode Vitest runs. */
+  browserSidecar: BrowserSidecar
   /** The configured (not resolved) run mode; 'auto' stays 'auto'. */
   configuredRunMode: RunMode
   routesContextOptions: RoutesContextOptions
@@ -54,6 +57,10 @@ export async function resolveRunBackend(options: ResolveRunBackendOptions): Prom
   return {
     launcher,
     localLauncher: createLocalLauncher({ port: options.port, fontRendering: options.fontRendering }),
+    browserSidecar: createBrowserSidecar({
+      docker: { fontRendering: options.fontRendering, ...options.docker },
+      exec: dockerExec,
+    }),
     configuredRunMode: options.runMode ?? 'auto',
     routesContextOptions: {
       runInfo: { mode: resolvedRunMode },

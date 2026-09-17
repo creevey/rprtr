@@ -175,6 +175,37 @@ Docker mode it rejects the run before a container starts.
 read by rprtr — translate it to the `metadata.crvyRprtr` pin above. See
 [Browser Pinning](../README.md#browser-pinning).
 
+## Vitest browser mode: same image via a browser sidecar
+
+Vitest browser-mode suites get the same rendering contract through a different mechanism: rprtr
+does not containerize the vitest process (host `node_modules` carry platform-pinned native
+bindings), it runs a **warm `playwright run-server` sidecar** in the same
+`mcr.microsoft.com/playwright:v<version>-noble` image and points the locally-running vitest at it.
+The image, the grayscale fontconfig drop-in, and the `TZ=UTC`/`LANG=C.UTF-8`/`LC_ALL=C.UTF-8`
+environment are pinned exactly as in Playwright docker mode, so screenshots taken through the
+sidecar share this document's determinism unit.
+
+The project's `vitest.config.ts` carries the documented hook:
+
+```ts
+provider: playwright({
+  connectOptions: process.env.CRVY_RPRTR_BROWSER_WS
+    ? { wsEndpoint: process.env.CRVY_RPRTR_BROWSER_WS, exposeNetwork: '<loopback>' }
+    : undefined,
+}),
+```
+
+rprtr exports `CRVY_RPRTR_BROWSER_WS` (the sidecar's loopback-only endpoint) when it spawns
+vitest in docker/auto mode. In explicit docker mode a config without the hook fails fast with
+`docker-missing-browser-hook` instead of silently running with host browsers; auto mode warns once
+and runs locally. The variable is inert without a docker-mode server, so the same config works in
+CI — set it against a sidecar you manage yourself (e.g. your compose `playwright run-server`
+service) and vitest connects to that instead.
+
+The browser port is published on `127.0.0.1` only, the container is reused across runs while it
+stays warm, and it is removed on server shutdown or force-kill. Screenshots, baselines, and
+offline artifacts are written on the host (vitest runs there), so nothing is path-rewritten.
+
 ## Reproduction / diagnostic cheat sheet
 
 ```bash

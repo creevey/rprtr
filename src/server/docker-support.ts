@@ -13,6 +13,13 @@ export interface DockerExecResult {
 
 export type DockerExec = (args: string[]) => Promise<DockerExecResult>
 
+export class DockerUnavailableError extends Error {
+  constructor() {
+    super('Docker daemon is not available')
+    this.name = 'DockerUnavailableError'
+  }
+}
+
 export function createDockerExec(): DockerExec {
   return (args) =>
     new Promise((resolve, reject) => {

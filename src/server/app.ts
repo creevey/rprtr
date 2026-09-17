@@ -12,6 +12,7 @@ import {
   safeParse,
   type IncomingWebSocketMessage,
 } from '../schemas.ts'
+import { type BrowserSidecar } from './browser-sidecar.ts'
 import { type DockerOptions } from './docker-launcher.ts'
 import { fileExists } from './file-utils.ts'
 import {
@@ -198,9 +199,10 @@ async function setupRoutesContext(
   routesContext: RoutesContext
   launcher: RunLauncher
   localLauncher: RunLauncher
+  browserSidecar: BrowserSidecar
   configuredRunMode: RunMode
 }> {
-  const { launcher, localLauncher, configuredRunMode, routesContextOptions } = await resolveRunBackend({
+  const { launcher, localLauncher, browserSidecar, configuredRunMode, routesContextOptions } = await resolveRunBackend({
     runMode: options.runMode,
     docker: options.docker,
     fontRendering: options.fontRendering,
@@ -211,7 +213,7 @@ async function setupRoutesContext(
     ...routesContextOptions,
   })
   await seedRunContext(routesContext, options)
-  return { routesContext, launcher, localLauncher, configuredRunMode }
+  return { routesContext, launcher, localLauncher, browserSidecar, configuredRunMode }
 }
 
 /** Fire-and-forget startup listing for a discovered Vitest project: the sidebar
@@ -242,7 +244,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const wsClients = new Set<RuntimeWebSocket>()
   const currentRunIds = new Set<string>()
   const persistence = createReportPersistence(reportFile, () => withoutDiscoveredTests(reportData))
-  const { routesContext, launcher, localLauncher, configuredRunMode } = await setupRoutesContext(
+  const { routesContext, launcher, localLauncher, browserSidecar, configuredRunMode } = await setupRoutesContext(
     options,
     reportData,
     staticDir,
@@ -258,6 +260,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
     persistence,
     launcher,
     localLauncher,
+    browserSidecar,
     configuredRunMode,
   )
   const handleRequest = (req: Request): Promise<Response> => handleHttpRequest(routesContext, req, runController)

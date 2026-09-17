@@ -56,6 +56,12 @@ interface Fixture {
   setRunMode: (mode: 'local' | 'docker' | 'auto' | undefined) => void
   warnings: string[]
   prepareCalls: { value: number }
+  setLauncherMode: (mode: 'local' | 'docker') => void
+  setHasBrowserHook: (value: boolean) => void
+  setSidecarEnsureFails: (value: boolean) => void
+  sidecarEnsureCalls: { value: number }
+  sidecarDisposeCalls: { value: number }
+  sidecarPhases: string[]
 }
 
 function createFixture(
@@ -81,6 +87,12 @@ function createFixture(
   const probeCalls = { value: 0 }
   const warnings: string[] = []
   const prepareCalls = { value: 0 }
+  let launcherMode: 'local' | 'docker' = 'local'
+  let hasBrowserHook = false
+  let sidecarEnsureFails = false
+  const sidecarEnsureCalls = { value: 0 }
+  const sidecarDisposeCalls = { value: 0 }
+  const sidecarPhases: string[] = []
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -113,7 +125,9 @@ function createFixture(
     resolveReporter,
     containerPathMapping,
     launcher: {
-      mode: 'local' as const,
+      get mode(): 'local' | 'docker' {
+        return launcherMode
+      },
       get available(): boolean | undefined {
         return launcherAvailable
       },
@@ -130,6 +144,20 @@ function createFixture(
         return { cmd: resolved.cmd, args: resolved.args, env: { STUB_ENV: '1' } }
       },
     },
+    browserSidecar: {
+      endpoint: 'ws://127.0.0.1:49153/',
+      ensure: (ctx, onProgress): Promise<string> => {
+        sidecarEnsureCalls.value += 1
+        onProgress('starting-sidecar')
+        sidecarPhases.push('starting-sidecar')
+        if (sidecarEnsureFails) return Promise.reject(new Error('sidecar unavailable'))
+        return Promise.resolve('ws://127.0.0.1:49153/')
+      },
+      dispose: (): void => {
+        sidecarDisposeCalls.value += 1
+      },
+    },
+    hasBrowserHook: (): boolean => hasBrowserHook,
     writeTempFile: (content: string): string => {
       const path = `/tmp/crvy-rprtr-test-list-${writtenTempFiles.length}.txt`
       writtenTempFiles.push({ path, content })
@@ -190,6 +218,18 @@ function createFixture(
     },
     warnings,
     prepareCalls,
+    setLauncherMode: (mode): void => {
+      launcherMode = mode
+    },
+    setHasBrowserHook: (value): void => {
+      hasBrowserHook = value
+    },
+    setSidecarEnsureFails: (value): void => {
+      sidecarEnsureFails = value
+    },
+    sidecarEnsureCalls,
+    sidecarDisposeCalls,
+    sidecarPhases,
   }
 }
 
@@ -487,36 +527,96 @@ describe('RunController.start', () => {
 })
 
 describe('RunController.start Vitest docker scoping', () => {
-  test('explicit docker run mode refuses Vitest runs without spawning', () => {
+  test('explicit docker with the hook spawns local vitest with the sidecar endpoint', async () => {
     const f = createFixture(VITEST_CTX)
     f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    expect(await f.controller.prepareRun()).toEqual({ ok: true })
+    expect(f.sidecarEnsureCalls.value).toBe(1)
     const result = f.controller.start({})
-    expect(result).toEqual({ ok: false, reason: 'docker-unsupported-for-runner' })
+    expect(result).toEqual({ ok: true })
+    expect(f.spawnCalls).toHaveLength(1)
+    expect(f.spawnCalls[0]!.args).toEqual(['vitest', 'run', '--config', '/proj/vitest.config.ts'])
+    expect(f.spawnCalls[0]!.opts.env).toMatchObject({ CRVY_RPRTR_BROWSER_WS: 'ws://127.0.0.1:49153/' })
+    expect(f.broadcasts).toContainEqual({ type: 'run-status', data: { running: true, mode: 'docker' } })
+    expect(f.warnings).toHaveLength(0)
+  })
+
+  test('explicit docker without the hook refuses with docker-missing-browser-hook', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(false)
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: false, reason: 'docker-missing-browser-hook' })
     expect(f.spawnCalls).toHaveLength(0)
+    expect(f.sidecarEnsureCalls.value).toBe(0)
     expect(f.broadcasts).toHaveLength(0)
     expect(f.runningFlag.value).toBe(false)
     expect(f.warnings).toHaveLength(0)
   })
 
-  test('auto run mode falls back to a local spawn with one warning', () => {
+  test('auto with a docker backend and no hook falls back to a local spawn with one warning', () => {
     const f = createFixture(VITEST_CTX)
     f.setRunMode('auto')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(false)
     const result = f.controller.start({})
     expect(result).toEqual({ ok: true })
     expect(f.spawnCalls).toHaveLength(1)
-    expect(f.spawnCalls[0]!.args).toEqual(['vitest', 'run', '--config', '/proj/vitest.config.ts'])
+    expect((f.spawnCalls[0]!.opts.env as Record<string, string | undefined>).CRVY_RPRTR_BROWSER_WS).toBeUndefined()
     expect(f.broadcasts).toEqual([{ type: 'run-status', data: { running: true, mode: 'local' } }])
     expect(f.warnings).toHaveLength(1)
   })
 
-  test('local run mode spawns locally without warning', () => {
+  test('auto with a docker backend and the hook uses the sidecar', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('auto')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    expect(await f.controller.prepareRun()).toEqual({ ok: true })
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: true })
+    expect(f.sidecarEnsureCalls.value).toBe(1)
+    expect(f.spawnCalls[0]!.opts.env).toMatchObject({ CRVY_RPRTR_BROWSER_WS: 'ws://127.0.0.1:49153/' })
+    expect(f.broadcasts).toContainEqual({ type: 'run-status', data: { running: true, mode: 'docker' } })
+  })
+
+  test('auto with a local backend never touches the sidecar or warns', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('auto')
+    f.setHasBrowserHook(true)
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: true })
+    expect(f.spawnCalls).toHaveLength(1)
+    expect((f.spawnCalls[0]!.opts.env as Record<string, string | undefined>).CRVY_RPRTR_BROWSER_WS).toBeUndefined()
+    expect(f.sidecarEnsureCalls.value).toBe(0)
+    expect(f.broadcasts).toEqual([{ type: 'run-status', data: { running: true, mode: 'local' } }])
+    expect(f.warnings).toHaveLength(0)
+  })
+
+  test('local run mode spawns locally without warning or sidecar interaction', () => {
     const f = createFixture(VITEST_CTX)
     f.setRunMode('local')
+    f.setHasBrowserHook(true)
     const result = f.controller.start({})
     expect(result).toEqual({ ok: true })
     expect(f.spawnCalls).toHaveLength(1)
     expect(f.spawnCalls[0]!.args[0]).toBe('vitest')
+    expect(f.sidecarEnsureCalls.value).toBe(0)
     expect(f.warnings).toHaveLength(0)
+  })
+
+  test('a sidecar run cannot start before a successful prepare', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    const result = f.controller.start({})
+    expect(result).toEqual({ ok: false, reason: 'docker-unavailable' })
+    expect(f.spawnCalls).toHaveLength(0)
+    expect(f.runningFlag.value).toBe(false)
   })
 
   test('Playwright runs ignore the docker scoping branch', () => {
@@ -529,12 +629,15 @@ describe('RunController.start Vitest docker scoping', () => {
     expect(f.warnings).toHaveLength(0)
   })
 
-  test('Vitest runs never trigger docker preparation', async () => {
+  test('Vitest runs without a docker backend never trigger docker preparation', async () => {
     const f = createFixture(VITEST_CTX)
     f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(false)
     const preparation = await f.controller.prepareRun()
     expect(preparation).toEqual({ ok: true })
     expect(f.prepareCalls.value).toBe(0)
+    expect(f.sidecarEnsureCalls.value).toBe(0)
   })
 
   test('Playwright runs still prepare', async () => {
@@ -543,6 +646,85 @@ describe('RunController.start Vitest docker scoping', () => {
     const preparation = await f.controller.prepareRun()
     expect(preparation).toEqual({ ok: true })
     expect(f.prepareCalls.value).toBe(1)
+  })
+})
+
+describe('RunController.prepareRun Vitest sidecar', () => {
+  test('ensures the sidecar and broadcasts its phases with docker mode', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    expect(await f.controller.prepareRun()).toEqual({ ok: true })
+    expect(f.sidecarEnsureCalls.value).toBe(1)
+    expect(f.sidecarPhases).toEqual(['starting-sidecar'])
+    expect(f.broadcasts).toEqual([
+      { type: 'run-status', data: { running: true, mode: 'docker', phase: 'starting-sidecar' } },
+    ])
+    expect(f.prepareCalls.value).toBe(0)
+  })
+
+  test('sidecar ensure failure reports docker-unavailable and the run never spawns', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    f.setSidecarEnsureFails(true)
+    expect(await f.controller.prepareRun()).toEqual({ ok: false, reason: 'docker-unavailable' })
+    expect(f.broadcasts).toContainEqual({ type: 'run-status', data: { running: false, mode: 'docker' } })
+    expect(f.controller.start({})).toEqual({ ok: false, reason: 'docker-unavailable' })
+    expect(f.spawnCalls).toHaveLength(0)
+    expect(f.runningFlag.value).toBe(false)
+  })
+
+  test('local-mode Vitest runs skip the sidecar', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('local')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    expect(await f.controller.prepareRun()).toEqual({ ok: true })
+    expect(f.sidecarEnsureCalls.value).toBe(0)
+  })
+
+  test('auto without the hook skips the sidecar and warns only on start', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('auto')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(false)
+    expect(await f.controller.prepareRun()).toEqual({ ok: true })
+    expect(f.sidecarEnsureCalls.value).toBe(0)
+    expect(f.warnings).toHaveLength(0)
+    f.controller.start({})
+    expect(f.warnings).toHaveLength(1)
+  })
+
+  test('dispose tears down the sidecar even without a running child', () => {
+    const f = createFixture(VITEST_CTX)
+    f.controller.dispose()
+    expect(f.sidecarDisposeCalls.value).toBe(1)
+  })
+
+  test('the stop force-kill path tears down the sidecar', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    await f.controller.prepareRun()
+    f.controller.start({})
+    f.controller.stop()
+    f.advanceTimer(5000)
+    expect(f.sidecarDisposeCalls.value).toBe(1)
+  })
+
+  test('the run-status broadcast on child exit keeps the docker mode', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    await f.controller.prepareRun()
+    f.controller.start({})
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect(f.broadcasts).toContainEqual({ type: 'run-status', data: { running: false, mode: 'docker' } })
   })
 })
 
