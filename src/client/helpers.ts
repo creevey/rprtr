@@ -6,7 +6,9 @@ export {
   getFailedTests,
   getCheckedTests,
   hasScreenshots,
-  isTreeVisible,
+  hasRunResults,
+  isNonVisual,
+  describeResultDisplay,
 } from './helpers/status'
 
 export {

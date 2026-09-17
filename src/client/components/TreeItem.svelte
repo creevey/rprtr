@@ -3,8 +3,7 @@
   import type { RunEnvironments } from '../../schemas';
   import {
     getTestPath,
-    hasScreenshots,
-    isTreeVisible,
+    isNonVisual,
     environmentForTest,
     testPinStatus,
     describeEnvironment,
@@ -37,6 +36,7 @@
   let hasChildren = $derived(!itemIsTest && Object.keys(suiteItem.children).length > 0);
   let isOpen = $derived(!itemIsTest && suiteItem.opened);
   let isSelected = $derived(itemIsTest && testItem.id === selectedId);
+  let nonVisual = $derived(isNonVisual(item));
   let isFocused = $derived(
     focusedPath !== null &&
     path.length === focusedPath.length &&
@@ -98,6 +98,12 @@
       title={pinEnvironment === undefined ? undefined : describeEnvironment(testItem.browser, pinEnvironment)}
     >{pinStatusLabel(pinStatus)}</span>
   {/if}
+  {#if nonVisual}
+    <span
+      class="shrink-0 px-1.5 py-0.5 rounded-sm border border-edge bg-surface-input text-fg-muted text-[10px] leading-none"
+      title="This test passed without screenshot assertions — nothing to compare or approve"
+    >no visual</span>
+  {/if}
   {#if runEnabled}
     <button
       class={cn(
@@ -119,7 +125,7 @@
 </div>
 
 {#if isOpen}
-  {#each Object.values(suiteItem.children).filter(isDefined).filter((c) => isTreeVisible(c as CrvyRprtrSuite | CrvyRprtrTest)) as child}
+  {#each Object.values(suiteItem.children).filter(isDefined) as child}
     <TreeItem
       item={child as CrvyRprtrSuite | CrvyRprtrTest}
       level={level + 1}

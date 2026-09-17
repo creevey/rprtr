@@ -1,4 +1,11 @@
-import { type CrvyRprtrSuite, type CrvyRprtrTest, type TestStatus, isTest, getChildrenArray } from '../../types'
+import {
+  type CrvyRprtrSuite,
+  type CrvyRprtrTest,
+  type TestResult,
+  type TestStatus,
+  isTest,
+  getChildrenArray,
+} from '../../types'
 
 export const testStatuses: TestStatus[] = ['unknown', 'pending', 'running', 'failed', 'approved', 'success', 'retrying']
 
@@ -34,7 +41,6 @@ export function countTestsStatus(suite: CrvyRprtrSuite): {
   let suiteOrTest
   while ((suiteOrTest = cases.pop())) {
     if (isTest(suiteOrTest)) {
-      if (!isTreeVisible(suiteOrTest)) continue
       if (suiteOrTest.status === 'approved') approvedCount++
       if (suiteOrTest.status === 'success') successCount++
       if (suiteOrTest.status === 'failed') failedCount++
@@ -69,14 +75,37 @@ export function hasScreenshots(item: CrvyRprtrSuite | CrvyRprtrTest): boolean {
 }
 
 /**
- * Sidebar/tree visibility: a test shows when it has screenshot artifacts — or
- * when it has no results yet, i.e. it was discovered but never ran (pending) or
- * is currently in flight (running). Finished tests without artifacts stay
- * hidden: the sidebar lists visual comparisons, not the whole suite.
+ * True when the item (or any descendant) has run results — a run actually
+ * streamed a status for it, unlike a discovered-but-never-run placeholder.
  */
-export function isTreeVisible(item: CrvyRprtrSuite | CrvyRprtrTest): boolean {
+export function hasRunResults(item: CrvyRprtrSuite | CrvyRprtrTest): boolean {
   if (isTest(item)) {
-    return item.results === undefined || hasScreenshots(item)
+    return (item.results?.length ?? 0) > 0
   }
-  return getChildrenArray(item.children).some((child) => isTreeVisible(child))
+  return getChildrenArray(item.children).some((child) => hasRunResults(child))
+}
+
+/**
+ * True for a test (or a suite whose tests all) ran without producing any
+ * screenshot artifacts — a plain DOM/logic assertion test. The sidebar marks
+ * these so a green run's test count matches the runner's ("Tests 3 passed")
+ * while making it obvious which entries carry no screenshots to review.
+ */
+export function isNonVisual(item: CrvyRprtrSuite | CrvyRprtrTest): boolean {
+  return hasRunResults(item) && !hasScreenshots(item)
+}
+
+export type ResultDisplay = 'image' | 'error' | 'passed-no-visual' | 'empty'
+
+/**
+ * What the results page should show for a test result. Images win (diff views
+ * tell the visual story); a failure without images surfaces its error message;
+ * a pass without images explains that the test has no screenshot assertions.
+ */
+export function describeResultDisplay(result: TestResult | undefined | null): ResultDisplay {
+  if (result === undefined || result === null) return 'empty'
+  if (result.images !== undefined && Object.keys(result.images).length > 0) return 'image'
+  if (result.status === 'failed' && result.error !== undefined) return 'error'
+  if (result.status === 'success') return 'passed-no-visual'
+  return 'empty'
 }

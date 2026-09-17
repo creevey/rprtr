@@ -4,8 +4,6 @@
   import {
     countTestsStatus,
     filterTests,
-    hasScreenshots,
-    isTreeVisible,
     parseFilterString,
     environmentBadgeEntries,
     describeEnvironment,
@@ -56,11 +54,7 @@
 
   let status = $derived(countTestsStatus(tests));
   let filteredTests = $derived(filterTests(tests, filter));
-  let visibleChildren = $derived(
-    Object.values(filteredTests.children)
-      .filter(isDefined)
-      .filter((c) => isTreeVisible(c as CrvyRprtrSuite | CrvyRprtrTest))
-  );
+  let visibleChildren = $derived(Object.values(filteredTests.children).filter(isDefined));
   let environmentBadges = $derived(environmentBadgeEntries(environments));
 
   function handleFilterInput(e: Event): void {

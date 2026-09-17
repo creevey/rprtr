@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CrvyRprtrTest, ImagesViewMode } from '../../types';
+  import { describeResultDisplay } from '../helpers';
   import { viewModes, VIEW_MODE_KEY } from '../viewMode';
   import { cn } from '../cn';
   import SlideView from './SlideView.svelte';
@@ -26,6 +27,7 @@
   let totalRetries = $derived(test.results?.length ?? 0);
   let hasDiffAndExpect = $derived(Boolean(image?.diff && image?.expect));
   let isDeclaredOnly = $derived(image?.source === 'declared-only');
+  let noImageDisplay = $derived(image === null ? describeResultDisplay(result) : 'image');
 
   let imagesWithError = $derived(
     result?.images
@@ -118,7 +120,25 @@
   <div class="flex-1 overflow-auto min-h-0">
     <div class="min-h-full p-4 max-md:p-2 flex justify-center items-center">
       {#if !image}
-        <div class="flex-1 flex items-center justify-center text-fg-muted text-base">No image to display</div>
+        {#if noImageDisplay === 'error'}
+          <div class="max-w-xl w-full rounded-md border-2 border-red-500/60 bg-surface-panel px-5 py-6">
+            <h3 class="m-0 text-sm font-semibold text-error uppercase tracking-wide">Failed without screenshots</h3>
+            <p class="mt-2 mb-0 text-sm leading-6 text-fg-muted">
+              This test failed without producing any screenshot comparisons. The assertion message:
+            </p>
+            <pre class="mt-3 px-3 py-2 rounded-sm bg-surface-input text-xs leading-5 text-fg whitespace-pre-wrap overflow-x-auto m-0">{result?.error}</pre>
+          </div>
+        {:else if noImageDisplay === 'passed-no-visual'}
+          <div class="max-w-xl w-full rounded-md border border-edge bg-surface-panel px-5 py-6 text-center">
+            <h3 class="m-0 text-sm font-semibold text-fg-bright uppercase tracking-wide">Passed — no screenshots</h3>
+            <p class="mt-3 text-sm leading-6 text-fg-muted">
+              This test passed without any screenshot assertions (toMatchScreenshot / toHaveScreenshot),
+              so there is no image to compare or approve.
+            </p>
+          </div>
+        {:else}
+          <div class="flex-1 flex items-center justify-center text-fg-muted text-base">No image to display</div>
+        {/if}
       {:else if isDeclaredOnly}
         <div class="max-w-xl w-full rounded-md border border-edge bg-surface-panel px-5 py-6 text-center">
           <h3 class="m-0 text-sm font-semibold text-fg-bright uppercase tracking-wide">Passed Visual Assertion</h3>
