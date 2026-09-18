@@ -17,8 +17,8 @@
 
 ## 4. `launchOptions.env` detection
 
-- [ ] 4.1 Write failing tests that `onBegin` warns once, naming the project, when a resolved config or project sets `use.launchOptions.env` while pinning is active — and does not warn when pinning was skipped or when the config applies the exported helper. Verify: `cd tests && bun test reporter-font-rendering.test.ts` (expect failures)
-- [ ] 4.2 Implement the detection in `CrvyRprtr.onBegin`, reading the resolved config without mutating it. Verify: `cd tests && bun test reporter-font-rendering.test.ts`, `bun run typecheck`
+- [x] 4.1 Write failing tests that `onBegin` warns once, naming the project, when a resolved config or project sets `use.launchOptions.env` while pinning is active — and does not warn when pinning was skipped or when the config applies the exported helper. Verify: `cd tests && bun test reporter-font-rendering.test.ts` (expect failures)
+- [x] 4.2 Implement the detection in `CrvyRprtr.onBegin`, reading the resolved config without mutating it. Verify: `cd tests && bun test reporter-font-rendering.test.ts`, `bun run typecheck`
 
 ## 5. End-to-end guard on the Playwright ordering assumption
 

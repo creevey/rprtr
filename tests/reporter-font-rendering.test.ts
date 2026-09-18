@@ -9,10 +9,12 @@ const PINNED_PATH = '/tmp/crvy-rprtr/fonts.conf'
 interface Harness {
   env: Record<string, string | undefined>
   logs: string[]
+  reporter: CrvyRprtr
 }
 
 function construct(options: CrvyRprtrOptions = {}, seams: Partial<ReporterSeams> = {}, env = {}): Harness {
-  const harness: Harness = { env: { ...env }, logs: [] }
+  const logs: string[] = []
+  const harnessEnv: Record<string, string | undefined> = { ...env }
   const reporter = new CrvyRprtr(
     { ci: true, ...options },
     {
@@ -21,14 +23,13 @@ function construct(options: CrvyRprtrOptions = {}, seams: Partial<ReporterSeams>
         firefox: { executablePath: (): string => '/firefox' },
         webkit: { executablePath: (): string => '/webkit' },
       },
-      env: harness.env,
-      log: (message: string): void => void harness.logs.push(message),
+      env: harnessEnv,
+      log: (message: string): void => void logs.push(message),
       fontconfig: { platform: 'linux', exists: (): boolean => true, writeConfig: (): string => PINNED_PATH },
       ...seams,
     },
   )
-  expect(reporter).toBeDefined()
-  return harness
+  return { env: harnessEnv, logs, reporter }
 }
 
 describe('CrvyRprtr font rendering', () => {
@@ -67,5 +68,63 @@ describe('CrvyRprtr font rendering', () => {
 
   test('rejects an invalid fontRendering value at reporter init', () => {
     expect(() => construct({ fontRendering: 'greyscale' } as unknown as CrvyRprtrOptions)).toThrow(/fontRendering/)
+  })
+})
+
+function configWith(projects: Array<{ name: string; use?: unknown }>): object {
+  return {
+    configFile: '/proj/playwright.config.ts',
+    rootDir: '/proj',
+    metadata: {},
+    projects: projects.map((project) => ({ metadata: {}, use: {}, ...project })),
+  }
+}
+
+const suiteStub = { allTests: (): unknown[] => [] }
+
+describe('CrvyRprtr launchOptions.env detection', () => {
+  function beginWith(projects: Array<{ name: string; use?: unknown }>, options: CrvyRprtrOptions = {}): string[] {
+    const warnings: string[] = []
+    const harness = construct(options, { warn: (message: string): void => void warnings.push(message) })
+    expect(harness.env).toBeDefined()
+    harness.reporter.onBegin(configWith(projects) as never, suiteStub as never)
+    return warnings
+  }
+
+  test('warns once, naming the project, when a project replaces the browser environment', () => {
+    const warnings = beginWith([{ name: 'chromium', use: { launchOptions: { env: { MY_VAR: 'mine' } } } }])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('chromium')
+    expect(warnings[0]).toMatch(/deterministicLaunchOptions/)
+  })
+
+  test('names every affected project in the one warning', () => {
+    const warnings = beginWith([
+      { name: 'chromium', use: { launchOptions: { env: { A: '1' } } } },
+      { name: 'firefox', use: { launchOptions: { env: { B: '2' } } } },
+      { name: 'webkit', use: {} },
+    ])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('chromium')
+    expect(warnings[0]).toContain('firefox')
+    expect(warnings[0]).not.toContain('webkit')
+  })
+
+  test('does not warn when the config applies the exported helper', () => {
+    expect(
+      beginWith([{ name: 'chromium', use: { launchOptions: { env: { FONTCONFIG_FILE: rootFontconfigPath() } } } }]),
+    ).toEqual([])
+  })
+
+  test('does not warn when no project sets a browser environment', () => {
+    expect(beginWith([{ name: 'chromium', use: { launchOptions: { args: ['--no-sandbox'] } } }])).toEqual([])
+  })
+
+  test('does not warn when pinning was skipped, since nothing was dropped', () => {
+    expect(
+      beginWith([{ name: 'chromium', use: { launchOptions: { env: { MY_VAR: 'mine' } } } }], {
+        fontRendering: 'inherit',
+      }),
+    ).toEqual([])
   })
 })
