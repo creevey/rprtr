@@ -20,5 +20,5 @@
 
 ## 5. Confirm main is green
 
-- [ ] 5.1 Full gate: `bun run check` and `bun run test:playwright`
+- [x] 5.1 Full gate: `bun run check` and `bun run test:playwright`
 - [ ] 5.2 Confirm on CI that `Lint & Type Check`, `Bun Tests`, `Playwright Tests` and `Build` all pass on the branch, and note that `Docker Smoke` stays red until the `optional-vitest-peer` change lands. Verify: `gh run list --branch <branch> --limit 1`
