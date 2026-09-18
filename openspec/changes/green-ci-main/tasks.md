@@ -16,7 +16,7 @@
 
 ## 4. Flaky pin assertion
 
-- [ ] 4.1 Raise the `waitFor` budget in `tests/browser-pin-reporter.test.ts` from 3 s to 10 s, keeping the polling interval. Verify: `cd tests && bun test browser-pin-reporter.test.ts`
+- [x] 4.1 Raise the `waitFor` budget in `tests/browser-pin-reporter.test.ts` from 3 s to 10 s, keeping the polling interval. Verify: `cd tests && bun test browser-pin-reporter.test.ts`
 
 ## 5. Confirm main is green
 

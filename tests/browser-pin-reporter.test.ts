@@ -58,7 +58,10 @@ function suiteStub(): object {
   return { allTests: () => [] }
 }
 
-async function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
+// 3 s failed in 2 of 5 CI runs, each at 3017-3019 ms: a loaded shared runner,
+// not a defect. The assertion is about payload content, not latency, so a
+// higher ceiling costs nothing when the condition is met in milliseconds.
+async function waitFor(condition: () => boolean, timeoutMs = 10000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (condition()) return
