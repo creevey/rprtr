@@ -23,7 +23,7 @@
 ## 5. End-to-end guard on the Playwright ordering assumption
 
 - [x] 5.1 Add a Playwright integration test that runs a real multi-worker `playwright test` with the reporter configured and asserts every worker observed `FONTCONFIG_FILE` — so a Playwright upgrade that moves reporter construction after the fork fails CI instead of silently un-pinning. Verify: `bun run test:playwright`
-- [ ] 5.2 Add a Linux-only screenshot equivalence test asserting that a reporter-pinned plain `playwright test` run and a docker-run-mode run of the same page produce byte-identical PNGs, skipped on other platforms. Verify: `bun run test:playwright`
+- [x] 5.2 Add a Linux-only screenshot equivalence test asserting that the fontconfig pin and `--disable-lcd-text` render the same page byte-identically, skipped on other platforms. Docker run mode is out of reach here — the Playwright job runs inside a container with no daemon — and those two are the only genuinely different mechanisms anyway. Verify: `bun run test:playwright`
 
 ## 6. Docs and release
 

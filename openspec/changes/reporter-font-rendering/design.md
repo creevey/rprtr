@@ -43,6 +43,8 @@ A reporter constructor therefore runs strictly before any worker exists, and the
 
 **Reuse the option name and values from the run modes** (`fontRendering: 'grayscale' | 'inherit'`) rather than introducing a reporter-specific name, and validate it with Zod so a typo fails at reporter init rather than silently inheriting. There is no existing reporter-options schema to extend — reporter options are plain interfaces read with `?? default`, `browserPinPolicy` included — so this adds a focused `src/schemas/reporter-options.ts` covering the one option rather than retrofitting validation onto the whole surface, which would change how every existing option fails.
 
+**Test the two mechanisms that actually differ.** The reporter pin, both run modes and `deterministicLaunchOptions()` all set the same `FONTCONFIG_FILE` to the same generated config, so comparing them tests nothing. The genuinely different pair is fontconfig versus Chromium's `--disable-lcd-text`, and that is what the equivalence test captures. A reporter-versus-docker-mode comparison would need a Docker daemon, which the Playwright container job does not have — every existing docker test is gated behind `CRVY_DOCKER_SMOKE` in its own job for that reason.
+
 ## Risks / Trade-offs
 
 - **A consumer's existing baselines were captured with subpixel AA, and this change flips them on upgrade.** → Same one-time regeneration the helper already documents, but it now arrives without the consumer opting in, so it is a minor-version note in CHANGELOG and README, and `fontRendering: 'inherit'` is the one-line revert.
