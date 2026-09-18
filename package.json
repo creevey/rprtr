@@ -72,6 +72,7 @@
     "typecheck": "tsc --noEmit",
     "knip": "knip-bun --strict",
     "duplicates": "jscpd",
+    "lockfiles": "bun scripts/check-lockfiles.ts",
     "test:bun": "bun run build && cd tests && bun test *.test.ts",
     "test:playwright": "bun run build && bunx playwright test",
     "test": "bun run test:bun && bun run test:playwright",

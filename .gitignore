@@ -54,6 +54,11 @@ reports/
 tests/fixtures/docker-smoke/node_modules/
 tests/fixtures/docker-smoke/package-lock.json
 tests/fixtures/docker-smoke/crvy-rprtr.tgz
+
+# Packed from source: the example consumes the ./vitest export, which no
+# published version has. Regenerate with `bun run pack` in the example.
+examples/vitest-browser/crvy-rprtr.tgz
+examples/vitest-browser/bun.lock
 tests/fixtures/docker-smoke/screenshots/
 tests/fixtures/docker-smoke/report.json
 tests/fixtures/docker-smoke/test-results/

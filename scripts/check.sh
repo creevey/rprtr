@@ -129,7 +129,7 @@ if [ "$STAGED_MODE" = true ]; then
   fi
 else
   # Run all checks except publint in parallel (test:bun builds dist/ as a side effect)
-  checks=("lint" "typecheck" "format:check" "knip" "test:bun" "duplicates")
+  checks=("lint" "typecheck" "format:check" "knip" "test:bun" "duplicates" "lockfiles")
   failed=0
   pids=()
 
