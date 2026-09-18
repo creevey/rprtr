@@ -15,5 +15,5 @@
 
 ## 4. Docs and release
 
-- [ ] 4.1 Note in `README.md` that each runner is an optional peer the consumer installs themselves, and add a CHANGELOG entry for consumers who relied on the transitive vitest install. Verify: `bun run format:check`
-- [ ] 4.2 Full gate: `bun run check`
+- [x] 4.1 Note in `README.md` that each runner is an optional peer the consumer installs themselves, and add a CHANGELOG entry for consumers who relied on the transitive vitest install. Verify: `bun run format:check`
+- [x] 4.2 Full gate: `bun run check`

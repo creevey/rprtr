@@ -12,6 +12,8 @@ npm install --save-dev @crvy/rprtr
 
 > **Requires:** Playwright ≥1.40, plus **Node 22+ or Bun** for the live UI server/CLI. You can install the package with npm, pnpm, yarn, or Bun.
 
+Both supported test runners — `@playwright/test` and `vitest` — are **optional** peer dependencies: installing `@crvy/rprtr` does not pull in a runner you are not using, so install the one you test with yourself. Reaching a reporter whose runner is missing fails with a message naming the package to install.
+
 ## Setup
 
 Add the reporter to your `playwright.config.ts`:

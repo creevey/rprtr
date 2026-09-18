@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **deps:** `@playwright/test` and `vitest` are now **optional** peer dependencies. Installing `@crvy/rprtr` no longer adds a test runner you are not using — a Playwright-only project no longer receives Vitest, and vice versa. If you relied on Vitest arriving transitively with `@crvy/rprtr`, add it to your own `devDependencies`: `npm i -D vitest`.
+
+### Fixed
+
+- **deps:** `npm install` no longer fails with `Cannot read properties of null (reading 'edgesOut')` when `@crvy/rprtr` is installed from a local tarball into a Playwright-only project.
+- **reporter:** Importing a reporter whose test runner is not installed now fails with a message naming the missing package and the entry point that needs it, instead of a module-resolution error pointing inside `dist/`.
+
 ## [0.3.3] - 2026-09-14
 
 ### Added
