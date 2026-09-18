@@ -46,8 +46,11 @@ async function writeStub(stub: RunnerStub): Promise<void> {
  * about *what npm decides to add*, and a stub keeps that decision observable
  * without downloading a browser harness.
  */
-async function installFixture(stub: RunnerStub): Promise<{ exitCode: number; output: string; installed: string[] }> {
+async function installFixture(
+  stub?: RunnerStub,
+): Promise<{ exitCode: number; output: string; installed: string[]; dir: string }> {
   const fixtureDir = await mkdtemp(join(workspace, 'fixture-'))
+  const runnerDependency = stub === undefined ? {} : { [stub.name]: `file:${join(workspace, stub.dir)}` }
   await writeFile(
     join(fixtureDir, 'package.json'),
     `${JSON.stringify(
@@ -55,7 +58,7 @@ async function installFixture(stub: RunnerStub): Promise<{ exitCode: number; out
         name: 'crvy-rprtr-package-surface-fixture',
         private: true,
         type: 'module',
-        dependencies: { '@crvy/rprtr': `file:${tarball}`, [stub.name]: `file:${join(workspace, stub.dir)}` },
+        dependencies: { '@crvy/rprtr': `file:${tarball}`, ...runnerDependency },
       },
       null,
       2,
@@ -74,7 +77,15 @@ async function installFixture(stub: RunnerStub): Promise<{ exitCode: number; out
     }
     installed.push(entry)
   }
-  return { ...result, installed }
+  return { ...result, installed, dir: fixtureDir }
+}
+
+/** Runs `source` as an ESM script inside `dir` and returns whatever it printed. */
+async function runScript(dir: string, source: string): Promise<string> {
+  const scriptPath = join(dir, 'probe.mjs')
+  await writeFile(scriptPath, source)
+  const { output } = await run(['node', scriptPath], dir)
+  return output
 }
 
 beforeAll(async () => {
@@ -93,6 +104,53 @@ afterAll(async () => {
 })
 
 describe('package surface', () => {
+  describe('a reporter whose runner is missing', () => {
+    let fixtureDir = ''
+
+    beforeAll(async () => {
+      const { exitCode, output, dir } = await installFixture()
+      if (exitCode !== 0) throw new Error(`runner-less fixture install failed:\n${output}`)
+      fixtureDir = dir
+    }, 180_000)
+
+    test('the vitest reporter names vitest and its entry point', async () => {
+      const output = await runScript(
+        fixtureDir,
+        [
+          "const { CrvyRprtrVitestReporter } = await import('@crvy/rprtr/vitest')",
+          'try {',
+          '  new CrvyRprtrVitestReporter()',
+          "  console.log('NO_ERROR')",
+          '} catch (error) {',
+          '  console.log(error instanceof Error ? error.message : String(error))',
+          '}',
+        ].join('\n'),
+      )
+      expect(output).toContain('vitest')
+      expect(output).toContain('@crvy/rprtr/vitest')
+      expect(output).not.toContain('NO_ERROR')
+    }, 60_000)
+
+    test('the playwright reporter names @playwright/test and its entry point', async () => {
+      const output = await runScript(
+        fixtureDir,
+        [
+          'try {',
+          "  const { CrvyRprtr } = await import('@crvy/rprtr')",
+          '  new CrvyRprtr()',
+          "  console.log('NO_ERROR')",
+          '} catch (error) {',
+          '  console.log(error instanceof Error ? error.message : String(error))',
+          '}',
+        ].join('\n'),
+      )
+      expect(output).toContain('@playwright/test')
+      expect(output).toContain('@crvy/rprtr')
+      expect(output).not.toContain('NO_ERROR')
+      expect(output).not.toContain('dist/reporter.js')
+    }, 60_000)
+  })
+
   test('a playwright-only consumer does not get vitest', async () => {
     const { exitCode, output, installed } = await installFixture(playwrightStub)
     expect({ exitCode, output }).toMatchObject({ exitCode: 0 })

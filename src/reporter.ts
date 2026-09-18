@@ -2,7 +2,6 @@ import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import { dirname, join, relative } from 'path'
 
-import { chromium, firefox, webkit } from '@playwright/test'
 import type {
   FullConfig,
   FullProject,
@@ -24,6 +23,7 @@ import {
 } from './browser-pins.ts'
 import { log } from './debug-log.ts'
 import { copyResolvedBaseline, sanitizeId, saveAttachments } from './reporter-artifact-ops.ts'
+import { type BrowserTypeLike, resolveBrowserTypes } from './reporter-browser-types.ts'
 import {
   collectNativeImageAttachments,
   type CrvyRprtrOptions,
@@ -45,10 +45,7 @@ import {
 import { ReporterTransport } from './transport.ts'
 
 export type { CrvyRprtrOptions }
-
-export interface BrowserTypeLike {
-  executablePath(): string
-}
+export type { BrowserTypeLike }
 
 export interface ReporterSeams {
   /** Injectable browser types for tests; defaults to @playwright/test's. */
@@ -80,11 +77,7 @@ export class CrvyRprtr implements Reporter {
     this.playwrightSnapshotPathTemplate = options.playwrightSnapshotPathTemplate
     this.playwrightToHaveScreenshotPathTemplate = options.playwrightToHaveScreenshotPathTemplate
     this.browserPinPolicy = options.browserPinPolicy ?? 'warn'
-    this.browserTypes = {
-      chromium: seams.browserTypes?.chromium ?? chromium,
-      firefox: seams.browserTypes?.firefox ?? firefox,
-      webkit: seams.browserTypes?.webkit ?? webkit,
-    }
+    this.browserTypes = resolveBrowserTypes(seams.browserTypes)
   }
 
   onBegin(config: FullConfig, suite: Suite): void {

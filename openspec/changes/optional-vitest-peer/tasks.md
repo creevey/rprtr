@@ -10,8 +10,8 @@
 
 ## 3. Entry-point guards
 
-- [ ] 3.1 Write failing tests that importing the Vitest reporter without vitest installed, and configuring the Playwright reporter without the Playwright test package, each fail with a message naming the missing peer and the entry point that needs it. Verify: `cd tests && bun test package-surface.test.ts` (expect failures)
-- [ ] 3.2 Implement the guards in `src/vitest.ts` and `src/reporter.ts`, using the project's standard error-extraction idiom and without adding a dependency. Verify: `cd tests && bun test package-surface.test.ts`, `bun run typecheck`
+- [x] 3.1 Write failing tests that importing the Vitest reporter without vitest installed, and configuring the Playwright reporter without the Playwright test package, each fail with a message naming the missing peer and the entry point that needs it. Verify: `cd tests && bun test package-surface.test.ts` (expect failures)
+- [x] 3.2 Implement the guards in `src/vitest.ts` and `src/reporter.ts`, using the project's standard error-extraction idiom and without adding a dependency. Verify: `cd tests && bun test package-surface.test.ts`, `bun run typecheck`
 
 ## 4. Docs and release
 
