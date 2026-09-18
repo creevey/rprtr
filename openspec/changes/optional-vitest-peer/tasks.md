@@ -5,8 +5,8 @@
 
 ## 2. Make both peers optional
 
-- [ ] 2.1 Add `peerDependenciesMeta` marking `vitest` and `@playwright/test` optional in `package.json`, leaving the ranges unchanged. Verify: `cd tests && bun test package-surface.test.ts`, `bun run build`
-- [ ] 2.2 Confirm the original crash is gone end to end: pack, then `npm install` in `tests/fixtures/docker-smoke` on linux. Verify: `docker run --rm -v "$PWD:/w" -w /w node:22 sh -c 'cd tests/fixtures/docker-smoke && npm install'`
+- [x] 2.1 Add `peerDependenciesMeta` marking `vitest` and `@playwright/test` optional in `package.json`, leaving the ranges unchanged. Verify: `cd tests && bun test package-surface.test.ts`, `bun run build`
+- [x] 2.2 Confirm the original crash is gone end to end: pack, then `npm install` in `tests/fixtures/docker-smoke` on linux. Verify: `docker run --rm -v "$PWD:/w" -w /w node:22 sh -c 'cd tests/fixtures/docker-smoke && npm install'`
 
 ## 3. Entry-point guards
 
