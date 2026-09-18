@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
+import { rootFontconfigPath } from '../src/fontconfig'
 import {
   DETERMINISTIC_CHROMIUM_ARGS,
+  applyGrayscaleFontRendering,
   deterministicChromiumLaunchOptions,
   deterministicLaunchOptions,
 } from '../src/rendering'
@@ -60,5 +62,58 @@ describe('deterministicLaunchOptions', () => {
     const base = {}
     expect(deterministicLaunchOptions(base, { ...LINUX_SEAMS, platform: 'darwin' })).toBe(base)
     expect(deterministicLaunchOptions(base, { ...LINUX_SEAMS, exists: () => false })).toBe(base)
+  })
+})
+
+describe('applyGrayscaleFontRendering', () => {
+  test('pins the generated config on the passed env and reports the path', () => {
+    const env: Record<string, string | undefined> = {}
+    const result = applyGrayscaleFontRendering(env, LINUX_SEAMS)
+    expect(result).toEqual({ pinned: true, path: '/tmp/crvy-rprtr/fonts.conf' })
+    expect(env.FONTCONFIG_FILE).toBe('/tmp/crvy-rprtr/fonts.conf')
+  })
+
+  test('skips on fontRendering: inherit, leaving the env untouched', () => {
+    const env: Record<string, string | undefined> = {}
+    expect(applyGrayscaleFontRendering(env, { ...LINUX_SEAMS, fontRendering: 'inherit' })).toEqual({
+      pinned: false,
+      reason: 'inherit',
+    })
+    expect(env).toEqual({})
+  })
+
+  test('skips where text rendering is not fontconfig-driven', () => {
+    const env: Record<string, string | undefined> = {}
+    expect(applyGrayscaleFontRendering(env, { ...LINUX_SEAMS, platform: 'darwin' })).toEqual({
+      pinned: false,
+      reason: 'not-linux',
+    })
+    expect(env).toEqual({})
+  })
+
+  test('skips when there is no system config to extend', () => {
+    const env: Record<string, string | undefined> = {}
+    expect(applyGrayscaleFontRendering(env, { ...LINUX_SEAMS, exists: () => false })).toEqual({
+      pinned: false,
+      reason: 'no-system-config',
+    })
+    expect(env).toEqual({})
+  })
+
+  // A crvy-rprtr run mode already exported our own generated config; pinning again
+  // would write a second config and log a skip reason inside docker mode.
+  test('skips when a crvy-rprtr run mode already pinned this environment', () => {
+    const env: Record<string, string | undefined> = { FONTCONFIG_FILE: rootFontconfigPath() }
+    expect(applyGrayscaleFontRendering(env, LINUX_SEAMS)).toEqual({ pinned: false, reason: 'already-pinned' })
+    expect(env.FONTCONFIG_FILE).toBe(rootFontconfigPath())
+  })
+
+  test('pins over a foreign FONTCONFIG_FILE, which the generated config includes', () => {
+    const env: Record<string, string | undefined> = { FONTCONFIG_FILE: '/etc/fonts/other.conf' }
+    expect(applyGrayscaleFontRendering(env, LINUX_SEAMS)).toEqual({
+      pinned: true,
+      path: '/tmp/crvy-rprtr/fonts.conf',
+    })
+    expect(env.FONTCONFIG_FILE).toBe('/tmp/crvy-rprtr/fonts.conf')
   })
 })

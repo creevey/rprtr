@@ -111,7 +111,7 @@ export interface GrayscaleFontconfigEnvOptions {
 export function grayscaleFontconfigEnv(
   baseEnv: Record<string, string | undefined> = process.env,
   options: GrayscaleFontconfigEnvOptions = {},
-): Record<string, string> | null {
+): { FONTCONFIG_FILE: string } | null {
   if ((options.platform ?? process.platform) !== 'linux') return null
   const systemConfig = resolveSystemFontconfig(baseEnv, options.exists)
   if (systemConfig === null) return null
