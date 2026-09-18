@@ -6,8 +6,8 @@
 
 ## 2. Reporter option
 
-- [ ] 2.1 Write failing tests that the reporter options schema accepts `fontRendering: 'grayscale' | 'inherit'`, defaults to `'grayscale'`, and rejects any other value at reporter init. Verify: `cd tests && bun test schemas.test.ts` (expect failures)
-- [ ] 2.2 Add the option to the Zod reporter-options schema and the exported option types. Verify: `cd tests && bun test schemas.test.ts`, `bun run typecheck`
+- [x] 2.1 Write failing tests that the reporter options schema accepts `fontRendering: 'grayscale' | 'inherit'`, defaults to `'grayscale'`, and rejects any other value at reporter init. Verify: `cd tests && bun test schemas.test.ts` (expect failures)
+- [x] 2.2 Add the option to the Zod reporter-options schema and the exported option types. Verify: `cd tests && bun test schemas.test.ts`, `bun run typecheck`
 
 ## 3. Reporter pins in its constructor
 

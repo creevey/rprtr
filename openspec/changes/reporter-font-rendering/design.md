@@ -41,7 +41,7 @@ A reporter constructor therefore runs strictly before any worker exists, and the
 
 **Warn on `launchOptions.env`, per project, once per run.** The reporter can read the resolved config in `onBegin`, so the check lands there, after the constructor already pinned. Warning rather than failing: a consumer may have set `env` for reasons unrelated to fonts and may already be passing their own fontconfig.
 
-**Reuse the option name and values from the run modes** (`fontRendering: 'grayscale' | 'inherit'`) rather than introducing a reporter-specific name, and validate it through the existing Zod option schema so a typo fails at reporter init rather than silently inheriting.
+**Reuse the option name and values from the run modes** (`fontRendering: 'grayscale' | 'inherit'`) rather than introducing a reporter-specific name, and validate it with Zod so a typo fails at reporter init rather than silently inheriting. There is no existing reporter-options schema to extend — reporter options are plain interfaces read with `?? default`, `browserPinPolicy` included — so this adds a focused `src/schemas/reporter-options.ts` covering the one option rather than retrofitting validation onto the whole surface, which would change how every existing option fails.
 
 ## Risks / Trade-offs
 

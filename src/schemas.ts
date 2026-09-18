@@ -6,6 +6,7 @@ export * from './schemas/http.ts'
 export * from './schemas/messages.ts'
 export * from './schemas/offline.ts'
 export * from './schemas/pins.ts'
+export * from './schemas/reporter-options.ts'
 
 // Location schema
 export const LocationSchema = z.object({
