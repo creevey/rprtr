@@ -5,8 +5,8 @@
 
 ## 2. Fail loudly on a vitest run that executed nothing
 
-- [ ] 2.1 Write a failing test that the vitest integration helper rejects a child run reporting zero executed tests, rather than proceeding to assert on the event list. Verify: `cd tests && bun test vitest-browser-integration.test.ts` (expect failure)
-- [ ] 2.2 Add the non-empty-run assertion to `spawnFixtureVitestRun` / `spawnPassingFixtureVitestRun` in `tests/vitest-browser-integration.test.ts`, so a browserless environment produces a named failure instead of a confusing event-list mismatch. Verify: `cd tests && bun test vitest-browser-integration.test.ts`
+- [x] 2.1 Write a failing test that the vitest integration helper rejects a child run reporting zero executed tests, rather than proceeding to assert on the event list. Verify: `cd tests && bun test vitest-browser-integration.test.ts` (expect failure)
+- [x] 2.2 Add the non-empty-run assertion to `spawnFixtureVitestRun` / `spawnPassingFixtureVitestRun` in `tests/vitest-browser-integration.test.ts`, so a browserless environment produces a named failure instead of a confusing event-list mismatch. Verify: `cd tests && bun test vitest-browser-integration.test.ts`
 
 ## 3. Run browser-dependent tests where a browser exists
 

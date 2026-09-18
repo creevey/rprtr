@@ -9,6 +9,7 @@ import { OfflineReportSchema, TestBeginDataSchema, TestEndDataSchema, safeParse 
 import { handleHttpRequest } from '../src/server/routes'
 import type { RunController } from '../src/server/run-controller'
 import type { TestData } from '../src/types'
+import { assertRunExecutedTests } from './vitest-run-guard.ts'
 
 const fixtureDir = join(import.meta.dir, 'fixtures', 'vitest-browser')
 const outputDir = join(fixtureDir, 'output')
@@ -49,6 +50,12 @@ function createStubRunController(): RunController {
   } as unknown as RunController
 }
 
+/** Reads the report the fixture's reporter just wrote, or nothing if it wrote none. */
+async function assertFixtureRunExecutedTests(source: string): Promise<void> {
+  const report = Bun.file(reportPath)
+  assertRunExecutedTests((await report.exists()) ? ((await report.json()) as unknown) : undefined, source)
+}
+
 async function spawnFixtureVitestRun(): Promise<void> {
   const child = Bun.spawn({
     cmd: ['bunx', 'vitest', 'run', '--config', join(fixtureDir, 'vitest.config.ts')],
@@ -60,6 +67,7 @@ async function spawnFixtureVitestRun(): Promise<void> {
   expect(await child.exited).toBe(1)
   await new Response(child.stdout).text()
   await new Response(child.stderr).text()
+  await assertFixtureRunExecutedTests('the failing fixture vitest run')
 }
 
 async function spawnPassingFixtureVitestRun(): Promise<number> {
@@ -77,6 +85,7 @@ async function spawnPassingFixtureVitestRun(): Promise<number> {
   const exit = await child.exited
   await new Response(child.stdout).text()
   await new Response(child.stderr).text()
+  await assertFixtureRunExecutedTests('the passing fixture vitest run')
   return exit
 }
 
