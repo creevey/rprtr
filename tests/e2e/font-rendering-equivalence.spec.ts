@@ -1,7 +1,7 @@
 import { chromium, expect, test } from '@playwright/test'
 
-import { DETERMINISTIC_CHROMIUM_ARGS } from '../../src/rendering'
-import { applyGrayscaleFontRendering } from '../../src/rendering'
+import { rootFontconfigPath } from '../../src/fontconfig'
+import { DETERMINISTIC_CHROMIUM_ARGS, applyGrayscaleFontRendering } from '../../src/rendering'
 
 /** Text-heavy enough that subpixel fringes would move thousands of bytes. */
 const PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0;background:#fff">
@@ -35,9 +35,17 @@ test.describe('font rendering equivalence', () => {
   test.skip(process.platform !== 'linux', 'fontconfig drives text rendering on Linux only')
 
   test('the fontconfig pin and --disable-lcd-text render identically', async () => {
+    // The crvy reporter pins this very process in its constructor, so by the time
+    // a test runs the environment is normally already pinned. Both outcomes mean
+    // the same thing here — the config is in place — and anything else means the
+    // comparison would not be testing the pin at all.
     const env: Record<string, string | undefined> = { ...process.env }
     const pin = applyGrayscaleFontRendering(env)
-    expect(pin.pinned, 'the run must be pinnable for this comparison to mean anything').toBe(true)
+    const pinnedPath = pin.pinned ? pin.path : rootFontconfigPath()
+    if (!pin.pinned) {
+      expect(pin.reason, 'the run must be pinned for this comparison to mean anything').toBe('already-pinned')
+    }
+    expect(env.FONTCONFIG_FILE).toBe(pinnedPath)
 
     const pinnedEnv: Record<string, string> = {}
     for (const [key, value] of Object.entries(env)) {

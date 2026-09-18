@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { rootFontconfigPath } from '../src/fontconfig'
 import {
@@ -7,6 +7,23 @@ import {
   deterministicChromiumLaunchOptions,
   deterministicLaunchOptions,
 } from '../src/rendering'
+
+// These functions read the real process.env, and the reporter pins FONTCONFIG_FILE
+// on it in its constructor — so on Linux the result depended on whether some
+// earlier test file happened to construct a reporter. Each block states the
+// ambient pin state it needs instead of inheriting one.
+const originalFontconfigFile = process.env.FONTCONFIG_FILE
+
+function restoreFontconfigFile(): void {
+  if (originalFontconfigFile === undefined) delete process.env.FONTCONFIG_FILE
+  else process.env.FONTCONFIG_FILE = originalFontconfigFile
+}
+
+beforeEach(() => {
+  delete process.env.FONTCONFIG_FILE
+})
+
+afterEach(restoreFontconfigFile)
 
 const LINUX_SEAMS = {
   platform: 'linux' as const,
@@ -62,6 +79,35 @@ describe('deterministicLaunchOptions', () => {
     const base = {}
     expect(deterministicLaunchOptions(base, { ...LINUX_SEAMS, platform: 'darwin' })).toBe(base)
     expect(deterministicLaunchOptions(base, { ...LINUX_SEAMS, exists: () => false })).toBe(base)
+  })
+})
+
+// The reporter pins the real process.env in its constructor, so on Linux any
+// test file that constructed one leaves FONTCONFIG_FILE set for every later
+// test in the same bun process. deterministicLaunchOptions reads process.env,
+// so it must behave the same either way.
+describe('deterministicLaunchOptions in an already-pinned process', () => {
+  beforeEach(() => {
+    process.env.FONTCONFIG_FILE = rootFontconfigPath()
+  })
+
+  test('is still a no-op where fontconfig does not apply', () => {
+    const base = {}
+    expect(deterministicLaunchOptions(base, { ...LINUX_SEAMS, platform: 'darwin' })).toBe(base)
+    expect(deterministicLaunchOptions(base, { ...LINUX_SEAMS, exists: () => false })).toBe(base)
+  })
+
+  test('leaves options alone when the browser would inherit the pin anyway', () => {
+    const base = { args: ['--no-sandbox'] }
+    expect(deterministicLaunchOptions(base, LINUX_SEAMS)).toBe(base)
+  })
+
+  // base.env REPLACES the browser environment, so the inherited pin is lost
+  // unless it is written back in.
+  test('still materializes the pin when the caller replaces the environment', () => {
+    const options = deterministicLaunchOptions({ env: { MY_VAR: 'mine' } }, LINUX_SEAMS)
+    expect(options.env?.FONTCONFIG_FILE).toBe(rootFontconfigPath())
+    expect(options.env?.MY_VAR).toBe('mine')
   })
 })
 

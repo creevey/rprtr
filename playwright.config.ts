@@ -7,7 +7,10 @@ export default defineConfig({
   forbidOnly: process.env.CI !== undefined && process.env.CI !== '',
   retries: process.env.CI !== undefined && process.env.CI !== '' ? 2 : 0,
   workers: process.env.CI !== undefined && process.env.CI !== '' ? 1 : undefined,
-  reporter: [['./src/reporter.ts', { serverUrl: 'ws://localhost:3000' }], ['html']],
+  // `list` is load-bearing in CI: the crvy reporter and `html` both write to disk
+  // and print nothing, so without it a failing run produces no console output at
+  // all and a run that executed nothing looks exactly like one that passed.
+  reporter: [['list'], ['./src/reporter.ts', { serverUrl: 'ws://localhost:3000' }], ['html']],
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
