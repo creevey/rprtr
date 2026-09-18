@@ -2,11 +2,11 @@ import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { cp, mkdir, rm, writeFile } from 'fs/promises'
 import { join, relative } from 'path'
 
-import { RegisterDataSchema, type RegisterData } from '../src/schemas'
-import { createServerApp, type ServerApp } from '../src/server/app'
-import { startBunServer } from '../src/server/bun-adapter'
+import { RegisterDataSchema, type RegisterData } from '../../src/schemas'
+import { createServerApp, type ServerApp } from '../../src/server/app'
+import { startBunServer } from '../../src/server/bun-adapter'
 
-const fixtureDir = join(import.meta.dir, 'fixtures', 'vitest-browser')
+const fixtureDir = join(import.meta.dir, '..', 'fixtures', 'vitest-browser')
 // The temp copy stays inside the fixture tree so `@vitest/browser-playwright`
 // and `vitest` resolve from the repo root node_modules by walking up.
 const tempDir = join(fixtureDir, `register-tmp-${process.pid}`)
@@ -24,7 +24,7 @@ async function createTempFixture(port: number): Promise<string> {
   await cp(join(fixtureDir, 'vitest.integration.browser.test.ts'), join(tempDir, 'vitest.integration.browser.test.ts'))
   await cp(join(fixtureDir, '__screenshots__'), join(tempDir, '__screenshots__'), { recursive: true })
 
-  const reporterImport = relative(tempDir, join(import.meta.dir, '..', 'src', 'vitest.ts')).replaceAll('\\', '/')
+  const reporterImport = relative(tempDir, join(import.meta.dir, '..', '..', 'src', 'vitest.ts')).replaceAll('\\', '/')
   const config = [
     `import { playwright } from '@vitest/browser-playwright'`,
     `import { defineConfig } from 'vitest/config'`,

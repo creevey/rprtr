@@ -3,15 +3,15 @@ import { copyFile, mkdir, mkdtemp, readFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { mergeOfflineReports } from '../src/offline-reports'
-import { attachmentsToImages } from '../src/report-utils'
-import { OfflineReportSchema, TestBeginDataSchema, TestEndDataSchema, safeParse } from '../src/schemas'
-import { handleHttpRequest } from '../src/server/routes'
-import type { RunController } from '../src/server/run-controller'
-import type { TestData } from '../src/types'
-import { assertRunExecutedTests } from './vitest-run-guard.ts'
+import { mergeOfflineReports } from '../../src/offline-reports'
+import { attachmentsToImages } from '../../src/report-utils'
+import { OfflineReportSchema, TestBeginDataSchema, TestEndDataSchema, safeParse } from '../../src/schemas'
+import { handleHttpRequest } from '../../src/server/routes'
+import type { RunController } from '../../src/server/run-controller'
+import type { TestData } from '../../src/types'
+import { assertRunExecutedTests } from '../vitest-run-guard.ts'
 
-const fixtureDir = join(import.meta.dir, 'fixtures', 'vitest-browser')
+const fixtureDir = join(import.meta.dir, '..', 'fixtures', 'vitest-browser')
 const outputDir = join(fixtureDir, 'output')
 const attachmentsDir = join(fixtureDir, '.vitest-attachments')
 const reportPath = join(outputDir, 'crvy-rprtr-0.json')

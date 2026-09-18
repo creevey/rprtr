@@ -10,9 +10,9 @@
 
 ## 3. Run browser-dependent tests where a browser exists
 
-- [ ] 3.1 Rename the browser-dependent test files to a shared suffix and split `test:bun` into a runner-independent glob plus a separate browser-tests script, leaving `bun run test` covering both. Verify: `bun run test:bun` passes on a machine with no browsers; the browser script fails there
-- [ ] 3.2 Move the browser-tests script into the `Playwright Tests` job in `.github/workflows/ci.yml` and confirm the `Bun Tests` job no longer globs those files. Verify: `bun run test:bun` locally, then a CI run on the branch
-- [ ] 3.3 Generate and commit `tests/fixtures/vitest-browser/__screenshots__/vitest.integration.browser.test.ts/hero-section-chromium-linux.png` from `mcr.microsoft.com/playwright:v1.59.0-noble`, reviewing the image in the diff. Verify: the browser-tests script passes inside that container
+- [x] 3.1 Move the browser-dependent test files into `tests/browser/` (two files, not three — the proposal counted the three tests inside `vitest-browser-integration.test.ts`) and split `test:bun` into a runner-independent glob plus a separate browser-tests script, leaving `bun run test` covering both. Verify: `bun run test:bun` passes on a machine with no browsers; the browser script fails there
+- [x] 3.2 Move the browser-tests script into the `Playwright Tests` job in `.github/workflows/ci.yml` and confirm the `Bun Tests` job no longer globs those files. Verify: `bun run test:bun` locally, then a CI run on the branch
+- [x] 3.3 Generate and commit `tests/fixtures/vitest-browser/__screenshots__/vitest.integration.browser.test.ts/hero-section-chromium-linux.png` from `mcr.microsoft.com/playwright:v1.59.0-noble`, reviewing the image in the diff. Verify: the browser-tests script passes inside that container
 
 ## 4. Flaky pin assertion
 
