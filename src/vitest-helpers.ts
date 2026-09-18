@@ -1,6 +1,6 @@
 import { basename, dirname, join, relative } from 'path'
 
-import type { TestCase } from 'vitest/node'
+import type { ResolvedConfig, TestCase, Vitest } from 'vitest/node'
 
 export type VitestStatus = 'passed' | 'failed' | 'skipped'
 
@@ -147,4 +147,12 @@ export function mapVitestStatus(state: VitestTaskState): VitestStatus {
     case 'skipped':
       return 'skipped'
   }
+}
+
+/** Vitest reports its config file on either the test config or the Vite one. */
+export function resolveVitestConfigFile(vitest: Vitest): string | undefined {
+  const fromTestConfig = (vitest.config as ResolvedConfig & { configFile?: string | false }).configFile
+  if (typeof fromTestConfig === 'string') return fromTestConfig
+  const fromViteConfig = vitest.vite.config.configFile
+  return typeof fromViteConfig === 'string' ? fromViteConfig : undefined
 }

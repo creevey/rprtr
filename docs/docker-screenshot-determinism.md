@@ -3,7 +3,12 @@
 > Follow-up (2026-09-10): unifying the image is necessary but not sufficient — a second
 > browser with its own fontconfig re-splits the baselines. See
 > [text-antialiasing-determinism.md](./text-antialiasing-determinism.md), which pins the AA
-> mode explicitly in both crvy-rprtr's docker mode and the consumer's Playwright config.
+> mode explicitly in crvy-rprtr's docker mode and the consumer's Playwright config.
+>
+> Follow-up (2026-09-18): the reporter now pins it too, from its own constructor, so a plain
+> `npx playwright test` that merely loads the reporter is covered without a config change —
+> including the `webServer` / `globalSetup` env-leak and `test.use()` detection caveats
+> documented there.
 
 Date: 2026-08-24
 Status: verified end-to-end on a consumer project (104 screenshot tests)

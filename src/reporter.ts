@@ -14,16 +14,16 @@ import type {
 } from '@playwright/test/reporter'
 import pLimit from 'p-limit'
 
-import {
-  buildRunEnvironments,
-  evaluateBrowserPinPolicy,
-  resolveProjectPins,
-  type BrowserPinPolicy,
-  type PinBrowser,
-  type RunEnvironments,
-} from './browser-pins.ts'
+import type { BrowserPinPolicy, PinBrowser, RunEnvironments } from './browser-pins.ts'
 import { log } from './debug-log.ts'
 import { copyResolvedBaseline, sanitizeId, saveAttachments } from './reporter-artifact-ops.ts'
+import { type BrowserTypeLike } from './reporter-browser-types.ts'
+import { resolveRunEnvironments } from './reporter-environments.ts'
+import {
+  pinReporterFontRendering,
+  warnOnReplacedBrowserEnv,
+  type FontRenderingSeams,
+} from './reporter-font-rendering.ts'
 import {
   collectNativeImageAttachments,
   type CrvyRprtrOptions,
@@ -45,12 +45,9 @@ import {
 import { ReporterTransport } from './transport.ts'
 
 export type { CrvyRprtrOptions }
+export type { BrowserTypeLike }
 
-export interface BrowserTypeLike {
-  executablePath(): string
-}
-
-export interface ReporterSeams {
+export interface ReporterSeams extends FontRenderingSeams {
   /** Injectable browser types for tests; defaults to @playwright/test's. */
   browserTypes?: Partial<Record<PinBrowser, BrowserTypeLike>>
 }
@@ -69,9 +66,15 @@ export class CrvyRprtr implements Reporter {
   private pendingArtifacts: PendingPortableArtifact[] = []
   private readonly browserPinPolicy: BrowserPinPolicy
   private readonly browserTypes: Record<PinBrowser, BrowserTypeLike>
+  private readonly fontRenderingPinned: boolean
+  private readonly seams: ReporterSeams
   private environments: RunEnvironments | undefined
 
   constructor(options: CrvyRprtrOptions = {}, seams: ReporterSeams = {}) {
+    // Before the transport: this must happen before anything can fork a worker,
+    // and an invalid option should fail init rather than half-configure a run.
+    this.fontRenderingPinned = pinReporterFontRendering(options, seams)
+    this.seams = seams
     this.transport = new ReporterTransport(options)
     this.serverUrl = this.transport.serverUrl
     this.screenshotDir = this.transport.screenshotDir
@@ -89,37 +92,19 @@ export class CrvyRprtr implements Reporter {
 
   onBegin(config: FullConfig, suite: Suite): void {
     this.configDir = config.configFile === undefined ? config.rootDir : dirname(config.configFile)
+    warnOnReplacedBrowserEnv(config, this.fontRenderingPinned, this.seams)
     log(`[CrvyRprtr] Starting run with ${suite.allTests().length} tests`)
-    this.environments = this.resolveEnvironments(config)
+    this.environments = resolveRunEnvironments({
+      config,
+      cwd: this.configDir,
+      policy: this.browserPinPolicy,
+      browserTypes: this.browserTypes,
+    })
     this.transport.start()
     if (!this.ci) {
       this.sendRegister(config)
       this.sendRunBegin(suite)
     }
-  }
-
-  /**
-   * Reads declared pins, resolves the effective build for every project, and
-   * applies `browserPinPolicy`. Invalid pins throw here — before any test runs.
-   */
-  private resolveEnvironments(config: FullConfig): RunEnvironments {
-    const projects = resolveProjectPins({ configMetadata: config.metadata, projects: config.projects })
-    const environments = buildRunEnvironments({
-      cwd: this.configDir,
-      projects,
-      executablePathFor: (browser) => this.browserTypes[browser].executablePath(),
-      dockerImage: process.env.CRVY_RPRTR_DOCKER_IMAGE,
-    })
-    for (const [projectName, environment] of Object.entries(environments)) {
-      const decision = evaluateBrowserPinPolicy({
-        policy: this.browserPinPolicy,
-        projectName,
-        environment,
-      })
-      if (decision.action === 'fail') throw new Error(decision.message)
-      if (decision.action === 'warn') console.warn(`[CrvyRprtr] ${decision.message}`)
-    }
-    return environments
   }
 
   private connect(): void {

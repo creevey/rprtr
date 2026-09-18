@@ -2,12 +2,16 @@ import { existsSync } from 'fs'
 import { isAbsolute, relative, resolve } from 'path'
 
 import pLimit from 'p-limit'
-import type { Reporter, ResolvedConfig, TestCase, TestProject, TestRunEndReason, Vitest } from 'vitest/node'
+import type { Reporter, TestCase, TestProject, TestRunEndReason, Vitest } from 'vitest/node'
 
 import { log, logError } from './debug-log.ts'
 import { saveAttachments } from './reporter-artifact-ops.ts'
+import { pinReporterFontRendering, type FontRenderingSeams } from './reporter-font-rendering.ts'
 import type { AttachmentData, ScreenshotDeclaration } from './reporter-utils.ts'
-import { ReporterTransport, type ReporterTransportOptions } from './transport.ts'
+import { ReporterTransport } from './transport.ts'
+import type { CrvyRprtrVitestReporterOptions } from './vitest-options.ts'
+
+export type { CrvyRprtrVitestReporterOptions }
 import {
   approvalTargetsFromEntries,
   buildAttachmentEntries,
@@ -22,15 +26,9 @@ import {
   getTitlePath,
   mapVitestStatus,
   parseVitestScreenshotError,
+  resolveVitestConfigFile,
   relativeFileTokens,
 } from './vitest-helpers.ts'
-
-export interface CrvyRprtrVitestReporterOptions extends ReporterTransportOptions {
-  /** Overrides vitest's default reference directory (`__screenshots__`). */
-  referenceDir?: string
-  /** Overrides vitest's default attachments directory (`.vitest-attachments`). */
-  attachmentsDir?: string
-}
 
 interface PendingVitestArtifact {
   testId: string
@@ -63,13 +61,6 @@ const MAX_CONCURRENT_FILE_OPS = 5
  * `configFile` depending on how the config was merged, so check the test
  * config first and fall back to the underlying Vite dev-server config.
  */
-function resolveVitestConfigFile(vitest: Vitest): string | undefined {
-  const fromTestConfig = (vitest.config as ResolvedConfig & { configFile?: string | false }).configFile
-  if (typeof fromTestConfig === 'string') return fromTestConfig
-  const fromViteConfig = vitest.vite.config.configFile
-  return typeof fromViteConfig === 'string' ? fromViteConfig : undefined
-}
-
 function isPathWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
@@ -99,7 +90,10 @@ export class CrvyRprtrVitestReporter implements Reporter {
   private pendingArtifacts: PendingVitestArtifact[] = []
   private moduleSources = new Map<string, string | null>()
 
-  constructor(options: CrvyRprtrVitestReporterOptions = {}) {
+  constructor(options: CrvyRprtrVitestReporterOptions = {}, seams: FontRenderingSeams = {}) {
+    // Before the transport: vitest constructs reporters before the browser
+    // provider starts, so this is the last moment that still covers every browser.
+    pinReporterFontRendering(options, seams)
     this.transport = new ReporterTransport(options)
     this.screenshotDir = this.transport.screenshotDir
     this.ci = this.transport.ci
