@@ -1,5 +1,6 @@
 import type { TestResult } from '@playwright/test/reporter'
 
+import type { FontRendering } from './rendering.ts'
 import type { AttachmentData } from './reporter-utils.ts'
 import type { ResolvedBaselineTarget } from './snapshot-path-resolver.ts'
 
@@ -18,6 +19,12 @@ export interface CrvyRprtrOptions {
    * Unpinned and unverifiable projects never fail.
    */
   browserPinPolicy?: 'warn' | 'fail'
+  /**
+   * Text antialiasing for the browsers this run launches. `grayscale` (default)
+   * pins it so baselines compare across environments; `inherit` leaves the
+   * environment's own rendering alone. Matches the option both run modes expose.
+   */
+  fontRendering?: FontRendering
 }
 
 export interface PendingPortableArtifact {

@@ -7,8 +7,9 @@ import type { Reporter, TestCase, TestProject, TestRunEndReason, Vitest } from '
 import { log, logError } from './debug-log.ts'
 import { ensureVitestInstalled } from './peer-guard.ts'
 import { saveAttachments } from './reporter-artifact-ops.ts'
+import { pinReporterFontRendering, type FontRenderingSeams } from './reporter-font-rendering.ts'
 import type { AttachmentData, ScreenshotDeclaration } from './reporter-utils.ts'
-import { ReporterTransport, type ReporterTransportOptions } from './transport.ts'
+import { ReporterTransport } from './transport.ts'
 import {
   approvalTargetsFromEntries,
   buildAttachmentEntries,
@@ -26,13 +27,9 @@ import {
   resolveVitestConfigFile,
   relativeFileTokens,
 } from './vitest-helpers.ts'
+import type { CrvyRprtrVitestReporterOptions } from './vitest-options.ts'
 
-export interface CrvyRprtrVitestReporterOptions extends ReporterTransportOptions {
-  /** Overrides vitest's default reference directory (`__screenshots__`). */
-  referenceDir?: string
-  /** Overrides vitest's default attachments directory (`.vitest-attachments`). */
-  attachmentsDir?: string
-}
+export type { CrvyRprtrVitestReporterOptions }
 
 interface PendingVitestArtifact {
   testId: string
@@ -94,8 +91,12 @@ export class CrvyRprtrVitestReporter implements Reporter {
   private pendingArtifacts: PendingVitestArtifact[] = []
   private moduleSources = new Map<string, string | null>()
 
-  constructor(options: CrvyRprtrVitestReporterOptions = {}) {
+  constructor(options: CrvyRprtrVitestReporterOptions = {}, seams: FontRenderingSeams = {}) {
+    // The missing-peer check comes first: without vitest there is no run to pin.
     ensureVitestInstalled()
+    // Before the transport: vitest constructs reporters before the browser
+    // provider starts, so this is the last moment that still covers every browser.
+    pinReporterFontRendering(options, seams)
     this.transport = new ReporterTransport(options)
     this.screenshotDir = this.transport.screenshotDir
     this.ci = this.transport.ci

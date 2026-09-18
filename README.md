@@ -319,20 +319,23 @@ Notes:
 
 Chromium on Linux takes its text AA mode from **fontconfig**, so screenshots change with the environment rather than with the page: a system Chromium passed via `executablePath`, an agent-provided binary or a second image renders the same text with colored subpixel fringes on every glyph. Glyph positions stay identical, so the diff is invisible by eye and fatal to the comparator — colored fringes on ~3% of a text-heavy page, channel deltas up to 100.
 
-crvy-rprtr therefore pins grayscale AA in **both** run modes, with no configuration:
+crvy-rprtr therefore pins grayscale AA wherever it participates in a run, with no configuration:
 
-| run mode | mechanism                                                                                                                                                                                  |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| docker   | fontconfig drop-in mounted at `/etc/fonts/conf.d/99-crvy-rprtr-grayscale.conf`                                                                                                             |
-| local    | `FONTCONFIG_FILE` exported to the spawned `playwright test` process (a generated root config that includes the system one, then forces `rgba=none`); every browser it launches inherits it |
+| where           | mechanism                                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| reporter        | `FONTCONFIG_FILE` set on the reporter's own process in its constructor — before Playwright forks any worker, so every worker and every browser it launches inherits it                     |
+| docker run mode | fontconfig drop-in mounted at `/etc/fonts/conf.d/99-crvy-rprtr-grayscale.conf`                                                                                                             |
+| local run mode  | `FONTCONFIG_FILE` exported to the spawned `playwright test` process (a generated root config that includes the system one, then forces `rgba=none`); every browser it launches inherits it |
 
-Both were verified to produce byte-identical screenshots, so runs can be mixed freely. On macOS and Windows the local-mode override is skipped: fontconfig does not drive text rendering there (macOS has had no subpixel AA since Mojave, Windows uses DirectWrite).
+The reporter row is what covers a plain `npx playwright test` in CI: adding the reporter is enough, with no change to `use.launchOptions`. All of them were verified to produce byte-identical screenshots, so runs can be mixed freely. On macOS and Windows the pin is skipped: fontconfig does not drive text rendering there (macOS has had no subpixel AA since Mojave, Windows uses DirectWrite). Whenever the reporter skips, it says so in one line.
 
-Turn it off with `fontRendering: 'inherit'` — as `startServer({ fontRendering: 'inherit' })` or `crvy-rprtr --font-rendering inherit` — when faithful "what a desktop user sees" text matters more than determinism. `docker: { fontRendering: 'inherit' }` still works and takes precedence in docker mode.
+Turn it off with `fontRendering: 'inherit'` — as a reporter option (`['@crvy/rprtr', { fontRendering: 'inherit' }]`), `startServer({ fontRendering: 'inherit' })` or `crvy-rprtr --font-rendering inherit` — when faithful "what a desktop user sees" text matters more than determinism. `docker: { fontRendering: 'inherit' }` still works and takes precedence in docker mode.
 
-#### Runs that crvy-rprtr does not launch
+**Upgrading:** baselines captured with subpixel AA now differ, because a reporter-only run that previously inherited the image's rendering is pinned. Regenerate them once, or set `fontRendering: 'inherit'`.
 
-Plain `npx playwright test` in CI is not covered by the above — it does not go through the launcher. Match it from the Playwright config:
+#### When the config sets its own browser environment
+
+`launchOptions.env` **replaces** the browser's environment rather than extending it, so it discards the variable the reporter set. The reporter detects this and warns once, naming the affected projects; it never rewrites your options. Merge the pin back in from the config:
 
 ```ts
 import { defineConfig } from '@playwright/test'
@@ -343,7 +346,9 @@ export default defineConfig({
 })
 ```
 
-The helper writes the same generated fontconfig root config and merges `FONTCONFIG_FILE` into `launchOptions.env`, keeping the inherited environment and the caller's own entries. It applies to every browser (`deterministicLaunchOptions(base, { fontRendering: 'inherit' })` opts out), needs no file committed to the repo, and produces screenshots byte-identical to both run modes. Outside Linux it returns the options unchanged.
+The helper writes the same generated fontconfig root config and merges `FONTCONFIG_FILE` into `launchOptions.env`, keeping the inherited environment and the caller's own entries. It applies to every browser (`deterministicLaunchOptions(base, { fontRendering: 'inherit' })` opts out), needs no file committed to the repo, and produces screenshots byte-identical to the reporter pin and both run modes. Outside Linux it returns the options unchanged.
+
+The same applies to `connectOptions`: a browser crvy-rprtr does not launch locally — a remote grid, `launchServer` — never receives the local environment, and no reporter-side pin can reach it.
 
 `deterministicChromiumLaunchOptions()`, which adds `--disable-lcd-text` instead, remains available for configs that cannot set browser env vars; it is byte-identical for Chromium but Chromium-only, since Firefox rejects unknown command-line flags.
 

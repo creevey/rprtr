@@ -62,8 +62,46 @@ for the untouched default) in `mcr.microsoft.com/playwright:v1.59.0-noble`:
 A reporter cannot pass browser args, so crvy-rprtr uses the fontconfig routes: the drop-in in
 docker mode (the image's own `conf.d` is right there to write into), `FONTCONFIG_FILE` in local
 mode (the spawned `playwright test` process exports it and every browser it launches inherits
-it). Both land on the same pixels as `--disable-lcd-text`, so a project can mix rprtr-driven
-runs and plain `npx playwright test` runs in CI without splitting its baselines again.
+it), and `FONTCONFIG_FILE` on its own process in the reporter. All land on the same pixels as
+`--disable-lcd-text` — asserted by `tests/e2e/font-rendering-equivalence.spec.ts` — so a project
+can mix rprtr-driven runs and plain `npx playwright test` runs in CI without splitting its
+baselines again.
+
+### The reporter, by default
+
+A run in which crvy-rprtr participates only as a reporter is pinned too, with no config change:
+the reporter's constructor sets `FONTCONFIG_FILE` on its own process.
+
+The ordering is what makes this work, verified against `@playwright/test` 1.59.0:
+
+| step                                                                 | where                                       |
+| -------------------------------------------------------------------- | ------------------------------------------- |
+| reporters constructed                                                | `runner/reporters.js` `createReporters`     |
+| workers forked, with `env: { ...process.env, ...extraEnv }` at spawn | `runner/processHost.js`                     |
+| browser launched, reading `options.env ?? process.env` live          | `playwright-core/lib/server/browserType.js` |
+
+So the constructor runs strictly before any worker exists, and the browser reads the worker's
+environment later still. `tests/e2e/reporter-font-rendering.spec.ts` runs a real two-worker
+`playwright test` and asserts both workers saw the variable, so a Playwright upgrade that moves
+construction after the fork fails CI rather than silently un-pinning.
+
+Vitest has the same shape: its reporters are constructed before the browser provider starts.
+
+When the reporter does not pin, it says why in one line — `fontRendering: 'inherit'`, a
+non-Linux platform, or no system fontconfig to extend. The one silent case is an environment a
+crvy-rprtr run mode already pinned, where there is nothing to act on.
+
+#### Two caveats
+
+**The variable leaks into `webServer` and `globalSetup` children.** `process.env` is inherited
+by everything the run spawns, not only browsers. It points at a config that includes the system
+one, so a non-browser child ignores it and a browser child is exactly the target — but a child
+that inspects `FONTCONFIG_FILE` will see it.
+
+**`test.use({ launchOptions: { env } })` inside a spec file is not detected.** The reporter reads
+the resolved config, where config-level and project-level `use` are visible; a `test.use()` in a
+spec file is applied inside the worker and never reaches the reporter. The pixel diff still
+surfaces it, and `deterministicLaunchOptions()` is still the fix.
 
 ### Both run modes, by default
 
@@ -79,9 +117,16 @@ The drop-in uses `target="font"`, which is load-bearing: Ubuntu's `10-sub-pixel-
 `rgba` at `target="pattern"` with `mode="append"`, and a pattern-level assign does not override
 it.
 
-### In a consumer's Playwright config
+### When the config sets its own browser environment
 
-For runs crvy-rprtr does not launch:
+`launchOptions.env` **replaces** the browser's environment rather than extending it, so it drops
+the reporter's pin. The reporter detects this in `onBegin` and warns once, naming the affected
+projects; it never rewrites the options, because it receives the resolved config read-only and
+the `env` may have been set for reasons of its own. The same is true of `connectOptions` and
+`launchServer`: a browser crvy-rprtr does not launch locally never receives the local
+environment, and no reporter-side pin can reach it.
+
+Either case is fixed from the config:
 
 ```ts
 import { defineConfig } from '@playwright/test'
@@ -94,7 +139,8 @@ export default defineConfig({
 
 The helper writes the generated root config and merges `FONTCONFIG_FILE` into
 `launchOptions.env` (keeping the inherited environment and the caller's own entries), so no
-drop-in has to be committed or installed in CI. `deterministicChromiumLaunchOptions()`, which
+drop-in has to be committed or installed in CI. A project whose `env` already carries that
+config is recognised as having applied the helper, and is not warned about. `deterministicChromiumLaunchOptions()`, which
 adds `--disable-lcd-text` instead, stays for configs that cannot set browser env vars — it is
 Chromium-only because Firefox exits on unknown command-line flags.
 

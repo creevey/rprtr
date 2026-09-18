@@ -1,6 +1,6 @@
 import type { LaunchOptions } from '@playwright/test'
 
-import { grayscaleFontconfigEnv, type GrayscaleFontconfigEnvOptions } from './fontconfig.ts'
+import { grayscaleFontconfigEnv, rootFontconfigPath, type GrayscaleFontconfigEnvOptions } from './fontconfig.ts'
 
 /**
  * Chromium switch that turns off subpixel (LCD RGB) text antialiasing and falls back to
@@ -29,6 +29,38 @@ export type FontRendering = 'grayscale' | 'inherit'
 export interface DeterministicLaunchOptions extends GrayscaleFontconfigEnvOptions {
   /** Default `'grayscale'`. `'inherit'` makes the helper a no-op. */
   fontRendering?: FontRendering
+}
+
+/** Why a run was left with the environment's own antialiasing. */
+export type FontRenderingSkipReason = 'inherit' | 'not-linux' | 'no-system-config' | 'already-pinned'
+
+export type FontRenderingResult = { pinned: true; path: string } | { pinned: false; reason: FontRenderingSkipReason }
+
+/**
+ * Pins grayscale text antialiasing on `env`, mutating it in place, or explains why it did
+ * not. The one place that decides "pin or not, and why": the reporters call it on
+ * `process.env` before any worker is forked, {@link deterministicLaunchOptions} calls it on
+ * a copy destined for `launchOptions.env`, and both run modes reuse the same reasons — so
+ * the four cannot drift apart.
+ *
+ * `already-pinned` is detected by comparing the incoming `FONTCONFIG_FILE` against our own
+ * generated path: `resolveSystemFontconfig` skips that file to stay re-entrant, so its
+ * presence is a reliable marker that a crvy-rprtr launcher set it.
+ */
+export function applyGrayscaleFontRendering(
+  env: Record<string, string | undefined>,
+  options: DeterministicLaunchOptions = {},
+): FontRenderingResult {
+  const { fontRendering = 'grayscale', ...envOptions } = options
+  if (fontRendering === 'inherit') return { pinned: false, reason: 'inherit' }
+  if ((envOptions.platform ?? process.platform) !== 'linux') return { pinned: false, reason: 'not-linux' }
+  if (env.FONTCONFIG_FILE === rootFontconfigPath()) return { pinned: false, reason: 'already-pinned' }
+
+  const fontconfig = grayscaleFontconfigEnv(env, envOptions)
+  if (fontconfig === null) return { pinned: false, reason: 'no-system-config' }
+
+  env.FONTCONFIG_FILE = fontconfig.FONTCONFIG_FILE
+  return { pinned: true, path: fontconfig.FONTCONFIG_FILE }
 }
 
 /**
@@ -72,15 +104,16 @@ export function deterministicLaunchOptions(
   base: LaunchOptions = {},
   options: DeterministicLaunchOptions = {},
 ): LaunchOptions {
-  const { fontRendering = 'grayscale', ...envOptions } = options
-  if (fontRendering === 'inherit') return base
   // `env` replaces the browser's environment rather than extending it, so the inherited one
   // has to be spread back in; the caller's own entries win over ours except for the override.
-  const baseEnv = { ...process.env, ...base.env }
-  const fontconfig = grayscaleFontconfigEnv(baseEnv, envOptions)
-  if (fontconfig === null) return base
+  const baseEnv: Record<string, string | undefined> = { ...process.env, ...base.env }
+  // Routing through the shared decision keeps this helper and the reporters from diverging.
+  // `already-pinned` is a pin too here: the value is exactly what we would have written.
+  const result = applyGrayscaleFontRendering(baseEnv, options)
+  if (!result.pinned && result.reason !== 'already-pinned') return base
+
   const env: NonNullable<LaunchOptions['env']> = {}
-  for (const [key, value] of Object.entries({ ...baseEnv, ...fontconfig })) {
+  for (const [key, value] of Object.entries(baseEnv)) {
     if (value !== undefined) env[key] = value
   }
   return { ...base, env }

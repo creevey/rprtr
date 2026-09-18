@@ -6,10 +6,11 @@
     "test": "vitest run",
     "test:ci": "CI=true vitest run",
     "update-snapshots": "vitest run --update",
-    "reporter": "crvy-rprtr"
+    "reporter": "crvy-rprtr",
+    "pack": "cd ../.. && bun run build && npm pack --pack-destination examples/vitest-browser && mv examples/vitest-browser/crvy-rprtr-*.tgz examples/vitest-browser/crvy-rprtr.tgz"
   },
   "devDependencies": {
-    "@crvy/rprtr": "^0.3.3",
+    "@crvy/rprtr": "file:./crvy-rprtr.tgz",
     "@vitest/browser-playwright": "4.1.11",
     "playwright": "1.59.0",
     "vitest": "4.1.11"
