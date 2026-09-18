@@ -24,6 +24,7 @@ import {
 } from './browser-pins.ts'
 import { log } from './debug-log.ts'
 import { copyResolvedBaseline, sanitizeId, saveAttachments } from './reporter-artifact-ops.ts'
+import { pinReporterFontRendering, type FontRenderingSeams } from './reporter-font-rendering.ts'
 import {
   collectNativeImageAttachments,
   type CrvyRprtrOptions,
@@ -50,7 +51,7 @@ export interface BrowserTypeLike {
   executablePath(): string
 }
 
-export interface ReporterSeams {
+export interface ReporterSeams extends FontRenderingSeams {
   /** Injectable browser types for tests; defaults to @playwright/test's. */
   browserTypes?: Partial<Record<PinBrowser, BrowserTypeLike>>
 }
@@ -72,6 +73,9 @@ export class CrvyRprtr implements Reporter {
   private environments: RunEnvironments | undefined
 
   constructor(options: CrvyRprtrOptions = {}, seams: ReporterSeams = {}) {
+    // Before the transport: this must happen before anything can fork a worker,
+    // and an invalid option should fail init rather than half-configure a run.
+    pinReporterFontRendering(options, seams)
     this.transport = new ReporterTransport(options)
     this.serverUrl = this.transport.serverUrl
     this.screenshotDir = this.transport.screenshotDir

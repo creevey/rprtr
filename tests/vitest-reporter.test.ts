@@ -5,6 +5,7 @@ import { join } from 'path'
 
 import { WebSocketServer, type WebSocket } from 'ws'
 
+import { rootFontconfigPath } from '../src/fontconfig'
 import { attachmentsToImages } from '../src/report-utils'
 import {
   OfflineReportSchema,
@@ -15,6 +16,8 @@ import {
   safeParse,
 } from '../src/schemas'
 import { CrvyRprtrVitestReporter } from '../src/vitest'
+
+const PINNED_PATH = '/tmp/crvy-rprtr/fonts.conf'
 
 const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2G0K0AAAAASUVORK5CYII=',
@@ -928,5 +931,51 @@ describe('CrvyRprtr Playwright reporter', () => {
     })
     expect(endMessage).toBeDefined()
     expect('approvalTargets' in (endMessage?.data ?? {})).toBe(false)
+  })
+})
+
+describe('CrvyRprtrVitestReporter font rendering', () => {
+  const linuxSeams = { platform: 'linux' as const, exists: (): boolean => true, writeConfig: (): string => PINNED_PATH }
+
+  test('pins the generated fontconfig on the env the browser provider inherits', () => {
+    const env: Record<string, string | undefined> = {}
+    expect(new CrvyRprtrVitestReporter({ ci: true }, { env, fontconfig: linuxSeams })).toBeDefined()
+    expect(env.FONTCONFIG_FILE).toBe(PINNED_PATH)
+  })
+
+  test('leaves the env alone and says why on fontRendering: inherit', () => {
+    const env: Record<string, string | undefined> = {}
+    const logs: string[] = []
+    expect(
+      new CrvyRprtrVitestReporter(
+        { ci: true, fontRendering: 'inherit' },
+        { env, fontconfig: linuxSeams, log: (message: string): void => void logs.push(message) },
+      ),
+    ).toBeDefined()
+    expect(env.FONTCONFIG_FILE).toBeUndefined()
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatch(/inherit/i)
+  })
+
+  test('says nothing when a crvy-rprtr run mode already pinned the environment', () => {
+    const env: Record<string, string | undefined> = { FONTCONFIG_FILE: rootFontconfigPath() }
+    const logs: string[] = []
+    expect(
+      new CrvyRprtrVitestReporter(
+        { ci: true },
+        { env, fontconfig: linuxSeams, log: (message: string): void => void logs.push(message) },
+      ),
+    ).toBeDefined()
+    expect(env.FONTCONFIG_FILE).toBe(rootFontconfigPath())
+    expect(logs).toEqual([])
+  })
+
+  test('rejects an invalid fontRendering value at reporter init', () => {
+    expect(
+      () =>
+        new CrvyRprtrVitestReporter({ ci: true, fontRendering: 'greyscale' } as unknown as Record<string, unknown>, {
+          fontconfig: linuxSeams,
+        }),
+    ).toThrow(/fontRendering/)
   })
 })

@@ -11,9 +11,9 @@
 
 ## 3. Reporter pins in its constructor
 
-- [ ] 3.1 Write failing tests that constructing `CrvyRprtr` pins `FONTCONFIG_FILE` on a supplied env on Linux, leaves it untouched for each skip reason, and logs exactly one line naming the reason on every skip except `already-pinned`. Verify: `cd tests && bun test reporter-font-rendering.test.ts` (expect failures)
-- [ ] 3.2 Call `applyGrayscaleFontRendering` from the `CrvyRprtr` constructor, behind the new option, with the process env injectable through the existing `ReporterSeams`. Verify: `cd tests && bun test reporter-font-rendering.test.ts`, `bun run typecheck`
-- [ ] 3.3 Apply the same constructor hook to the Vitest reporter in `src/vitest.ts`, with tests mirroring 3.1. Verify: `cd tests && bun test vitest-reporter.test.ts`, `bun run typecheck`
+- [x] 3.1 Write failing tests that constructing `CrvyRprtr` pins `FONTCONFIG_FILE` on a supplied env on Linux, leaves it untouched for each skip reason, and logs exactly one line naming the reason on every skip except `already-pinned`. Verify: `cd tests && bun test reporter-font-rendering.test.ts` (expect failures)
+- [x] 3.2 Call `applyGrayscaleFontRendering` from the `CrvyRprtr` constructor, behind the new option, with the process env injectable through the existing `ReporterSeams`. Verify: `cd tests && bun test reporter-font-rendering.test.ts`, `bun run typecheck`
+- [x] 3.3 Apply the same constructor hook to the Vitest reporter in `src/vitest.ts`, with tests mirroring 3.1. Verify: `cd tests && bun test vitest-reporter.test.ts`, `bun run typecheck`
 
 ## 4. `launchOptions.env` detection
 
