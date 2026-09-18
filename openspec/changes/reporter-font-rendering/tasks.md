@@ -29,4 +29,4 @@
 
 - [x] 6.1 Add the reporter row to the mechanism table in `README.md` (Text antialiasing) and `docs/text-antialiasing-determinism.md`, restate `deterministicLaunchOptions()` as the escape hatch for `launchOptions.env` / `connectOptions`, and note the one-time baseline regeneration. Verify: `bun run format:check`
 - [x] 6.2 Note the `webServer` / `globalSetup` env-leak caveat and the `test.use()` detection gap in `docs/text-antialiasing-determinism.md`, and cross-link from `docs/docker-screenshot-determinism.md`. Verify: `bun run format:check`
-- [ ] 6.3 Full gate: `bun run check` and `bun run test:playwright`
+- [x] 6.3 Full gate: `bun run check` and `bun run test:playwright`
