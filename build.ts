@@ -70,12 +70,20 @@ const patchedFiles = await Promise.all(
     content = content.replace(fix1Pattern, '!mod || !mod.__esModule')
 
     // Fix 2: import.meta.url is undefined in CJS. esbuild emits `var import_meta = {};`
-    // Replace with a polyfill using __filename so fileURLToPath(import_meta.url) works.
-    const fix2Pattern = 'var import_meta = {};'
-    if (content.includes('fileURLToPath') && !content.includes(fix2Pattern)) {
+    // once per bundled module that touches import.meta, numbering the extras
+    // (`import_meta2`, `import_meta3`, …). Every one needs the polyfill: an unpatched
+    // copy hands `undefined` to fileURLToPath/createRequire at runtime.
+    const fix2Pattern = /var (import_meta\d*) = \{\};/g
+    const usesImportMeta = /\bimport_meta\d*\./.test(content)
+    if (usesImportMeta && !fix2Pattern.test(content)) {
       throw new Error(`${file}: CJS Fix 2 pattern not found — esbuild output format may have changed`)
     }
-    content = content.replace(fix2Pattern, 'var import_meta = { url: require("url").pathToFileURL(__filename).href };')
+    fix2Pattern.lastIndex = 0
+    content = content.replace(fix2Pattern, 'var $1 = { url: require("url").pathToFileURL(__filename).href };')
+    const unpatched = content.match(/\bimport_meta\d*\.(?!url\b)\w+/g)
+    if (unpatched !== null) {
+      throw new Error(`${file}: unsupported import.meta usage in a CJS bundle: ${[...new Set(unpatched)].join(', ')}`)
+    }
 
     return { file, content }
   }),
