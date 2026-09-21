@@ -5,13 +5,11 @@ import pLimit from 'p-limit'
 import type { Reporter, TestCase, TestProject, TestRunEndReason, Vitest } from 'vitest/node'
 
 import { log, logError } from './debug-log.ts'
+import { ensureVitestInstalled } from './peer-guard.ts'
 import { saveAttachments } from './reporter-artifact-ops.ts'
 import { pinReporterFontRendering, type FontRenderingSeams } from './reporter-font-rendering.ts'
 import type { AttachmentData, ScreenshotDeclaration } from './reporter-utils.ts'
 import { ReporterTransport } from './transport.ts'
-import type { CrvyRprtrVitestReporterOptions } from './vitest-options.ts'
-
-export type { CrvyRprtrVitestReporterOptions }
 import {
   approvalTargetsFromEntries,
   buildAttachmentEntries,
@@ -29,6 +27,9 @@ import {
   resolveVitestConfigFile,
   relativeFileTokens,
 } from './vitest-helpers.ts'
+import type { CrvyRprtrVitestReporterOptions } from './vitest-options.ts'
+
+export type { CrvyRprtrVitestReporterOptions }
 
 interface PendingVitestArtifact {
   testId: string
@@ -91,6 +92,8 @@ export class CrvyRprtrVitestReporter implements Reporter {
   private moduleSources = new Map<string, string | null>()
 
   constructor(options: CrvyRprtrVitestReporterOptions = {}, seams: FontRenderingSeams = {}) {
+    // The missing-peer check comes first: without vitest there is no run to pin.
+    ensureVitestInstalled()
     // Before the transport: vitest constructs reporters before the browser
     // provider starts, so this is the last moment that still covers every browser.
     pinReporterFontRendering(options, seams)
