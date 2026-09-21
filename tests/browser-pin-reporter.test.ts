@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -58,9 +58,15 @@ function suiteStub(): object {
   return { allTests: () => [] }
 }
 
-// 3 s failed in 2 of 5 CI runs, each at 3017-3019 ms: a loaded shared runner,
-// not a defect. The assertion is about payload content, not latency, so a
-// higher ceiling costs nothing when the condition is met in milliseconds.
+// bun's default per-test timeout is 5 s, so a waitFor budget above it can never
+// be reached: the test would die at bun's limit and report a bare timeout
+// instead of waitFor's own message.
+setDefaultTimeout(30000)
+
+// The budget is generous because the assertion is about payload content, not
+// latency; when the condition is reachable it is met in milliseconds. It is not
+// a tolerance for a loaded runner — the CI failures that looked like slowness
+// were a reporter in offline mode that never sent the message at all.
 async function waitFor(condition: () => boolean, timeoutMs = 10000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -85,7 +91,10 @@ describe('reporter browser pins', () => {
 
     try {
       const reporter = new CrvyRprtr(
-        { serverUrl: `ws://127.0.0.1:${address.port}`, screenshotDir: join(dir, 'shots') },
+        // ci: false is load-bearing. It defaults to isCI(), and an offline
+        // reporter never sends register — so on any CI runner this test waited
+        // for a message that was never going to come.
+        { serverUrl: `ws://127.0.0.1:${address.port}`, screenshotDir: join(dir, 'shots'), ci: false },
         seams,
       )
       reporter.onBegin(

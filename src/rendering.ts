@@ -108,9 +108,13 @@ export function deterministicLaunchOptions(
   // has to be spread back in; the caller's own entries win over ours except for the override.
   const baseEnv: Record<string, string | undefined> = { ...process.env, ...base.env }
   // Routing through the shared decision keeps this helper and the reporters from diverging.
-  // `already-pinned` is a pin too here: the value is exactly what we would have written.
   const result = applyGrayscaleFontRendering(baseEnv, options)
-  if (!result.pinned && result.reason !== 'already-pinned') return base
+  if (!result.pinned) {
+    // `already-pinned` means the environment the browser would inherit already
+    // carries our config — nothing to do, unless the caller passed an `env` of
+    // their own, which REPLACES that environment and would drop the pin.
+    if (result.reason !== 'already-pinned' || base.env === undefined) return base
+  }
 
   const env: NonNullable<LaunchOptions['env']> = {}
   for (const [key, value] of Object.entries(baseEnv)) {
