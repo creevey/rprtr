@@ -40,6 +40,10 @@ trim = true
 conventional_commits = true
 filter_unconventional = true
 split_commits = false
+commit_preprocessors = [
+  { pattern = '''\s*\(tasks? [\d.,\s-]+\)''', replace = "" },
+  { pattern = '''\stasks? \d+(\.\d+)*''', replace = "" },
+]
 commit_parsers = [
   { message = "^feat", group = "Added" },
   { message = "^fix", group = "Fixed" },
@@ -48,7 +52,9 @@ commit_parsers = [
   { message = "^refactor", group = "Changed" },
   { message = "^style", group = "Styling" },
   { message = "^test", group = "Testing" },
+  { message = "^ci", group = "CI" },
   { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore\\(openspec\\)", skip = true },
   { message = "^chore", group = "Miscellaneous" },
 ]
 filter_commits = false
@@ -60,4 +66,4 @@ sort_commits = "oldest"
 
 [github]
 owner = "creevey"
-repo = "playwright-reporter"
+repo = "rprtr"

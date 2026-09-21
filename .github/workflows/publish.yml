@@ -95,6 +95,9 @@ jobs:
       - name: Generate CHANGELOG.md
         run: git-cliff --unreleased --tag "${{ steps.version.outputs.next }}" --prepend CHANGELOG.md
 
+      - name: Strip [Unreleased] sections
+        run: bun scripts/strip-unreleased-changelog.ts CHANGELOG.md
+
       - name: Commit and tag release
         run: |
           git add package.json CHANGELOG.md

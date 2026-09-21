@@ -20,6 +20,6 @@
     "types": ["bun", "svelte", "node"],
     "allowJs": true
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.svelte", "*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules"]
 }
