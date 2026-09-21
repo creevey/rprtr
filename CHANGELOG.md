@@ -5,16 +5,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-09-21
+
+### Added
+
+- **vitest:** Add vitest reporter build surface and deps
+- **vitest:** Add vitest-helpers with test-first coverage
+- **server:** Allowlist vitest artifact dirs and tag provider on events
+- **vitest:** Implement CrvyRprtrVitestReporter on the shared transport
+- **report-state:** Stamp approval metadata from reporter approvalTargets
+- **server:** Metadata-first approval with resolver fallback
+- **vitest:** Emit approvalTargets reference paths on test-end
+- **vitest:** Approve Vitest baselines end-to-end from replayed reports
+- **server:** Runner discriminator in the register contract
+- **vitest:** Reporter declares runner, cwd, and configFile in register
+- **server:** Per-runner launch args with shared package-manager resolution
+- **server:** Docker scoping for Vitest runs
+- **client:** Provider-neutral run errors with docker-refusal message
+- **server:** Vitest list discovery primitives
+- **server:** Seed vitest run context and pre-run test tree at startup
+- **server:** Merge, replace, and exclude discovered vitest tests
+- **vitest:** Source-level toMatchScreenshot declaration extraction
+- **vitest:** Reporter surfaces passing visual tests with baseline + approval metadata
+- **pins:** Browser build pins with offline verification across surfaces
+- **vitest:** Run docker-mode Vitest suites against a browser sidecar
+- **reporter:** Announce run-begin with the run's test ids
+- **state:** Start every test from a clean slate on run begin
+- **server:** Clear announced tests when a run begins
+- **rendering:** Centralize the grayscale-AA pinning decision
+- **schemas:** Validate the fontRendering reporter option
+- **reporter:** Pin grayscale antialiasing from the reporter constructor
+- **reporter:** Warn when a config replaces the browser environment
+- **reporter:** Name the missing runner instead of crashing on it
+
+### CI
+
+- **examples:** Install and run vitest-browser example
 
 ### Changed
 
-- **deps:** `@playwright/test` and `vitest` are now **optional** peer dependencies. Installing `@crvy/rprtr` no longer adds a test runner you are not using — a Playwright-only project no longer receives Vitest, and vice versa. If you relied on Vitest arriving transitively with `@crvy/rprtr`, add it to your own `devDependencies`: `npm i -D vitest`.
+- **reporter:** Extract provider-agnostic ReporterTransport module
+- **reporter:** Slim CrvyRprtr to a Playwright adapter over ReporterTransport
+- **reporter:** Finish transport extraction gate and fix jscpd format key
+
+### Documentation
+
+- **readme:** Vitest Browser Mode setup, options, and limitations
+- Vitest runs launch from the UI
+- **examples:** Scaffold vitest-browser example
+- **examples:** Vitest-browser components and tests
+- **examples:** Commit vitest-browser darwin baselines
+- **examples:** Commit vitest-browser linux baselines
+- **examples:** Vitest-browser README
+- Link vitest-browser example from Vitest Browser Mode section
+- **openspec:** Propose vitest-discovery change
+- Vitest startup discovery enables run buttons and pre-run listing
+- Passing vitest visual tests surface with baseline previews
+- Note that a new run clears the tests it executes
+- Document the reporter as a pinning mechanism
+- Note that each test runner is an optional peer
 
 ### Fixed
 
-- **deps:** `npm install` no longer fails with `Cannot read properties of null (reading 'edgesOut')` when `@crvy/rprtr` is installed from a local tarball into a Playwright-only project.
-- **reporter:** Importing a reporter whose test runner is not installed now fails with a message naming the missing package and the entry point that needs it, instead of a module-resolution error pointing inside `dist/`.
+- **client:** Show never-run pending tests in the sidebar tree
+- **ui:** Keep the sidebar tree stable across discovery and runs
+- **ui:** Surface non-visual tests instead of hiding them
+- **examples:** Pack the vitest example's dependency from source
+- **ci:** Green main — baselines, CI-mode tests, visible output
+- **examples:** Regenerate the vitest example baselines under the pin
+- **deps:** Mark both test runners as optional peers
+- **build:** Polyfill every import.meta stub in the CJS bundles
+- **ci:** Pack the vitest example tarball before publish install
+
+### Miscellaneous
+
+- Add openspec change extract-reporter-transport and agent configs
+- **test:** Gate fixes for vitest-browser-reporter
+- **vitest:** Vitest-runner change complete
+- **vitest:** Check off completed checkbox
+- **examples:** Vitest-browser change complete
+- Drop unused extraction wrapper, verify full gate
+- **examples:** Update vitest-browser baseline screenshots
+
+### Testing
+
+- **vitest:** Add real-browser vitest fixture with committed baseline
+- **vitest:** Integration test spawning a real browser-mode vitest run
+- **vitest:** Live-register integration with a real vitest browser run
+- **vitest:** Pin the passing browser run as a baseline-only report
+- **e2e:** Assert every worker of a real run inherits the pin
+- **e2e:** Assert the two pinning mechanisms render identically
+- **vitest:** Fail loudly when a fixture run executes nothing
+- **ci:** Run browser-dependent tests where a browser exists
+- **pins:** Give the register assertion a shared-runner budget
+- **package-surface:** Cover the optional-peer contract with a real install
 
 ## [0.3.3] - 2026-09-14
 
