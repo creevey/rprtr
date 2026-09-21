@@ -1,14 +1,14 @@
 # Offline Mode
 
-When the Crvy Rprtr server is unavailable (e.g., CI matrix builds), the Playwright reporter operates in offline mode to generate local report files for later review.
+When the Crvy Rprtr server is unavailable (e.g., CI matrix builds), both reporters — the Playwright reporter and the Vitest Browser Mode reporter — operate in offline mode to generate local report files for later review.
 
 ## How It Works
 
-1. Reporter attempts WebSocket connection to server
+1. Reporter attempts WebSocket connection to server (or goes straight offline when `CI` is detected)
 2. If connection fails, reporter enters **offline mode**
 3. Events are queued locally during test execution
-4. On `onEnd`, reporter writes `crvy-rprtr-{index}.json`
-5. On `onEnd`, reporter also writes `crvy-rprtr.html` for direct browser viewing
+4. At the end of the run, reporter writes `crvy-rprtr-{index}.json`
+5. At the end of the run, reporter also writes `crvy-rprtr.html` for direct browser viewing
 
 ## Server-Side Loading
 
@@ -26,6 +26,15 @@ reporter: [
     },
   ],
 ]
+```
+
+```typescript
+// vitest.config.ts
+reporters: [
+  new CrvyRprtrVitestReporter({
+    serverUrl: process.env.CRVY_RPRTR_SERVER_URL ?? 'ws://localhost:3000',
+  }),
+],
 ```
 
 ## Artifacts
@@ -56,9 +65,9 @@ npx crvy-rprtr \
 
 ## Limitations
 
-- Offline events are only written to file when `onEnd()` is called
+- Offline events are only written to file at the end of the run (`onEnd()` for Playwright)
 - If WebSocket reconnects after being offline, queued events stay in memory and are NOT sent to the server
-- For matrix CI, each worker writes its own offline report file
+- In a multi-worker run, each worker writes its own offline report file
 - The static `crvy-rprtr.html` artifact is read-only and does not apply approvals by itself
 
 ## Environment Variables

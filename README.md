@@ -168,7 +168,7 @@ When the server can resolve a run configuration (via `--config`/auto-discovery f
 - **Vitest** runs spawn `vitest run --config <config>` — the project's own Vitest config carries the reporter, so nothing is injected. Per-test reruns filter by test file plus a `-t` pattern built from the test's full title path; `-t` matches test names as a substring, so selection is approximate and similarly named tests may run too. Update runs pass `--update`.
 - **Vitest discovery** — when the server discovers a `vitest.config.*` at startup, it also lists the project's tests (`vitest list`, collection only) and pre-populates the sidebar with them as pending, before anything has run. Discovered entries fill only the gaps in a loaded report, are replaced wholesale by the first real run, and are never persisted to `report.json` or the static artifact.
 
-Docker mode applies to Playwright runs only: with `--run-mode docker`, Vitest run requests fail fast with a clear message instead of launching a container; with `auto`, Vitest runs launch locally with a one-line warning. Approval-routing resolver overrides are available through the programmatic server API, not additional CLI flags.
+Docker mode covers both runners: Playwright runs execute inside the container, while Vitest runs execute on the host against a managed `playwright run-server` sidecar in the same image (see [Docker Mode](#docker-mode)). Explicit `--run-mode docker` refuses a Vitest run whose config lacks the `CRVY_RPRTR_BROWSER_WS` hook (`docker-missing-browser-hook`); `auto` warns once and runs locally. Approval-routing resolver overrides are available through the programmatic server API, not additional CLI flags.
 
 ## How It Works
 
@@ -274,13 +274,25 @@ For fully portable artifact loading across operating systems, run the reporter i
 
 ## Docker Mode
 
-Run Playwright browsers inside a pinned Docker container so screenshot baselines are reproducible across machines — no local browser or system-dependency installation required.
+Run browsers inside a pinned Docker container so screenshot baselines are reproducible across machines — no local browser or system-dependency installation required.
 
 ```bash
 npx crvy-rprtr --run-mode docker
 ```
 
-The server still runs on your host; only `playwright test` executes in the container, against the official `mcr.microsoft.com/playwright:v<your @playwright/test version>-noble` image with your project bind-mounted. Reporters stream results back live, and approve/update flows work unchanged. Vitest runs are not containerized (their image would need vitest plus a browser provider): under explicit `--run-mode docker`, Vitest run requests fail fast; under `auto`, they launch locally with a warning.
+The server still runs on your host. Playwright runs execute in the container, against the official `mcr.microsoft.com/playwright:v<your @playwright/test version>-noble` image with your project bind-mounted. Vitest runs execute on the host and use a **managed browser sidecar** instead: rprtr starts a warm `playwright run-server` in the same image (same grayscale fontconfig and `TZ`/locale pinning) and passes its loopback endpoint to Vitest through `CRVY_RPRTR_BROWSER_WS` — only the browser moves into the container. Reporters stream results back live, and approve/update flows work unchanged.
+
+The project's `vitest.config.ts` opts into the sidecar with the documented hook:
+
+```ts
+provider: playwright({
+  connectOptions: process.env.CRVY_RPRTR_BROWSER_WS
+    ? { wsEndpoint: process.env.CRVY_RPRTR_BROWSER_WS, exposeNetwork: '<loopback>' }
+    : undefined,
+}),
+```
+
+Explicit `--run-mode docker` without the hook fails fast with `docker-missing-browser-hook`; `auto` warns once and runs locally. The variable is inert without a docker-mode server, so the same config works in CI against a sidecar you manage yourself.
 
 | Mode             | Behavior                                                                        |
 | ---------------- | ------------------------------------------------------------------------------- |

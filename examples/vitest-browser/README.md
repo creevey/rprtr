@@ -4,7 +4,7 @@ This example shows [Vitest Browser Mode](https://vitest.dev/guide/browser/) work
 
 It is intentionally **framework-free** (vanilla DOM components, no dependencies beyond Vitest, its browser provider, and the reporter) so every piece of the mechanism is visible — the same philosophy as the [component-testing example](../component-testing).
 
-> **Version note:** the `CrvyRprtrVitestReporter` is published under the `@crvy/rprtr/vitest` export. npm release **0.3.3 predates it** — use the next release (`@crvy/rprtr@^0.3.3` in `package.json` resolves it as soon as it is published).
+> **Version note:** the `CrvyRprtrVitestReporter` is published under the `@crvy/rprtr/vitest` export since **`@crvy/rprtr@0.4.0`** — older versions have no Vitest entry point.
 
 ## Requirements
 
@@ -137,5 +137,5 @@ Explicit docker mode without the snippet in the project's Vitest config fails fa
 - **The sidebar lists tests before the first run** — that's startup discovery: the server asks Vitest to enumerate the suite when it starts (collection only, no browser launch). The list is pending-only; run the tests to get real results, and edits made after the server started appear on the next run.
 - **Visual tests fail on a brand-new machine/CI runner** — you're on a platform suffix without baselines (e.g. first linux run without `-linux` references). Run once to write them, or `bun run update-snapshots`, then commit.
 - **Diffs appear everywhere after an intentional redesign** — use `bun run update-snapshots`, or click **Approve All** in the UI, then commit the regenerated `__screenshots__/` files.
-- **The config fails to load with `Missing "./vitest" specifier`** — your `@crvy/rprtr` version predates the Vitest reporter (see version note at the top).
+- **The config fails to load with `Missing "./vitest" specifier`** — your `@crvy/rprtr` is older than 0.4.0, which introduced the Vitest reporter (see version note at the top).
 - **Chromium doesn't start** — the playwright provider launches the pinned `playwright@1.59.0` browsers; run `bunx playwright install chromium` once if they are missing.
