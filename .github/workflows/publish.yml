@@ -47,7 +47,7 @@ jobs:
 
       - name: Install vitest browser example dependencies
         working-directory: examples/vitest-browser
-        run: bun install --frozen-lockfile
+        run: bun run pack && bun install --frozen-lockfile
 
       - name: Install git-cliff
         run: bun add -g git-cliff
