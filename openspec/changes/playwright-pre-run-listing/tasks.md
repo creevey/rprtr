@@ -20,4 +20,4 @@
 ## 4. Docs and full gate
 
 - [x] 4.1 Update README.md — the `--config` row, the run-buttons bullets ("Vitest discovery" becomes pre-run discovery for both runners), and the Vitest section's first-run sentence — and verify `bun run format:check` (no `docs/*.md` behavior pages change).
-- [ ] 4.2 Full gate: `bun run check` (lint, typecheck, format:check, knip, test:bun, duplicates, publint); browser behavior is unchanged, so `bun run test:playwright` is not required. Confirm every task above is checked and `openspec validate playwright-pre-run-listing --strict` passes.
+- [x] 4.2 Full gate: `bun run check` (lint, typecheck, format:check, knip, test:bun, duplicates, publint); browser behavior is unchanged, so `bun run test:playwright` is not required. Confirm every task above is checked and `openspec validate playwright-pre-run-listing --strict` passes.
