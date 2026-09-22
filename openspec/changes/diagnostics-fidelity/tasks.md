@@ -4,7 +4,7 @@
 
 - [x] 1.1 Add failing matrix cases to `tests/docker-preflight.test.ts`: with an injected `platform: 'linux'` and injected `hostAddresses`, a gateway address answering only at the loopback alias produces the new loopback-only notice, and one answering at a non-loopback IPv4 address produces no notice; with `platform: 'darwin'` or `'win32'` the loopback alias keeps counting as reachable; nothing answering keeps the existing gateway notice. Verify: `bun run build && cd tests && bun test docker-preflight.test.ts` fails on the new assertions.
 - [x] 1.2 Implement the platform-aware availability and the loopback-only notice in `src/server/docker-host-services.ts`, defaulting `hostAddresses` to the host's non-internal IPv4 addresses from `os.networkInterfaces()`. Verify: `bun run build && cd tests && bun test docker-preflight.test.ts` passes and `bun run typecheck` is clean.
-- [ ] 1.3 Add a failing launcher case to `tests/docker-launcher.test.ts` that the per-run diagnostic receives the launcher's platform seam, then pass `platform` through in `src/server/docker-launcher.ts`. Verify: `bun run build && cd tests && bun test docker-launcher.test.ts` passes.
+- [x] 1.3 Add a failing launcher case to `tests/docker-launcher.test.ts` that the per-run diagnostic receives the launcher's platform seam, then pass `platform` through in `src/server/docker-launcher.ts`. Verify: `bun run build && cd tests && bun test docker-launcher.test.ts` passes.
 
 ## 2. Reporter output passthrough
 
@@ -18,4 +18,4 @@
 
 ## 4. Full verification
 
-- [ ] 4.1 Run the complete gate and the browser suite: `bun run check` and `bun run test:playwright`; confirm every task above is checked and the docs page is updated. Fix any surfaced issues before declaring the change complete.
+- [x] 4.1 Run the complete gate and the browser suite: `bun run check` and `bun run test:playwright`; confirm every task above is checked and the docs page is updated. Fix any surfaced issues before declaring the change complete.
