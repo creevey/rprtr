@@ -176,6 +176,17 @@ export class RunController {
     })
   }
 
+  /**
+   * Logs host-service divergence notices through the warning sink. Notices are
+   * never persisted: they only decorate the running broadcast for the live UI.
+   */
+  private warnNotices(notices: readonly string[]): void {
+    for (const notice of notices) {
+      if (this.deps.warn === undefined) console.warn(notice)
+      else this.deps.warn(notice)
+    }
+  }
+
   start(filters: RunFilters): StartResult {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: false, reason: 'no-config' }
@@ -218,7 +229,11 @@ export class RunController {
     })
     this.deps.setReportRunning(true)
     this.deps.setRunFiltered?.(filters.tests !== undefined)
-    this.deps.broadcast({ type: 'run-status', data: { running: true, mode } })
+    this.warnNotices(this.runNotices)
+    this.deps.broadcast({
+      type: 'run-status',
+      data: { running: true, mode, ...(this.runNotices.length === 0 ? {} : { notices: this.runNotices }) },
+    })
     return { ok: true }
   }
 

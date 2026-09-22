@@ -21,10 +21,10 @@
 
 ## 4. Live UI notice
 
-- [ ] 4.1 Add a failing schema case to `tests/schemas.test.ts` that `run-status` accepts an optional `notices: string[]` and still accepts payloads without it; update `src/schemas.ts` and `src/types.ts`. Verify: `bun run build && cd tests && bun test schemas.test.ts` passes and `bun run typecheck` is clean.
-- [ ] 4.2 Add a failing case to `tests/run-controller.test.ts` that the running broadcast after a warned prepare carries the notices; implement the plumbing in `src/server/run-controller.ts` and log each notice through the warning sink. Verify: `bun run build && cd tests && bun test run-controller.test.ts` passes.
-- [ ] 4.3 Render the notices in the sidebar: `src/client/App.svelte` keeps them for the current run and `src/client/components/Sidebar.svelte` displays them next to `runMessage`; clear them when the next run starts. Verify: `bun run build && bun run typecheck` is clean and `bun run test:playwright` exercises the run controls without regressions.
-- [ ] 4.4 Add a regression assertion that notices never reach report persistence or artifacts: after a warned prepare/start cycle the controller's report setters see only running flags, and `bun run build && cd tests && bun test report-persistence.test.ts offline-artifact.test.ts` stays green.
+- [x] 4.1 Add a failing schema case to `tests/schemas.test.ts` that `run-status` accepts an optional `notices: string[]` and still accepts payloads without it; update `src/schemas.ts` and `src/types.ts`. Verify: `bun run build && cd tests && bun test schemas.test.ts` passes and `bun run typecheck` is clean.
+- [x] 4.2 Add a failing case to `tests/run-controller.test.ts` that the running broadcast after a warned prepare carries the notices; implement the plumbing in `src/server/run-controller.ts` and log each notice through the warning sink. Verify: `bun run build && cd tests && bun test run-controller.test.ts` passes.
+- [x] 4.3 Render the notices in the sidebar: `src/client/App.svelte` keeps them for the current run and `src/client/components/Sidebar.svelte` displays them next to `runMessage`; clear them when the next run starts. Verify: `bun run build && bun run typecheck` is clean and `bun run test:playwright` exercises the run controls without regressions.
+- [x] 4.4 Add a regression assertion that notices never reach report persistence or artifacts: after a warned prepare/start cycle the controller's report setters see only running flags, and `bun run build && cd tests && bun test report-persistence.test.ts offline-artifact.test.ts` stays green.
 
 ## 5. Docs
 

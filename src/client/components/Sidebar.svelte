@@ -24,6 +24,8 @@
     approvalMessage?: string;
     runEnabled: boolean;
     runMessage?: string | null;
+    /** Docker host-service divergence notices for the current run. */
+    runNotices?: string[];
     filter: CrvyRprtrViewFilter;
     canApprove: boolean;
     environments?: RunEnvironments;
@@ -43,7 +45,7 @@
   }
 
   let {
-    tests, selectedId, focusedPath, isReport, isRunning, isUpdateMode, approvalEnabled, approvalMessage, runEnabled, runMessage, filter, canApprove,
+    tests, selectedId, focusedPath, isReport, isRunning, isUpdateMode, approvalEnabled, approvalMessage, runEnabled, runMessage, runNotices = [], filter, canApprove,
     environments,
     onFilterChange, onSelect, onOpen, onToggle, onStart, onStop, onUpdate, onRun, onApprove, onNext, onApproveAll,
     runMode, isPreparing,
@@ -190,6 +192,9 @@
     {#if runMessage}
       <div class="mt-2 text-center text-xs text-fg-muted">{runMessage}</div>
     {/if}
+    {#each runNotices as notice (notice)}
+      <div class="mt-2 text-left text-xs text-warning" data-testid="run-notice">{notice}</div>
+    {/each}
   </div>
 
   <!-- Tree -->

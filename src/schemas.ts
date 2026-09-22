@@ -176,6 +176,8 @@ export const WebSocketMessageSchema = z.discriminatedUnion('type', [
       running: z.boolean(),
       mode: z.enum(['local', 'docker']).optional(),
       phase: z.string().optional(),
+      /** Docker host-service divergence notices for this run; absent when there is no divergence. */
+      notices: z.array(z.string()).optional(),
     }),
   }),
 ])

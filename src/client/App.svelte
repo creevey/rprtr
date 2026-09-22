@@ -68,6 +68,7 @@
   // svelte-ignore state_referenced_locally — intentionally capture initial value for local mutation
   let environments = $state<RunEnvironments | undefined>(initialEnvironments);
   let runMessage = $state<string | null>(null);
+  let runNotices = $state<string[]>([]);
   let isPreparing = $state(false);
   let runSnapshot: Map<string, TestStatus | undefined> | null = null;
   let runEventIds: Set<string> = new Set();
@@ -462,6 +463,8 @@
           if (msg.data.running) {
             isRunning = true;
             runMessage = null;
+            // A new run replaces the previous run's notices; a plain run clears them.
+            runNotices = msg.data.notices ?? [];
           } else {
             isRunning = false;
             finalizeRunSnapshot();
@@ -491,6 +494,7 @@
     {approvalMessage}
     {runEnabled}
     {runMessage}
+    {runNotices}
     {filter}
     {canApprove}
     {environments}

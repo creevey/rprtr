@@ -779,6 +779,55 @@ describe('RunController.prepareRun notices', () => {
 
     expect(await f.controller.prepareRun()).toEqual({ ok: true })
   })
+
+  test('the running broadcast after a warned prepare carries the notices and logs them', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLauncherMode('docker')
+    f.setLauncherDiagnose(() => Promise.resolve(['notice A', 'notice B']))
+    expect(await f.controller.prepareRun()).toEqual({ ok: true, notices: ['notice A', 'notice B'] })
+
+    f.controller.start({})
+
+    expect(f.broadcasts).toContainEqual({
+      type: 'run-status',
+      data: { running: true, mode: 'docker', notices: ['notice A', 'notice B'] },
+    })
+    expect(f.warnings).toEqual(['notice A', 'notice B'])
+  })
+
+  test('a run without notices broadcasts the plain running status', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLauncherMode('docker')
+    f.setLauncherDiagnose(() => Promise.resolve([]))
+    await f.controller.prepareRun()
+
+    f.controller.start({})
+
+    expect(f.broadcasts).toEqual([{ type: 'run-status', data: { running: true, mode: 'docker' } }])
+    expect(f.warnings).toEqual([])
+  })
+
+  test('notices never reach report persistence or artifacts', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLauncherMode('docker')
+    f.setLauncherDiagnose(() => Promise.resolve(['notice A']))
+    await f.controller.prepareRun()
+
+    f.controller.start({})
+
+    // Report persistence only ever sees running flags: notices live on the broadcast,
+    // and run-end still only flips the running flag and saves the report.
+    expect(f.runningFlag.value).toBe(true)
+    expect(f.filteredCalls).toEqual([false])
+    expect(f.broadcasts).toContainEqual({
+      type: 'run-status',
+      data: { running: true, mode: 'docker', notices: ['notice A'] },
+    })
+
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect(f.runningFlag.value).toBe(false)
+    expect(f.saveReportCalls.value).toBe(1)
+  })
 })
 
 describe('RunController.start run scope signaling', () => {
