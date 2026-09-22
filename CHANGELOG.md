@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-09-22
+
+### Added
+
+- **server:** Parse Playwright list reports into discovered tests
+- **server:** List Playwright tests at startup
+- **vitest:** Resolve browser pins and effective builds
+- **vitest:** Resolve and stream browser pin environments
+- **vitest:** Read declared pins through the project's own Vitest
+- **cli:** Check Vitest pins and resolve Vitest-only installs
+- **server:** Preflight Vitest pins and export sidecar image
+- **docker:** Export host gateway contract into docker runs
+- **server:** Resolve the Playwright config through a generated v2 reporter
+- **server:** Diagnose docker host-service divergence before a run
+- **ui:** Show docker host-service divergence notices for the run
+- **server:** Add the test-file watcher for live discovery
+- **server:** Distinguish failed test listings from empty projects
+- **server:** Reconcile the discovered layer against fresh listings
+- **server:** Serialize discovery refreshes behind a session
+- **server:** Start live discovery with the app and settle it on run end
+
+### Changed
+
+- **server:** Extract runner-neutral discovered-test machinery
+
+### Documentation
+
+- Align Vitest docker sidecar, offline mode, and 0.4.0 notes
+- Describe pre-run test listing for both runners
+- Document Vitest browser pinning and sidecar preflight
+- Document the docker host-service contract and diagnostics
+- **openspec:** Add the vitest-discovery-refresh change proposal
+- Describe live pre-run discovery refresh
+
+### Fixed
+
+- **vitest:** Resolve the vitest peer inside bundled configs
+
+### Miscellaneous
+
+- Adopt the OpenCode 2 plugin toolchain
+
+### Testing
+
+- **server:** Cover live refresh parity for Playwright projects
 ## [0.4.0] - 2026-09-21
 
 ### Added
