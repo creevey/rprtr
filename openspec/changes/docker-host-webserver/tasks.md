@@ -33,4 +33,4 @@
 
 ## 6. Full verification
 
-- [ ] 6.1 Run the complete gate and browser suite: `bun run check` and `bun run test:playwright`, confirm all tasks above are checked off and the docs from section 5 are updated. Fix any surfaced issues before declaring the change complete.
+- [x] 6.1 Run the complete gate and browser suite: `bun run check` and `bun run test:playwright`, confirm all tasks above are checked off and the docs from section 5 are updated. Fix any surfaced issues before declaring the change complete.
