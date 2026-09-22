@@ -14,7 +14,7 @@
 
 ## 3. Docs
 
-- [ ] 3.1 Update `docs/docker-host-services.md`: platform matrix (Linux loopback-only answers warn; Docker Desktop forwards host loopback), probe semantics (gateway hostname, then non-loopback IPv4 addresses, then the loopback alias only on Docker Desktop), and the loopback-only bind remedy. Verify: `bun run format:check`.
+- [x] 3.1 Update `docs/docker-host-services.md`: platform matrix (Linux loopback-only answers warn; Docker Desktop forwards host loopback), probe semantics (gateway hostname, then non-loopback IPv4 addresses, then the loopback alias only on Docker Desktop), and the loopback-only bind remedy. Verify: `bun run format:check`.
 
 ## 4. Full verification
 
