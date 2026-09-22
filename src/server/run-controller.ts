@@ -64,6 +64,8 @@ export interface RunControllerDeps {
   setReportRunning(running: boolean): void
   /** Records whether the in-progress run is filtered, so run-end can preserve unrelated tests. */
   setRunFiltered?(filtered: boolean): void
+  /** Invoked when the child exits, so a discovery refresh queued during the run can apply. */
+  notifyRunSettled?: () => void
   containerPathMapping?: ContainerPathMapping
   /** Flushes pending report writes on child exit so an interrupted run still persists. */
   saveReport?: () => Promise<void>
@@ -289,6 +291,7 @@ export class RunController {
     if (code !== null && code !== 0) console.warn(`[RunController] test run exited with code ${code}`)
     this.deps.setReportRunning(false)
     this.deps.broadcast({ type: 'run-status', data: { running: false, mode } })
+    this.deps.notifyRunSettled?.()
     void this.deps.saveReport?.()
   }
 }

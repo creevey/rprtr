@@ -66,6 +66,36 @@ function createReportRequest(app: ServerApp): () => Promise<ReportApiBody> {
   }
 }
 
+/**
+ * A test file that appends to an out-of-project marker whenever Vitest collects
+ * it — one marker byte per `vitest list` spawn, letting tests prove a refresh
+ * did NOT run.
+ */
+function markerTestFile(markerPath: string, titles: string[]): string {
+  const tests = titles.map((title) => `it(${JSON.stringify(title)}, () => {})`).join('\n')
+  return `import { appendFileSync } from 'node:fs'\nimport { it } from 'vitest'\nappendFileSync(${JSON.stringify(markerPath)}, 'x')\n${tests}\n`
+}
+
+function createMarkerPath(label: string): string {
+  return join(TMP_ROOT, `${label}-${process.pid}-${Math.random().toString(36).slice(2, 8)}.log`)
+}
+
+/**
+ * Watcher startup can replay recent filesystem activity as one extra listing,
+ * so tests wait until the marker stops growing before using it as a baseline.
+ */
+async function settledMarkerLength(path: string): Promise<number> {
+  let stable = 0
+  let last = -1
+  for (let attempt = 0; attempt < 24 && stable < 3; attempt += 1) {
+    const length = (await readFile(path, 'utf8')).length
+    stable = length === last ? stable + 1 : 0
+    last = length
+    await Bun.sleep(500)
+  }
+  return last
+}
+
 afterEach(async () => {
   await rm(TMP_ROOT, { recursive: true, force: true })
 })
@@ -197,6 +227,171 @@ describe('startup seeding', () => {
     const persisted = JSON.parse(raw) as { tests: Record<string, TestData> }
     expect(Object.keys(persisted.tests)).toEqual(['run-id-1'])
     expect(persisted.tests['run-id-1']?.title).toBe('a really run test')
+  })
+})
+
+describe('live refresh', () => {
+  let app: ServerApp | null = null
+
+  afterEach(async () => {
+    if (app !== null) {
+      await app.close()
+      app = null
+    }
+  })
+
+  test('a watched test file edit refreshes the pending tree without a run', async () => {
+    const projectDir = await createTempProject({
+      'vitest.config.ts': VITEST_CONFIG,
+      'tests/one.test.ts': `import { it } from 'vitest'\nit('first discovered test', () => {})\n`,
+    })
+    app = await startSeededApp(projectDir)
+    const request = createReportRequest(app)
+    await waitFor((b) => Object.keys(b.tests ?? {}).length === 1, request)
+
+    await writeFile(
+      join(projectDir, 'tests', 'one.test.ts'),
+      `import { it } from 'vitest'\nit('first discovered test', () => {})\nit('second discovered test', () => {})\n`,
+    )
+    const added = await waitFor(
+      (b) => Object.values(b.tests ?? {}).some((entry) => entry.title === 'second discovered test'),
+      request,
+    )
+    const addedTest = Object.values(added.tests ?? {}).find((entry) => entry.title === 'second discovered test')
+    expect(addedTest?.status).toBe('pending')
+    expect(addedTest?.id?.startsWith('discovered:')).toBe(true)
+
+    await writeFile(
+      join(projectDir, 'tests', 'one.test.ts'),
+      `import { it } from 'vitest'\nit('first discovered test', () => {})\n`,
+    )
+    const removed = await waitFor(
+      (b) => !Object.values(b.tests ?? {}).some((entry) => entry.title === 'second discovered test'),
+      request,
+    )
+    expect(Object.keys(removed.tests ?? {}).length).toBe(1)
+  })
+
+  test('an artifact-only write schedules no re-enumeration', async () => {
+    const marker = createMarkerPath('artifact')
+    const projectDir = await createTempProject({
+      'vitest.config.ts': VITEST_CONFIG,
+      'tests/one.test.ts': markerTestFile(marker, ['first discovered test']),
+      'artifacts/keep.txt': '',
+    })
+    app = await startSeededApp(projectDir)
+    const body = await waitFor((b) => Object.keys(b.tests ?? {}).length === 1, createReportRequest(app))
+    expect(Object.keys(body.tests ?? {}).length).toBe(1)
+    const listingsAfterSeed = await settledMarkerLength(marker)
+    expect(listingsAfterSeed).toBeGreaterThan(0)
+
+    const snapshotDir = join(projectDir, 'tests', 'one.test.ts-snapshots')
+    await mkdir(snapshotDir, { recursive: true })
+    await writeFile(join(snapshotDir, 'one-chromium-darwin.png'), 'png')
+    await Bun.sleep(3000)
+
+    expect((await readFile(marker, 'utf8')).length).toBe(listingsAfterSeed)
+  })
+
+  test('close() disposes watchers so later edits change nothing', async () => {
+    const marker = createMarkerPath('close')
+    const projectDir = await createTempProject({
+      'vitest.config.ts': VITEST_CONFIG,
+      'tests/one.test.ts': markerTestFile(marker, ['first discovered test']),
+    })
+    app = await startSeededApp(projectDir)
+    const request = createReportRequest(app)
+    await waitFor((b) => Object.keys(b.tests ?? {}).length === 1, request)
+    const listingsBeforeClose = await settledMarkerLength(marker)
+
+    const closedApp = app
+    await closedApp.close()
+    app = null
+
+    await writeFile(
+      join(projectDir, 'tests', 'one.test.ts'),
+      markerTestFile(marker, ['first discovered test', 'late discovered test']),
+    )
+    await Bun.sleep(3000)
+
+    expect((await readFile(marker, 'utf8')).length).toBe(listingsBeforeClose)
+    const body = await createReportRequest(closedApp)()
+    const titles = Object.values(body.tests ?? {}).map((entry) => entry.title)
+    expect(titles).toEqual(['first discovered test'])
+  })
+  test('a file change during a streamed run applies only after run-end', async () => {
+    const projectDir = await createTempProject({
+      'vitest.config.ts': VITEST_CONFIG,
+      'tests/one.test.ts': `import { it } from 'vitest'\nit('first discovered test', () => {})\n`,
+    })
+    app = await startSeededApp(projectDir)
+    const request = createReportRequest(app)
+    await waitFor((b) => Object.keys(b.tests ?? {}).length === 1, request)
+
+    await app.handleWebSocketMessage(JSON.stringify({ type: 'run-begin', data: { testIds: ['run-id-1'] } }))
+    await app.handleWebSocketMessage(
+      JSON.stringify({
+        type: 'test-begin',
+        data: {
+          id: 'run-id-1',
+          title: 'first discovered test',
+          titlePath: [],
+          browser: 'chromium',
+          location: { file: join(projectDir, 'tests', 'one.test.ts'), line: 1 },
+        },
+      }),
+    )
+    expect((await request()).isRunning).toBe(true)
+
+    await writeFile(
+      join(projectDir, 'tests', 'one.test.ts'),
+      `import { it } from 'vitest'\nit('first discovered test', () => {})\nit('second discovered test', () => {})\n`,
+    )
+    await Bun.sleep(2500)
+    const during = await request()
+    expect(during.isRunning).toBe(true)
+    expect(Object.values(during.tests ?? {}).some((entry) => entry.title === 'second discovered test')).toBe(false)
+    expect(during.tests?.['run-id-1']?.status).toBe('running')
+
+    await app.handleWebSocketMessage(JSON.stringify({ type: 'run-end', data: { status: 'passed' } }))
+    const after = await waitFor(
+      (b) => Object.values(b.tests ?? {}).some((entry) => entry.title === 'second discovered test'),
+      request,
+    )
+    expect(after.isRunning).toBe(false)
+    expect(after.tests?.['run-id-1']?.status).toBe('running')
+    expect(Object.values(after.tests ?? {}).find((entry) => entry.title === 'second discovered test')?.status).toBe(
+      'pending',
+    )
+  })
+
+  test('a UI-launched run exit reconciles a change made while it ran', async () => {
+    const projectDir = await createTempProject({
+      'vitest.config.ts': VITEST_CONFIG,
+      'tests/one.test.ts': `import { it } from 'vitest'\nit('first discovered test', () => {})\n`,
+    })
+    app = await startSeededApp(projectDir)
+    const request = createReportRequest(app)
+    await waitFor((b) => Object.keys(b.tests ?? {}).length === 1, request)
+
+    const runResponse = await app.handleRequest(new Request('http://localhost/api/run', { method: 'POST', body: '{}' }))
+    expect((await runResponse.json()) as { ok?: boolean }).toEqual({ ok: true })
+    expect((await request()).isRunning).toBe(true)
+
+    await writeFile(
+      join(projectDir, 'tests', 'one.test.ts'),
+      `import { it } from 'vitest'\nit('first discovered test', () => {})\nit('second discovered test', () => {})\n`,
+    )
+
+    const after = await waitFor(
+      (b) =>
+        b.isRunning === false && Object.values(b.tests ?? {}).some((entry) => entry.title === 'second discovered test'),
+      request,
+    )
+    expect(after.isRunning).toBe(false)
+    expect(Object.values(after.tests ?? {}).find((entry) => entry.title === 'second discovered test')?.status).toBe(
+      'pending',
+    )
   })
 })
 

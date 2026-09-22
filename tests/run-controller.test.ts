@@ -64,6 +64,7 @@ interface Fixture {
   sidecarPhases: string[]
   diagnoseCalls: { value: number }
   setLauncherDiagnose: (fn: (() => Promise<string[]>) | null) => void
+  notifyRunSettledCalls: { value: number }
 }
 
 function createFixture(
@@ -97,6 +98,7 @@ function createFixture(
   const sidecarPhases: string[] = []
   const diagnoseCalls = { value: 0 }
   let launcherDiagnose: (() => Promise<string[]>) | null = null
+  const notifyRunSettledCalls = { value: 0 }
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -109,6 +111,9 @@ function createFixture(
     },
     setRunFiltered: (filtered): void => {
       filteredCalls.push(filtered)
+    },
+    notifyRunSettled: (): void => {
+      notifyRunSettledCalls.value += 1
     },
     spawn: (cmd, args, opts): ChildProcessLike => {
       spawnCalls.push({ cmd, args, opts })
@@ -245,6 +250,7 @@ function createFixture(
     setLauncherDiagnose: (fn): void => {
       launcherDiagnose = fn
     },
+    notifyRunSettledCalls,
   }
 }
 
@@ -913,6 +919,22 @@ describe('RunController child exit', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(f.saveReportCalls.value).toBe(1)
+  })
+
+  test('notifies the discovery session when a UI-launched child exits', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    expect(f.notifyRunSettledCalls.value).toBe(0)
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect(f.notifyRunSettledCalls.value).toBe(1)
+  })
+
+  test('notifies the discovery session once when a spawn error is followed by exit', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.child.errorEmitters.forEach((cb) => cb(new Error('ENOENT')))
+    f.child.exitEmitters.forEach((cb) => cb(1))
+    expect(f.notifyRunSettledCalls.value).toBe(1)
   })
 })
 

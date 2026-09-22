@@ -1,4 +1,5 @@
 import type { BrowserSidecar } from './browser-sidecar.ts'
+import type { DiscoverySession } from './discovered-tests.ts'
 import type { HandlerContext } from './handlers.ts'
 import type { ReportPersistence } from './report-persistence.ts'
 import type { RoutesContext } from './routes.ts'
@@ -32,6 +33,9 @@ function createServerRunController(
       reportData.isRunning = running
     },
     setRunFiltered,
+    notifyRunSettled: (): void => {
+      routesContext.notifyRunSettled?.()
+    },
     containerPathMapping: routesContext.containerPathMapping,
     saveReport,
     spawn: createRealSpawn(),
@@ -43,8 +47,13 @@ function createServerRunController(
   })
 }
 
-export function createCloseHandler(persistence: ReportPersistence, runController: RunController): () => Promise<void> {
+export function createCloseHandler(
+  persistence: ReportPersistence,
+  runController: RunController,
+  discovery?: DiscoverySession | null,
+): () => Promise<void> {
   return async (): Promise<void> => {
+    discovery?.dispose()
     await persistence.dispose()
     runController.dispose()
   }

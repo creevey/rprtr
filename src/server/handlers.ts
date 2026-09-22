@@ -114,6 +114,7 @@ export async function handleRunEnd(ctx: HandlerContext, data: RunEndData): Promi
     data: { status: data.status, removedTestIds },
   }
   broadcastToBrowsers(ctx.wsClients, message)
+  ctx.routesContext.notifyRunSettled?.()
 }
 
 export function handleApprove(): void {

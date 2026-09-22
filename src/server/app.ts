@@ -16,7 +16,7 @@ import {
   type IncomingWebSocketMessage,
 } from '../schemas.ts'
 import { type BrowserSidecar } from './browser-sidecar.ts'
-import { seedDiscoveredTests, withoutDiscoveredTests } from './discovered-tests.ts'
+import { startDiscoverySession, withoutDiscoveredTests, type DiscoverySession } from './discovered-tests.ts'
 import { type DockerOptions } from './docker-launcher.ts'
 import { fileExists } from './file-utils.ts'
 import {
@@ -81,7 +81,7 @@ export interface ServerOptions {
 export interface ServerApp {
   port: number
   wsClients: Set<RuntimeWebSocket>
-  /** Flushes pending report writes and disposes the run controller. */
+  /** Flushes pending report writes and disposes the run controller and discovery session. */
   close: () => Promise<void>
   handleRequest: (req: Request) => Promise<Response>
   handleWebSocketMessage: (message: string) => Promise<void>
@@ -216,25 +216,35 @@ async function setupRoutesContext(
   return { routesContext, launcher, localLauncher, browserSidecar, configuredRunMode }
 }
 
-/** Fire-and-forget startup listing for a discovered project — Playwright or
- * Vitest per the seeded run context: the sidebar pre-populates when it lands;
- * the run controls stay enabled even if it fails. */
+/** Server options naming generated artifact locations that must not trigger re-discovery. */
+function discoveryIgnorePaths(options: ServerOptions, reportData: ReportData, reportFile: string): string[] {
+  return [reportData.screenshotDir, reportFile, options.outputDir, options.playwrightSnapshotDir].filter(
+    (path): path is string => path !== undefined && path !== '',
+  )
+}
+
+/** Live re-discovery for the seeded run context: startup listing, watchers, run deferral. */
 function startDiscovery(
-  runContext: RoutesContext['runContext'],
+  routesContext: RoutesContext,
   reportData: ReportData,
   wsClients: Set<RuntimeWebSocket>,
-): void {
-  void seedDiscoveredTests({
+  options: ServerOptions,
+  reportFile: string,
+): DiscoverySession | null {
+  const runContext = routesContext.runContext
+  if (runContext === undefined) return null
+  const session = startDiscoverySession({
     runContext,
     reportData,
     broadcast: (message): void => {
       broadcastToBrowsers(wsClients, message)
     },
-  }).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error)
-    const label = runContext?.runner === 'vitest' ? 'VitestDiscovery' : 'PlaywrightDiscovery'
-    console.error(`[${label}] test listing failed:`, message)
+    ignore: discoveryIgnorePaths(options, reportData, reportFile),
   })
+  routesContext.notifyRunSettled = (): void => {
+    session.notifyRunSettled()
+  }
+  return session
 }
 
 export async function createServerApp(options: ServerOptions = {}): Promise<ServerApp> {
@@ -271,12 +281,12 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   await loadReport(reportFile, reportData)
   await loadOfflineReports(reportData, offlineReportDir)
 
-  startDiscovery(routesContext.runContext, reportData, wsClients)
+  const discovery = startDiscovery(routesContext, reportData, wsClients, options, reportFile)
 
   return {
     port,
     wsClients,
-    close: createCloseHandler(persistence, runController),
+    close: createCloseHandler(persistence, runController, discovery),
     handleRequest,
     handleWebSocketMessage,
   }

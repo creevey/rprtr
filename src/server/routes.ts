@@ -32,6 +32,8 @@ export interface RoutesContext {
   runContext?: RunContext
   runInfo?: { mode: 'local' | 'docker' }
   containerPathMapping?: ContainerPathMapping
+  /** Invoked once a run stops being in progress; flushes queued discovery refreshes. */
+  notifyRunSettled?: () => void
 }
 
 export { isPathWithinRoots, isWebSocketUpgradeRequest, LIVE_UPDATES_WEBSOCKET_PATH } from './utils.ts'

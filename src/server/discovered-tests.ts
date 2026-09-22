@@ -88,20 +88,13 @@ export function reconcileDiscoveredTests(
  * static HTML artifact — stays derived from actual run events only.
  */
 export function withoutDiscoveredTests<T extends { tests: Record<string, TestData> }>(data: T): T {
-  if (!hasDiscoveredIds(data.tests)) return data
-  return { ...data, tests: filterDiscoveredIds(data.tests) }
+  const entries = Object.entries(data.tests)
+  if (!entries.some(([id]) => isDiscoveredId(id))) return data
+  return { ...data, tests: Object.fromEntries(entries.filter(([id]) => !isDiscoveredId(id))) }
 }
 
 function isDiscoveredId(id: string): boolean {
   return id.startsWith(DISCOVERED_ID_PREFIX)
-}
-
-function hasDiscoveredIds(tests: Record<string, TestData>): boolean {
-  return Object.keys(tests).some(isDiscoveredId)
-}
-
-function filterDiscoveredIds(tests: Record<string, TestData>): Record<string, TestData> {
-  return Object.fromEntries(Object.entries(tests).filter(([id]) => !isDiscoveredId(id)))
 }
 
 /** The report fields the discovery pipeline reads and mutates. */
@@ -262,10 +255,16 @@ class DiscoverySessionState implements DiscoverySession {
     this.inFlight = true
     const initial = this.initial
     this.initial = false
-    void (initial ? this.runInitialListing() : this.runRefresh()).finally(() => {
-      this.inFlight = false
-      if (this.dirty) this.pump()
-    })
+    const pipeline = initial ? this.runInitialListing() : this.runRefresh()
+    void pipeline
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        this.log(`[${discoveryRunner(this.deps.runContext).label}] discovery failed: ${message}`)
+      })
+      .finally(() => {
+        this.inFlight = false
+        if (this.dirty) this.pump()
+      })
   }
 
   private async runInitialListing(): Promise<void> {
