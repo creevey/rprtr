@@ -12,8 +12,8 @@
 
 ## 3. Vitest config reader for CLI and preflight
 
-- [ ] 3.1 Add failing tests in `tests/vitest-project-pins.test.ts` for `readVitestProjectPins`: an injected loader seam returns per-instance `ResolvedProjectPin[]` with keyed and fallback pins; unmatched `browserPins` keys come back as invalid pins; an unresolvable `vitest/node` or a throwing config load yields no pins plus one diagnostic and still closes the instance; and one fixture-backed test builds a temp Vitest config that imports the built reporter with `browserPins` and resolves it through the repository's Vitest (`cd tests && bun test vitest-project-pins.test.ts` — fails).
-- [ ] 3.2 Implement `src/vitest-project-pins.ts`: resolve the project's `vitest/node`, `createVitest` without `standalone()`/`init()`, read a duck-typed `declaredPinOptions()` off `vitest.config.reporters`, map `vitest.projects` names/engines to `ResolvedProjectPin[]`, and close in a `finally` until 3.1 passes (`cd tests && bun test vitest-project-pins.test.ts`; `bun run typecheck`).
+- [x] 3.1 Add failing tests in `tests/vitest-project-pins.test.ts` for `readVitestProjectPins`: an injected loader seam returns per-instance `ResolvedProjectPin[]` with keyed and fallback pins; unmatched `browserPins` keys come back as invalid pins; an unresolvable `vitest/node` or a throwing config load yields no pins plus one diagnostic and still closes the instance; and one fixture-backed test builds a temp Vitest config that imports the built reporter with `browserPins` and resolves it through the repository's Vitest (`cd tests && bun test vitest-project-pins.test.ts` — fails).
+- [x] 3.2 Implement `src/vitest-project-pins.ts`: resolve the project's `vitest/node`, `createVitest` without `standalone()`/`init()`, read a duck-typed `declaredPinOptions()` off `vitest.config.reporters`, map `vitest.projects` names/engines to `ResolvedProjectPin[]`, and close in a `finally` until 3.1 passes (`cd tests && bun test vitest-project-pins.test.ts`; `bun run typecheck`).
 
 ## 4. CLI parity
 

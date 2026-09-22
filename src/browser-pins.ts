@@ -74,6 +74,14 @@ export interface ResolvedProjectPin {
   pin?: BrowserPin
   channel?: string
   launchExecutablePath?: string
+  /**
+   * Set when the reader cannot observe the build the project launches — for
+   * example a Vitest project whose browser provider is not Playwright. Never
+   * drift, never a failed check; only informational.
+   */
+  unverifiable?: boolean
+  /** Set when the declaration is invalid (for example a `browserPins` key naming no project). */
+  invalidReason?: string
 }
 
 const PIN_BROWSER_SET: ReadonlySet<string> = new Set(PIN_BROWSERS)
