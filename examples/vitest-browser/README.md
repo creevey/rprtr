@@ -134,7 +134,7 @@ Explicit docker mode without the snippet in the project's Vitest config fails fa
 ## FAQ
 
 - **`Error: listen EADDRINUSE` / the UI never receives events** — port 3000 is taken. Start the server elsewhere (`bunx crvy-rprtr -p 3100`) and point the reporter at it with `CRVY_RPRTR_SERVER_URL=ws://localhost:3100 bun run test`.
-- **The sidebar lists tests before the first run** — that's startup discovery: the server asks Vitest to enumerate the suite when it starts (collection only, no browser launch). The list is pending-only; run the tests to get real results, and edits made after the server started appear on the next run.
+- **The sidebar lists tests before the first run** — that's startup discovery: the server asks Vitest to enumerate the suite when it starts (collection only, no browser launch). The list is pending-only and stays current while the server runs: test-file or config edits refresh it automatically.
 - **Visual tests fail on a brand-new machine/CI runner** — you're on a platform suffix without baselines (e.g. first linux run without `-linux` references). Run once to write them, or `bun run update-snapshots`, then commit.
 - **Diffs appear everywhere after an intentional redesign** — use `bun run update-snapshots`, or click **Approve All** in the UI, then commit the regenerated `__screenshots__/` files.
 - **The config fails to load with `Missing "./vitest" specifier`** — your `@crvy/rprtr` is older than 0.4.0, which introduced the Vitest reporter (see version note at the top).

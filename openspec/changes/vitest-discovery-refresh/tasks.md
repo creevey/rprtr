@@ -31,5 +31,5 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 7. Docs and full gate
 
-- [ ] 7.1 Update README.md (pre-run discovery section and the `--config` table row: the pending list now refreshes on test-file and config changes; note that helper edits outside watched test directories still need a run or restart) and `examples/vitest-browser/README.md` (drop the "edits made after the server started appear on the next run" FAQ line). Verify: `bun run format:check` and manual review against implemented behavior
-- [ ] 7.2 Full gate + browser regression: `bun run check && bun run test:playwright`
+- [x] 7.1 Update README.md (pre-run discovery section and the `--config` table row: the pending list now refreshes on test-file and config changes; note that helper edits outside watched test directories still need a run or restart) and `examples/vitest-browser/README.md` (drop the "edits made after the server started appear on the next run" FAQ line). Verify: `bun run format:check` and manual review against implemented behavior
+- [x] 7.2 Full gate + browser regression: `bun run check && bun run test:playwright`
