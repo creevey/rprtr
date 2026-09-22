@@ -27,7 +27,7 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 6. Playwright parity
 
-- [ ] 6.1 Failing test first: extend `tests/playwright-discovery-app.test.ts` — the edit/delete refresh flow works in a seeded Playwright project, and a refresh keeps recorded results and approvals unchanged. Verify: `cd tests && bun test playwright-discovery-app.test.ts && cd .. && bun run typecheck`
+- [x] 6.1 Failing test first: extend `tests/playwright-discovery-app.test.ts` — the edit/delete refresh flow works in a seeded Playwright project, and a refresh keeps recorded results and approvals unchanged. Verify: `cd tests && bun test playwright-discovery-app.test.ts && cd .. && bun run typecheck`
 
 ## 7. Docs and full gate
 

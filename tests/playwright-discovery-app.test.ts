@@ -28,6 +28,23 @@ test.describe('group', () => {
 })
 `
 
+const EXTENDED_SPEC_FILE = `import { expect, test } from '@playwright/test'
+
+test('first discovered test', async () => {
+  expect(1).toBe(1)
+})
+
+test.describe('group', () => {
+  test('second discovered test', async () => {
+    expect(1).toBe(1)
+  })
+})
+
+test('third discovered test', async () => {
+  expect(1).toBe(1)
+})
+`
+
 setDefaultTimeout(60000)
 
 async function createTempProject(files: Record<string, string>): Promise<string> {
@@ -186,5 +203,88 @@ describe('startup seeding', () => {
     const persisted = JSON.parse(raw) as { tests: Record<string, TestData> }
     expect(Object.keys(persisted.tests)).toEqual(['run-id-1'])
     expect(persisted.tests['run-id-1']?.title).toBe('first discovered test')
+  })
+})
+
+describe('live refresh', () => {
+  let app: ServerApp | null = null
+
+  afterEach(async () => {
+    if (app !== null) {
+      await app.close()
+      app = null
+    }
+  })
+
+  test('a watched spec edit refreshes the pending tree without a run', async () => {
+    const projectDir = await createTempProject({
+      'playwright.config.ts': PLAYWRIGHT_CONFIG,
+      'tests/one.spec.ts': SPEC_FILE,
+    })
+    app = await startSeededApp(projectDir)
+    const request = createReportRequest(app)
+    await waitFor((b) => Object.keys(b.tests ?? {}).length === 2, request)
+
+    await writeFile(join(projectDir, 'tests', 'one.spec.ts'), EXTENDED_SPEC_FILE)
+    const added = await waitFor(
+      (b) => Object.values(b.tests ?? {}).some((entry) => entry.title === 'third discovered test'),
+      request,
+    )
+    const addedTest = Object.values(added.tests ?? {}).find((entry) => entry.title === 'third discovered test')
+    expect(addedTest?.status).toBe('pending')
+
+    await writeFile(join(projectDir, 'tests', 'one.spec.ts'), SPEC_FILE)
+    const removed = await waitFor(
+      (b) => !Object.values(b.tests ?? {}).some((entry) => entry.title === 'third discovered test'),
+      request,
+    )
+    expect(Object.keys(removed.tests ?? {}).length).toBe(2)
+  })
+
+  test('a refresh keeps recorded results and approvals unchanged', async () => {
+    const projectDir = await createTempProject({
+      'playwright.config.ts': PLAYWRIGHT_CONFIG,
+      'tests/one.spec.ts': SPEC_FILE,
+    })
+    const specFile = join(projectDir, 'tests', 'one.spec.ts')
+    await writeFile(
+      join(projectDir, 'report.json'),
+      JSON.stringify({
+        tests: {
+          'run-id-1': {
+            id: 'run-id-1',
+            titlePath: [],
+            title: 'first discovered test',
+            browser: 'chromium',
+            status: 'success',
+            results: [{ status: 'success', retries: 0 }],
+            approved: { screenshot: 0 },
+            location: { file: specFile, line: 3 },
+          },
+        },
+      }),
+    )
+    app = await startSeededApp(projectDir)
+    const request = createReportRequest(app)
+    const seeded = await waitFor(
+      (b) => Object.keys(b.tests ?? {}).length === 2 && b.tests?.['run-id-1'] !== undefined,
+      request,
+    )
+    expect(Object.values(seeded.tests ?? {}).filter((entry) => entry.title === 'first discovered test')).toHaveLength(1)
+    expect(seeded.tests?.['run-id-1']?.status).toBe('success')
+
+    await writeFile(specFile, EXTENDED_SPEC_FILE)
+    const refreshed = await waitFor(
+      (b) => Object.values(b.tests ?? {}).some((entry) => entry.title === 'third discovered test'),
+      request,
+    )
+
+    const recorded = refreshed.tests?.['run-id-1']
+    expect(recorded?.status).toBe('success')
+    expect(recorded?.results?.[0]?.status).toBe('success')
+    expect(recorded?.approved).toEqual({ screenshot: 0 })
+    expect(
+      Object.values(refreshed.tests ?? {}).filter((entry) => entry.title === 'first discovered test'),
+    ).toHaveLength(1)
   })
 })
