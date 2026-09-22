@@ -1,7 +1,12 @@
 import { checkDockerPins, type PinBrowser, type ResolvedProjectPin } from '../browser-pins.ts'
 import { resolveBrowserExecutablePaths } from '../playwright-install.ts'
-import { readProjectPinsFromConfig } from '../project-pins.ts'
+import {
+  parseProjectPinsFromListReport,
+  readPlaywrightListWithConfig,
+  readProjectPinsFromConfig,
+} from '../project-pins.ts'
 import { readVitestProjectPins } from '../vitest-project-pins.ts'
+import type { DockerConfigSummary } from './config-dump.ts'
 import type { Warn } from './docker-support.ts'
 
 /** Rejects a Docker run whose declared pins the installed Playwright cannot satisfy. */
@@ -16,8 +21,26 @@ export interface DockerPinPreflightDeps {
   cwd: string
   image: string
   warn: Warn
+  /** Injectable pin reader for tests; defaults to the dump-aware listing. */
   readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  /**
+   * Injectable config-summary reader for tests. When absent and `readProjectPins` is
+   * not injected, the pins reader default also produces the summary from one spawn.
+   */
+  readConfigSummary?: (cwd: string) => Promise<DockerConfigSummary | null>
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
+}
+
+/** Diagnostics must not fail the preflight: an unreadable summary degrades to null. */
+async function readConfigSummarySafe(
+  read: (cwd: string) => Promise<DockerConfigSummary | null>,
+  cwd: string,
+): Promise<DockerConfigSummary | null> {
+  try {
+    return await read(cwd)
+  } catch {
+    return null
+  }
 }
 
 async function loadBrowserExecutablePaths(
@@ -36,20 +59,31 @@ async function loadBrowserExecutablePaths(
 
 /**
  * Rejects the run when a declared pin cannot be satisfied by the installed
- * Playwright's browsers — before any container starts. Config reading failures
- * degrade to a warning: an unreadable config must not block docker runs.
+ * Playwright's browsers — before any container starts. Returns the resolved config
+ * summary for host-service diagnostics; null when unavailable. Config reading
+ * failures degrade to a warning: an unreadable config must not block docker runs.
  */
-export async function assertDockerPinsSatisfied(deps: DockerPinPreflightDeps): Promise<void> {
-  const readPins = deps.readProjectPins ?? readProjectPinsFromConfig
-  let projects: readonly ResolvedProjectPin[]
+export async function assertDockerPinsSatisfied(deps: DockerPinPreflightDeps): Promise<DockerConfigSummary | null> {
+  let projects: readonly ResolvedProjectPin[] = []
+  let config: DockerConfigSummary | null = null
   try {
-    projects = await readPins(deps.cwd)
+    const readPins = deps.readProjectPins
+    if (deps.readConfigSummary !== undefined) {
+      config = await readConfigSummarySafe(deps.readConfigSummary, deps.cwd)
+      projects = readPins === undefined ? await readProjectPinsFromConfig(deps.cwd) : await readPins(deps.cwd)
+    } else if (readPins === undefined) {
+      const listed = await readPlaywrightListWithConfig(deps.cwd)
+      config = listed.config
+      projects = listed.report === null ? [] : parseProjectPinsFromListReport(listed.report)
+    } else {
+      projects = await readPins(deps.cwd)
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     deps.warn(`Could not read browser pins from the Playwright config: ${message}`)
-    return
+    return config
   }
-  if (!projects.some((project) => project.pin !== undefined)) return
+  if (!projects.some((project) => project.pin !== undefined)) return config
 
   const executablePaths = await loadBrowserExecutablePaths(deps.browserExecutablePaths)
   const check = checkDockerPins({
@@ -59,6 +93,7 @@ export async function assertDockerPinsSatisfied(deps: DockerPinPreflightDeps): P
     executablePathFor: (browser) => executablePaths[browser],
   })
   if (!check.ok) throw new DockerPinDriftError(check.message)
+  return config
 }
 
 export interface VitestDockerPinPreflightDeps {

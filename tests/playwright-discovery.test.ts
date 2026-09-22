@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import { existsSync, writeFileSync } from 'fs'
 
+import { readPlaywrightListWithConfig } from '../src/project-pins'
+import { configDumpReporterPath, DOCKER_CONFIG_DUMP_ENV } from '../src/server/config-dump'
 import {
   parsePlaywrightListReport,
   runPlaywrightList,
@@ -114,6 +117,8 @@ interface FakeSpawnOptions {
   exitCode?: number | null
   emitError?: Error
   neverCloses?: boolean
+  /** Runs synchronously at spawn time; mirrors a reporter writing its side output. */
+  onSpawn?: (args: string[], opts: Record<string, unknown>) => void
 }
 
 function createFakeSpawn(options: FakeSpawnOptions): {
@@ -145,6 +150,7 @@ function createFakeSpawn(options: FakeSpawnOptions): {
       },
     }
     calls.push({ cmd, args, opts, child })
+    options.onSpawn?.(args, opts)
     return child
   }
   return { spawn, calls }
@@ -358,5 +364,55 @@ describe('runPlaywrightList', () => {
     const result = await runPlaywrightList({ configFile, cwd: '/proj', spawn, timeoutMs: 5 })
     expect(result).toEqual([])
     expect(calls[0]?.child.killedWith).toBe('SIGKILL')
+  })
+})
+
+describe('readPlaywrightListWithConfig', () => {
+  const summary = {
+    webServers: [
+      { command: 'npm run storybook', url: 'http://localhost:6006', name: 'storybook', reuseExistingServer: true },
+      { command: 'npm run api', port: 4000 },
+    ],
+    projects: [{ name: 'chromium', baseURL: 'http://localhost:6006' }],
+  }
+
+  function dumpOnSpawn(payload: unknown): (args: string[], opts: Record<string, unknown>) => void {
+    return (_args, opts) => {
+      const target = (opts.env as Record<string, string | undefined> | undefined)?.[DOCKER_CONFIG_DUMP_ENV]
+      if (target !== undefined) writeFileSync(target, JSON.stringify(payload))
+    }
+  }
+
+  test('passes the generated reporter and dump env, then parses both outputs', async () => {
+    const { spawn, calls } = createFakeSpawn({ stdout: JSON.stringify(listReport()), onSpawn: dumpOnSpawn(summary) })
+
+    const result = await readPlaywrightListWithConfig('/proj', { spawn })
+
+    const call = calls[0]!
+    expect(call.args.join(' ')).toContain(`--reporter=json,${configDumpReporterPath()}`)
+    const dumpPath = (call.opts.env as Record<string, string | undefined>)[DOCKER_CONFIG_DUMP_ENV]
+    expect(dumpPath).toBeDefined()
+    // Read-and-delete: the dump does not survive the listing.
+    expect(existsSync(dumpPath!)).toBe(false)
+    expect(result.config).toEqual(summary)
+    expect(result.report).not.toBeNull()
+  })
+
+  test('a missing dump degrades to a null summary without losing the report', async () => {
+    const { spawn } = createFakeSpawn({ stdout: JSON.stringify(listReport()) })
+
+    const result = await readPlaywrightListWithConfig('/proj', { spawn })
+
+    expect(result.config).toBeNull()
+    expect(result.report).not.toBeNull()
+  })
+
+  test('a malformed dump degrades to a null summary', async () => {
+    const { spawn } = createFakeSpawn({
+      stdout: JSON.stringify(listReport()),
+      onSpawn: dumpOnSpawn({ webServers: 'not-an-array', projects: [] }),
+    })
+
+    expect((await readPlaywrightListWithConfig('/proj', { spawn })).config).toBeNull()
   })
 })

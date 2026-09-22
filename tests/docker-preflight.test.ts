@@ -5,6 +5,7 @@ import { join } from 'path'
 
 import type { PinBrowser, ResolvedProjectPin } from '../src/browser-pins'
 import { createDockerLauncher } from '../src/server/docker-launcher'
+import { assertDockerPinsSatisfied } from '../src/server/docker-preflight'
 import type { DockerExec, DockerExecResult } from '../src/server/docker-support'
 import {
   RunController,
@@ -161,6 +162,61 @@ describe('docker pin preflight', () => {
     })
 
     await launcher.prepare!({ ctx, onProgress: () => undefined })
+  })
+})
+
+describe('docker config preflight', () => {
+  const SUMMARY = {
+    webServers: [
+      { command: 'npm run storybook', url: 'http://localhost:6006', name: 'storybook', reuseExistingServer: true },
+      { command: 'npm run api', port: 4000 },
+    ],
+    projects: [{ name: 'chromium', baseURL: 'http://localhost:6006' }],
+  }
+  const noopWarn = (): void => undefined
+
+  test('returns the resolved config summary alongside the pins', async () => {
+    const { ctx } = await createFixtureProject()
+
+    const result = await assertDockerPinsSatisfied({
+      cwd: ctx.cwd,
+      image: IMAGE,
+      warn: noopWarn,
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(SUMMARY),
+    })
+
+    expect(result).toEqual(SUMMARY)
+  })
+
+  test('a failed config summary read degrades to null without warning or blocking', async () => {
+    const warnings: string[] = []
+
+    const result = await assertDockerPinsSatisfied({
+      cwd: '/proj',
+      image: IMAGE,
+      warn: (message) => warnings.push(message),
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.reject(new Error('config exploded')),
+    })
+
+    expect(result).toBeNull()
+    expect(warnings).toEqual([])
+  })
+
+  test('a summary survives a pin-read failure so diagnostics still run', async () => {
+    const warnings: string[] = []
+
+    const result = await assertDockerPinsSatisfied({
+      cwd: '/proj',
+      image: IMAGE,
+      warn: (message) => warnings.push(message),
+      readProjectPins: () => Promise.reject(new Error('config exploded')),
+      readConfigSummary: () => Promise.resolve(SUMMARY),
+    })
+
+    expect(result).toEqual(SUMMARY)
+    expect(warnings.join('\n')).toContain('config exploded')
   })
 })
 
