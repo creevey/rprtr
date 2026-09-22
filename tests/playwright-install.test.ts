@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { resolvePlaywrightVersion } from '../src/playwright-install'
+import { resolveBrowserExecutablePaths, resolvePlaywrightVersion } from '../src/playwright-install'
 
 const tempDirs: string[] = []
 
@@ -17,6 +17,28 @@ async function fixtureProject(packages: Record<string, string>): Promise<string>
     await writeFile(join(packageDir, 'package.json'), JSON.stringify({ name, version }))
   }
   return dir
+}
+
+const BROWSER_PATHS = {
+  chromium: '/caches/ms-playwright/chromium-1217/chrome-mac/Chromium',
+  firefox: '/caches/ms-playwright/firefox-1511/firefox/firefox',
+  webkit: '/caches/ms-playwright/webkit-2272/pw_run.sh',
+}
+
+/** Writes a package whose entry point exposes the bundled browser types. */
+async function fixtureBrowserPackage(
+  dir: string,
+  name: string,
+  version: string,
+  paths: Record<string, string>,
+): Promise<void> {
+  const packageDir = join(dir, 'node_modules', ...name.split('/'))
+  await mkdir(packageDir, { recursive: true })
+  await writeFile(join(packageDir, 'package.json'), JSON.stringify({ name, version, main: 'index.js' }))
+  const entries = Object.entries(paths).map(
+    ([browser, path]) => `  ${browser}: { executablePath: () => ${JSON.stringify(path)} },`,
+  )
+  await writeFile(join(packageDir, 'index.js'), `module.exports = {\n${entries.join('\n')}\n}\n`)
 }
 
 afterEach(async () => {
@@ -50,5 +72,37 @@ describe('resolvePlaywrightVersion', () => {
   test('returns null when neither package resolves', async () => {
     const dir = await fixtureProject({ vitest: '4.1.0' })
     expect(resolvePlaywrightVersion(dir)).toBeNull()
+  })
+})
+
+describe('resolveBrowserExecutablePaths', () => {
+  test('resolves every bundled browser from a playwright-only install', async () => {
+    const dir = await fixtureProject({})
+    await fixtureBrowserPackage(dir, 'playwright', '1.59.0', BROWSER_PATHS)
+
+    expect(resolveBrowserExecutablePaths(dir)).toEqual(BROWSER_PATHS)
+  })
+
+  test('prefers the project playwright over @playwright/test', async () => {
+    const dir = await fixtureProject({})
+    await fixtureBrowserPackage(dir, 'playwright', '1.59.0', BROWSER_PATHS)
+    await fixtureBrowserPackage(dir, '@playwright/test', '1.58.0', {
+      chromium: '/caches/ms-playwright/chromium-1290/chrome-mac/Chromium',
+    })
+
+    expect(resolveBrowserExecutablePaths(dir)?.chromium).toBe(BROWSER_PATHS.chromium)
+  })
+
+  test('null when a package does not expose every browser', async () => {
+    const dir = await fixtureProject({})
+    await fixtureBrowserPackage(dir, 'playwright', '1.59.0', { chromium: BROWSER_PATHS.chromium })
+
+    expect(resolveBrowserExecutablePaths(dir)).toBeNull()
+  })
+
+  test('null when neither package resolves', async () => {
+    const dir = await fixtureProject({ vitest: '4.1.0' })
+
+    expect(resolveBrowserExecutablePaths(dir)).toBeNull()
   })
 })

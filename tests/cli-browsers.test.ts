@@ -1,10 +1,15 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { parseCliInvocation } from '../src/cli'
-import { runBrowsersCommand, type BrowsersCommandDeps } from '../src/cli-browsers'
+import {
+  createDefaultBrowsersDeps,
+  readAllProjectPins,
+  runBrowsersCommand,
+  type BrowsersCommandDeps,
+} from '../src/cli-browsers'
 import { parseProjectPinsFromListReport } from '../src/project-pins'
 
 const FIXTURE_ENTRIES = [
@@ -326,6 +331,92 @@ async function createFixtureProject(): Promise<string> {
 }
 
 describe('browsers check', () => {
+  test('reports Playwright and Vitest pins together with their statuses', async () => {
+    const io = capture()
+    const cwd = await createFixtureProject()
+    const code = await runBrowsersCommand(
+      ['check', '--strict'],
+      makeDeps(io, {
+        cwd,
+        readPins: () =>
+          Promise.resolve([
+            {
+              projectName: 'chromium',
+              browser: 'chromium',
+              pin: { browser: 'chromium', version: '147' },
+            },
+            {
+              projectName: 'desktop (chromium)',
+              browser: 'chromium',
+              pin: { browser: 'chromium', version: '149' },
+            },
+          ]),
+        executablePaths: () =>
+          Promise.resolve({
+            chromium: '/caches/ms-playwright/chromium-1217/chrome-mac/Chromium',
+            firefox: '/caches/ms-playwright/firefox-1511/firefox/firefox',
+            webkit: '/caches/ms-playwright/webkit-2272/pw_run.sh',
+          }),
+      }),
+    )
+    const text = io.out.join('\n')
+
+    expect(code).toBe(1)
+    expect(text).toContain('chromium: pins chromium@147')
+    expect(text).toContain('[pinned]')
+    expect(text).toContain('desktop (chromium): pins chromium@149')
+    expect(text).toContain('[drift]')
+  })
+
+  test('an unmatched Vitest key is reported as an invalid pin and fails strict mode', async () => {
+    const cwd = await createFixtureProject()
+    const deps = (io: Captured): BrowsersCommandDeps =>
+      makeDeps(io, {
+        cwd,
+        readPins: () =>
+          Promise.resolve([
+            {
+              projectName: 'tablet (webkit)',
+              browser: 'webkit',
+              pin: { browser: 'webkit', version: '26.4' },
+              invalidReason: 'browserPins key "tablet (webkit)" matches no browser-enabled project',
+            },
+          ]),
+      })
+
+    const strict = capture()
+    expect(await runBrowsersCommand(['check', '--strict'], deps(strict))).toBe(1)
+    expect(strict.out.join('\n')).toMatch(/tablet \(webkit\).*invalid pin/i)
+
+    const lenient = capture()
+    expect(await runBrowsersCommand(['check'], deps(lenient))).toBe(0)
+    expect(lenient.out.join('\n')).toMatch(/invalid pin/i)
+  })
+
+  test('an unverifiable Vitest project never fails strict mode', async () => {
+    const cwd = await createFixtureProject()
+    const io = capture()
+    const code = await runBrowsersCommand(
+      ['check', '--strict'],
+      makeDeps(io, {
+        cwd,
+        readPins: () =>
+          Promise.resolve([
+            {
+              projectName: 'desktop',
+              browser: 'chromium',
+              pin: { browser: 'chromium', version: '147' },
+              unverifiable: true,
+            },
+          ]),
+      }),
+    )
+
+    expect(code).toBe(0)
+    expect(io.out.join('\n')).toContain('desktop')
+    expect(io.out.join('\n')).toContain('[unverifiable]')
+  })
+
   test('reports each pinned project with pin, effective build, and status', async () => {
     const io = capture()
     const cwd = await createFixtureProject()
@@ -456,5 +547,104 @@ describe('browsers check', () => {
 
     expect(code).toBe(0)
     expect(io.out.join('\n')).toMatch(/no browser pins/i)
+  })
+})
+
+async function createPlaywrightOnlyProject(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'crvy-cli-playwright-'))
+  tempDirs.push(dir)
+  const packageDir = join(dir, 'node_modules', 'playwright')
+  await mkdir(packageDir, { recursive: true })
+  await writeFile(join(dir, 'package.json'), '{}')
+  await writeFile(
+    join(packageDir, 'package.json'),
+    JSON.stringify({ name: 'playwright', version: '1.59.0', main: 'index.js' }),
+  )
+  await writeFile(
+    join(packageDir, 'index.js'),
+    [
+      'module.exports = {',
+      "  chromium: { executablePath: () => '/caches/ms-playwright/chromium-1217/chrome-mac/Chromium' },",
+      "  firefox: { executablePath: () => '/caches/ms-playwright/firefox-1511/firefox/firefox' },",
+      "  webkit: { executablePath: () => '/caches/ms-playwright/webkit-2272/pw_run.sh' },",
+      '}',
+      '',
+    ].join('\n'),
+  )
+  return dir
+}
+
+describe('readAllProjectPins', () => {
+  test('merges Playwright and Vitest pins', async () => {
+    const playwrightPin = {
+      projectName: 'chromium',
+      browser: 'chromium' as const,
+      pin: { browser: 'chromium' as const, version: '147' },
+    }
+    const vitestPin = {
+      projectName: 'desktop',
+      browser: 'chromium' as const,
+      pin: { browser: 'chromium' as const, version: '147' },
+    }
+
+    const pins = await readAllProjectPins('/proj', {
+      readPlaywrightPins: () => Promise.resolve([playwrightPin]),
+      readVitestPins: () => Promise.resolve([vitestPin]),
+    })
+
+    expect(pins).toEqual([playwrightPin, vitestPin])
+  })
+
+  test('a missing Vitest config reports no Vitest pins and still exits zero', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'crvy-cli-no-vitest-'))
+    tempDirs.push(dir)
+    await writeFile(join(dir, 'package.json'), '{}')
+    const warnLog = spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      const pins = await readAllProjectPins(dir, { readPlaywrightPins: () => Promise.resolve([]) })
+      expect(pins).toEqual([])
+
+      const io = capture()
+      const code = await runBrowsersCommand(
+        ['check', '--strict'],
+        makeDeps(io, {
+          cwd: dir,
+          readPins: () => readAllProjectPins(dir, { readPlaywrightPins: () => Promise.resolve([]) }),
+        }),
+      )
+      expect(code).toBe(0)
+      expect(io.out.join('\n')).toMatch(/no browser pins/i)
+    } finally {
+      warnLog.mockRestore()
+    }
+  })
+})
+
+describe('createDefaultBrowsersDeps', () => {
+  test('resolves installed executable paths from a playwright-only install', async () => {
+    const dir = await createPlaywrightOnlyProject()
+    const paths = await createDefaultBrowsersDeps(dir).executablePaths()
+
+    expect(paths.chromium).toBe('/caches/ms-playwright/chromium-1217/chrome-mac/Chromium')
+    expect(paths.webkit).toBe('/caches/ms-playwright/webkit-2272/pw_run.sh')
+  })
+
+  test('browsers resolve reports installed state from a playwright-only install', async () => {
+    const dir = await createPlaywrightOnlyProject()
+    const io = capture()
+    const code = await runBrowsersCommand(['resolve', 'chromium@147'], {
+      ...createDefaultBrowsersDeps(dir),
+      out: (line: string): void => {
+        io.out.push(line)
+      },
+      err: (line: string): void => {
+        io.err.push(line)
+      },
+      loadBuildMap: () => Promise.resolve({ entries: FIXTURE_ENTRIES, source: 'cache' }),
+    })
+
+    expect(code).toBe(0)
+    expect(io.out.join('\n')).toMatch(/installed: playwright 1\.59\.0/)
   })
 })

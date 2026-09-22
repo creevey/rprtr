@@ -17,8 +17,8 @@
 
 ## 4. CLI parity
 
-- [ ] 4.1 Add failing tests in `tests/cli-browsers.test.ts`: `check` merges Playwright and Vitest pins and reports each with status; an unmatched Vitest key is reported as an invalid pin and `--strict` exits non-zero; a missing or unreadable Vitest config reports no Vitest pins and exits zero; `resolve`'s installed-state probe resolves through `resolveBrowserExecutablePaths` when only `playwright` is installed (`cd tests && bun test cli-browsers.test.ts playwright-install.test.ts` — fails).
-- [ ] 4.2 Wire `readVitestProjectPins` into `createDefaultBrowsersDeps.readPins` and switch the installed-state probe to the project's `playwright`-first resolution until 4.1 passes (`cd tests && bun test cli-browsers.test.ts playwright-install.test.ts`; `bun run typecheck`).
+- [x] 4.1 Add failing tests in `tests/cli-browsers.test.ts`: `check` merges Playwright and Vitest pins and reports each with status; an unmatched Vitest key is reported as an invalid pin and `--strict` exits non-zero; a missing or unreadable Vitest config reports no Vitest pins and exits zero; `resolve`'s installed-state probe resolves through `resolveBrowserExecutablePaths` when only `playwright` is installed (`cd tests && bun test cli-browsers.test.ts playwright-install.test.ts` — fails).
+- [x] 4.2 Wire `readVitestProjectPins` into `createDefaultBrowsersDeps.readPins` and switch the installed-state probe to the project's `playwright`-first resolution until 4.1 passes (`cd tests && bun test cli-browsers.test.ts playwright-install.test.ts`; `bun run typecheck`).
 
 ## 5. Docker sidecar provenance and preflight
 

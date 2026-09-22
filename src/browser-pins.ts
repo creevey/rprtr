@@ -271,7 +271,7 @@ export function checkDockerPins(input: DockerPinCheckInput): { ok: true } | { ok
   const failures: string[] = []
   for (const project of input.projects) {
     const pin = project.pin
-    if (pin === undefined) continue
+    if (pin === undefined || project.invalidReason !== undefined || project.unverifiable === true) continue
     const environment = readInstalledEnvironment({
       cwd: input.cwd,
       browser: project.browser,

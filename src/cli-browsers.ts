@@ -21,8 +21,10 @@ import {
   type LoadedBuildMap,
   type PlaywrightBuildEntry,
 } from './build-map.ts'
+import { resolveBrowserExecutablePaths } from './playwright-install.ts'
 import { readProjectPinsFromConfig } from './project-pins.ts'
 import { BrowserPinSchema, PIN_BROWSERS, type BrowserPin } from './schemas/pins.ts'
+import { readVitestProjectPins } from './vitest-project-pins.ts'
 
 const USAGE = `Usage: crvy-rprtr browsers <command> [options]
 
@@ -170,17 +172,28 @@ async function runCheck(args: string[], deps: BrowsersCommandDeps): Promise<numb
     allowPositionals: true,
     options: { strict: { type: 'boolean' } },
   })
-  const pins = (await deps.readPins(deps.cwd)).flatMap((project) =>
-    project.pin === undefined ? [] : [{ project, pin: project.pin }],
-  )
-  if (pins.length === 0) {
+  const projects = await deps.readPins(deps.cwd)
+  if (!projects.some((project) => project.pin !== undefined)) {
     deps.out('No browser pins declared.')
     return 0
   }
 
   const paths = await deps.executablePaths()
   let drifted = 0
-  for (const { project, pin } of pins) {
+  for (const project of projects) {
+    const pin = project.pin
+    if (pin === undefined) continue
+    if (project.invalidReason !== undefined) {
+      deps.out(`${project.projectName}: invalid pin — ${project.invalidReason}`)
+      drifted += 1
+      continue
+    }
+    if (project.unverifiable === true) {
+      deps.out(
+        `${project.projectName}: pins ${pin.browser}@${pin.version} — unverifiable on this runner [unverifiable]`,
+      )
+      continue
+    }
     const environment = readInstalledEnvironment({
       cwd: deps.cwd,
       browser: project.browser,
@@ -199,6 +212,26 @@ async function runCheck(args: string[], deps: BrowsersCommandDeps): Promise<numb
     if (environment.status === 'drift') drifted += 1
   }
   return values.strict === true && drifted > 0 ? 1 : 0
+}
+
+export interface ReadAllProjectPinsDeps {
+  readPlaywrightPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  readVitestPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+}
+
+/**
+ * Reads declared pins from both runners and merges them. A runner without a
+ * readable config contributes nothing: `check` reports no pins for it instead
+ * of failing the whole command.
+ */
+export async function readAllProjectPins(
+  cwd: string,
+  deps: ReadAllProjectPinsDeps = {},
+): Promise<ResolvedProjectPin[]> {
+  const readPlaywright = deps.readPlaywrightPins ?? readProjectPinsFromConfig
+  const readVitest = deps.readVitestPins ?? readVitestProjectPins
+  const [playwright, vitest] = await Promise.all([readPlaywright(cwd), readVitest(cwd)])
+  return [...playwright, ...vitest]
 }
 
 export async function runBrowsersCommand(args: string[], deps: BrowsersCommandDeps): Promise<number> {
@@ -224,10 +257,10 @@ export async function runBrowsersCommand(args: string[], deps: BrowsersCommandDe
   }
 }
 
-/** Wires the real build-map cache, config reader, and installed browser types. */
-export function createDefaultBrowsersDeps(): BrowsersCommandDeps {
+/** Wires the real build-map cache, config readers, and installed browser types. */
+export function createDefaultBrowsersDeps(cwd: string = process.cwd()): BrowsersCommandDeps {
   return {
-    cwd: process.cwd(),
+    cwd,
     out: (line): void => {
       console.log(line)
     },
@@ -236,14 +269,17 @@ export function createDefaultBrowsersDeps(): BrowsersCommandDeps {
     },
     loadBuildMap,
     probeBuildMap: (baseVersion) => probeBuildMap(candidateProbeVersions(baseVersion)),
-    readPins: readProjectPinsFromConfig,
-    executablePaths: async (): Promise<Record<PinBrowser, string>> => {
-      const { chromium, firefox, webkit } = await import('@playwright/test')
-      return {
-        chromium: chromium.executablePath(),
-        firefox: firefox.executablePath(),
-        webkit: webkit.executablePath(),
+    readPins: readAllProjectPins,
+    executablePaths: (): Promise<Record<PinBrowser, string>> => {
+      const paths = resolveBrowserExecutablePaths(cwd)
+      if (paths === null) {
+        return Promise.reject(
+          new Error(
+            'Could not resolve the installed Playwright browsers: install `playwright` or `@playwright/test` in the project.',
+          ),
+        )
       }
+      return Promise.resolve(paths)
     },
   }
 }
