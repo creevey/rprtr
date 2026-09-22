@@ -314,3 +314,37 @@ describe('BrowserSidecar.dispose', () => {
     expect(sidecar.endpoint).toBeUndefined()
   })
 })
+
+describe('BrowserSidecar image provenance', () => {
+  test('resolveImage derives the canonical tag from the project version', () => {
+    const { sidecar } = sidecarFixture({})
+    expect(sidecar.resolveImage({ cwd: '/proj' })).toBe('mcr.microsoft.com/playwright:v1.59.0-noble')
+  })
+
+  test('resolveImage honors an explicit docker image', () => {
+    const { sidecar } = sidecarFixture({ docker: { image: 'custom/pw:1' } })
+    expect(sidecar.resolveImage({ cwd: '/proj' })).toBe('custom/pw:1')
+  })
+
+  test('resolveImage is null without a version or explicit image', () => {
+    const { sidecar } = sidecarFixture({ getPlaywrightVersion: () => null, docker: {} })
+    expect(sidecar.resolveImage({ cwd: '/proj' })).toBeNull()
+  })
+
+  test('exposes the started image and clears it on dispose', async () => {
+    const { exec } = execScript({
+      info: ok,
+      'image inspect': ok,
+      'run -d': ok,
+      'port crvy-rprtr-browser-1': { exitCode: 0, stdout: '127.0.0.1:49153\n', stderr: '' },
+    })
+    const { sidecar } = sidecarFixture({ exec })
+    expect(sidecar.image).toBeUndefined()
+
+    await sidecar.ensure({ cwd: '/proj' }, noopProgress)
+    expect(sidecar.image).toBe('mcr.microsoft.com/playwright:v1.59.0-noble')
+
+    sidecar.dispose()
+    expect(sidecar.image).toBeUndefined()
+  })
+})

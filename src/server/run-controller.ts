@@ -1,4 +1,5 @@
-import { resolvePlaywrightVersion } from '../browser-pins.ts'
+import { resolvePlaywrightVersion, type PinBrowser, type ResolvedProjectPin } from '../browser-pins.ts'
+import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
 import { BROWSER_WS_ENV, type BrowserSidecar } from './browser-sidecar.ts'
@@ -12,13 +13,9 @@ import {
 } from './run-command-helpers.ts'
 import { type RunLauncher } from './run-launcher.ts'
 import type { RunMode } from './run-mode.ts'
+import { prepareRunForContext } from './run-preparation.ts'
 import { createRealSpawn, createRealTimers } from './run-process.ts'
-import {
-  prepareVitestSidecar,
-  resolveVitestLaunchPlan,
-  resolveVitestBackend,
-  buildVitestArgs,
-} from './vitest-backend.ts'
+import { buildVitestArgs, resolveVitestLaunchPlan } from './vitest-backend.ts'
 
 export { resolvePlaywrightLaunch } from './run-launcher.ts'
 export { buildTestListEntries } from './docker-support.ts'
@@ -84,6 +81,10 @@ export interface RunControllerDeps {
   localLauncher?: RunLauncher
   /** Warm browser sidecar backing docker-mode Vitest runs. */
   browserSidecar?: BrowserSidecar
+  /** Reads declared Vitest pins for the sidecar preflight; defaults to the project's Vitest config. */
+  readVitestPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  /** Installed browser executable paths for the Vitest pin preflight; defaults to the project's Playwright. */
+  browserExecutablePaths?: (cwd: string) => Record<PinBrowser, string> | null
   /** Vitest config hook scan; defaults to the textual `CRVY_RPRTR_BROWSER_WS` scan. */
   hasBrowserHook?: (configFile: string) => boolean
   /** Warning sink for run-mode fallbacks; defaults to console.warn. */
@@ -104,6 +105,8 @@ export class RunController {
   private testListPath: string | null = null
   /** Ready sidecar endpoint from the last successful prepareRun, reused across runs. */
   private browserWs: string | null = null
+  /** Image of the sidecar backing the current Vitest run, exported for offline pin resolution. */
+  private browserImage: string | null = null
 
   constructor(private readonly deps: RunControllerDeps) {}
 
@@ -189,7 +192,11 @@ export class RunController {
 
     const spec = launcher.launch({ ctx, playwrightArgs: args })
     if (ctx.runner === 'vitest' && mode === 'docker' && this.browserWs !== null) {
-      spec.env = { ...spec.env, [BROWSER_WS_ENV]: this.browserWs }
+      spec.env = {
+        ...spec.env,
+        [BROWSER_WS_ENV]: this.browserWs,
+        ...(this.browserImage === null ? {} : { [DOCKER_IMAGE_ENV]: this.browserImage }),
+      }
     }
     let child: ChildProcessLike
     try {
@@ -230,50 +237,18 @@ export class RunController {
   async prepareRun(): Promise<{ ok: true } | { ok: false; reason: 'docker-unavailable' }> {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: true }
-    if (ctx.runner === 'vitest') return this.prepareVitestRun(ctx)
-    const launcher = this.deps.launcher
-    if (launcher.prepare === undefined) return { ok: true }
-    try {
-      await launcher.prepare({
-        ctx,
-        onProgress: (phase) => {
-          this.deps.broadcast({ type: 'run-status', data: { running: true, mode: launcher.mode, phase } })
-        },
-      })
-      return { ok: true }
-    } catch (error) {
-      this.deps.broadcast({ type: 'run-status', data: { running: false, mode: launcher.mode } })
-      const message = error instanceof Error ? error.message : String(error)
-      console.warn(`[RunController] run preparation failed: ${message}`)
-      return { ok: false, reason: 'docker-unavailable' }
-    }
-  }
-
-  /** Ensures the warm browser sidecar for a sidecar-backed Vitest run, broadcasting its phases. */
-  private async prepareVitestRun(ctx: RunContext): Promise<{ ok: true } | { ok: false; reason: 'docker-unavailable' }> {
-    const backend = resolveVitestBackend({
-      ctx,
-      runMode: this.deps.getRunMode?.(),
-      dockerBackend: this.deps.launcher.mode === 'docker',
-      warn: false,
-      hasHook: this.deps.hasBrowserHook,
-      warnSink: this.deps.warn,
-    })
-    if (backend !== 'sidecar') return { ok: true }
-    const prepared = await prepareVitestSidecar({
-      ctx,
-      sidecar: this.deps.browserSidecar,
-      broadcast: (message) => {
-        this.deps.broadcast(message)
-      },
-    })
+    const prepared = await prepareRunForContext(ctx, this.deps)
     if (!prepared.ok) return { ok: false, reason: 'docker-unavailable' }
-    this.browserWs = prepared.endpoint
+    if (prepared.sidecar !== undefined) {
+      this.browserWs = prepared.sidecar.endpoint
+      this.browserImage = prepared.sidecar.image ?? null
+    }
     return { ok: true }
   }
 
   dispose(): void {
     this.deps.browserSidecar?.dispose()
+    this.browserImage = null
     if (this.child === null) return
     if (this.sigkillTimer !== null) this.deps.timers.clearTimeout(this.sigkillTimer)
     this.sigkillTimer = null

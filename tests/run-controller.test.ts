@@ -146,6 +146,8 @@ function createFixture(
     },
     browserSidecar: {
       endpoint: 'ws://127.0.0.1:49153/',
+      image: SIDECAR_IMAGE,
+      resolveImage: (): string => SIDECAR_IMAGE,
       ensure: (ctx, onProgress): Promise<string> => {
         sidecarEnsureCalls.value += 1
         onProgress('starting-sidecar')
@@ -157,6 +159,7 @@ function createFixture(
         sidecarDisposeCalls.value += 1
       },
     },
+    readVitestPins: () => Promise.resolve([]),
     hasBrowserHook: (): boolean => hasBrowserHook,
     writeTempFile: (content: string): string => {
       const path = `/tmp/crvy-rprtr-test-list-${writtenTempFiles.length}.txt`
@@ -234,6 +237,8 @@ function createFixture(
 }
 
 const SAMPLE_CTX: RunContext = { configFile: '/proj/playwright.config.ts', cwd: '/proj' }
+
+const SIDECAR_IMAGE = 'mcr.microsoft.com/playwright:v1.59.0-noble'
 
 const VITEST_CTX: RunContext = {
   configFile: '/proj/vitest.config.ts',
@@ -538,7 +543,10 @@ describe('RunController.start Vitest docker scoping', () => {
     expect(result).toEqual({ ok: true })
     expect(f.spawnCalls).toHaveLength(1)
     expect(f.spawnCalls[0]!.args).toEqual(['vitest', 'run', '--config', '/proj/vitest.config.ts'])
-    expect(f.spawnCalls[0]!.opts.env).toMatchObject({ CRVY_RPRTR_BROWSER_WS: 'ws://127.0.0.1:49153/' })
+    expect(f.spawnCalls[0]!.opts.env).toMatchObject({
+      CRVY_RPRTR_BROWSER_WS: 'ws://127.0.0.1:49153/',
+      CRVY_RPRTR_DOCKER_IMAGE: SIDECAR_IMAGE,
+    })
     expect(f.broadcasts).toContainEqual({ type: 'run-status', data: { running: true, mode: 'docker' } })
     expect(f.warnings).toHaveLength(0)
   })
@@ -604,6 +612,9 @@ describe('RunController.start Vitest docker scoping', () => {
     expect(result).toEqual({ ok: true })
     expect(f.spawnCalls).toHaveLength(1)
     expect(f.spawnCalls[0]!.args[0]).toBe('vitest')
+    const env = f.spawnCalls[0]!.opts.env as Record<string, string | undefined>
+    expect(env.CRVY_RPRTR_BROWSER_WS).toBeUndefined()
+    expect(env.CRVY_RPRTR_DOCKER_IMAGE).toBeUndefined()
     expect(f.sidecarEnsureCalls.value).toBe(0)
     expect(f.warnings).toHaveLength(0)
   })

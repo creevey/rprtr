@@ -1,6 +1,8 @@
+import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
 import { BROWSER_WS_ENV, hasBrowserEndpointHook, type BrowserSidecar } from './browser-sidecar.ts'
+import { assertVitestDockerPinsSatisfied } from './docker-preflight.ts'
 import { sharedProject } from './run-command-helpers.ts'
 import type { RunContext } from './run-controller.ts'
 import type { RunLauncher } from './run-launcher.ts'
@@ -106,17 +108,62 @@ export interface PrepareVitestSidecarInput {
  */
 export async function prepareVitestSidecar(
   input: PrepareVitestSidecarInput,
-): Promise<{ ok: true; endpoint: string } | { ok: false }> {
+): Promise<{ ok: true; endpoint: string; image?: string } | { ok: false }> {
   if (input.sidecar === undefined) return { ok: false }
   try {
     const endpoint = await input.sidecar.ensure(input.ctx, (phase) => {
       input.broadcast({ type: 'run-status', data: { running: true, mode: 'docker', phase } })
     })
-    return { ok: true, endpoint }
+    return {
+      ok: true,
+      endpoint,
+      ...(input.sidecar.image === undefined ? {} : { image: input.sidecar.image }),
+    }
   } catch (error) {
     input.broadcast({ type: 'run-status', data: { running: false, mode: 'docker' } })
     const message = error instanceof Error ? error.message : String(error)
     console.warn(`[RunController] browser sidecar preparation failed: ${message}`)
     return { ok: false }
   }
+}
+
+export interface PrepareVitestSidecarRunInput {
+  ctx: RunContext
+  sidecar: BrowserSidecar | undefined
+  /** Injected pin reader for the preflight; defaults to the project's Vitest config. */
+  readVitestPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  /** Installed executable paths for the preflight; defaults to the project's Playwright. */
+  browserExecutablePaths?: (cwd: string) => Record<PinBrowser, string> | null
+  warn: (message: string) => void
+  broadcast: (message: ClientWebSocketMessage) => void
+}
+
+/**
+ * Preflights declared Vitest pins against the sidecar image, then ensures the
+ * warm sidecar. The image resolves before the container starts, so a drifting
+ * pin rejects the run with the matching image tag as the remedy.
+ */
+export async function prepareVitestSidecarRun(
+  input: PrepareVitestSidecarRunInput,
+): Promise<{ ok: true; endpoint: string; image?: string } | { ok: false }> {
+  const resolvedImage = input.sidecar?.resolveImage(input.ctx) ?? null
+  if (resolvedImage !== null) {
+    try {
+      await assertVitestDockerPinsSatisfied({
+        cwd: input.ctx.cwd,
+        image: resolvedImage,
+        warn: input.warn,
+        ...(input.readVitestPins === undefined ? {} : { readVitestPins: input.readVitestPins }),
+        ...(input.browserExecutablePaths === undefined ? {} : { browserExecutablePaths: input.browserExecutablePaths }),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      input.warn(`[RunController] Vitest browser pin preflight failed: ${message}`)
+      return { ok: false }
+    }
+  }
+  const prepared = await prepareVitestSidecar({ ctx: input.ctx, sidecar: input.sidecar, broadcast: input.broadcast })
+  if (!prepared.ok) return { ok: false }
+  const image = prepared.image ?? resolvedImage
+  return image === null ? { ok: true, endpoint: prepared.endpoint } : { ok: true, endpoint: prepared.endpoint, image }
 }

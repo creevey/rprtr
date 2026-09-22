@@ -97,6 +97,10 @@ function waitForEndpoint(input: {
 export interface BrowserSidecar {
   /** Endpoint of the warm sidecar, if one is currently ready. */
   readonly endpoint: string | undefined
+  /** Docker image of the warm sidecar, once one has started. */
+  readonly image: string | undefined
+  /** Resolves the image the sidecar would start for this context; null when it cannot be derived. */
+  resolveImage(ctx: { cwd: string }): string | null
   /** Ensures a ready sidecar exists and returns its WebSocket endpoint. */
   ensure(ctx: { cwd: string }, onProgress: (phase: string) => void): Promise<string>
   /** Best-effort removal of the warm container. */
@@ -227,10 +231,17 @@ export function createBrowserSidecar(options: BrowserSidecarOptions = {}): Brows
   const deps = resolveSidecarDeps(options)
   let endpoint: string | undefined
   let publishedPort: number | undefined
+  let startedImage: string | undefined
 
   return {
     get endpoint(): string | undefined {
       return endpoint
+    },
+    get image(): string | undefined {
+      return startedImage
+    },
+    resolveImage(ctx): string | null {
+      return resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
     },
     async ensure(ctx, onProgress): Promise<string> {
       if (!(await probeDockerDaemon(deps.exec))) throw new DockerUnavailableError()
@@ -245,11 +256,13 @@ export function createBrowserSidecar(options: BrowserSidecarOptions = {}): Brows
       const started = await startSidecar(deps, ctx, image, version)
       endpoint = started.endpoint
       publishedPort = started.port
+      startedImage = image
       return started.endpoint
     },
     dispose(): void {
       endpoint = undefined
       publishedPort = undefined
+      startedImage = undefined
       void forceRemoveContainer(deps.exec, deps.containerName)
     },
   }

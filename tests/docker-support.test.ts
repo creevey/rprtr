@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
+import { playwrightImageTag } from '../src/docker-image'
 import {
   DEFAULT_CONTAINER_COMMAND,
   probeDockerDaemon,
@@ -168,5 +169,11 @@ describe('rewriteContainerPath — Windows hosts', () => {
     expect(rewriteContainerPath('/work/tests/x.spec.ts', { from: '/work', to: 'C:\\proj' })).toBe(
       'C:\\proj/tests/x.spec.ts',
     )
+  })
+})
+
+describe('playwrightImageTag', () => {
+  test('builds the canonical Playwright image tag', () => {
+    expect(playwrightImageTag('1.59.0')).toBe('mcr.microsoft.com/playwright:v1.59.0-noble')
   })
 })

@@ -8,6 +8,7 @@ import {
   type PinBrowser,
   type RunEnvironments,
 } from './browser-pins.ts'
+import { DOCKER_IMAGE_ENV } from './docker-image.ts'
 import type { BrowserTypeLike } from './reporter-browser-types.ts'
 
 export interface ResolveEnvironmentsInput {
@@ -27,7 +28,7 @@ export function resolveRunEnvironments(input: ResolveEnvironmentsInput): RunEnvi
     cwd: input.cwd,
     projects,
     executablePathFor: (browser) => input.browserTypes[browser].executablePath(),
-    dockerImage: process.env.CRVY_RPRTR_DOCKER_IMAGE,
+    dockerImage: process.env[DOCKER_IMAGE_ENV],
   })
   for (const [projectName, environment] of Object.entries(environments)) {
     const decision = evaluateBrowserPinPolicy({ policy: input.policy, projectName, environment })

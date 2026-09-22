@@ -22,8 +22,8 @@
 
 ## 5. Docker sidecar provenance and preflight
 
-- [ ] 5.1 Add failing tests: `tests/run-controller.test.ts` asserts a sidecar-backed Vitest spawn carries `CRVY_RPRTR_DOCKER_IMAGE` (and a local spawn does not); `tests/docker-preflight.test.ts` asserts a drifting Vitest pin rejects the run before `sidecar.ensure` with the image tag as the remedy while unpinned/unverifiable pins pass and a reader failure only warns; `tests/docker-support.test.ts` pins the extracted `playwrightImageTag` helper (`cd tests && bun test run-controller.test.ts docker-preflight.test.ts docker-support.test.ts browser-sidecar.test.ts` — fails).
-- [ ] 5.2 Extract `playwrightImageTag(version)` into `src/docker-image.ts`, expose the started image from `src/server/browser-sidecar.ts`/`prepareVitestSidecar`, set the env var in `src/server/run-controller.ts`, and run the Vitest pin preflight in `prepareVitestRun` through an injected reader seam until 5.1 passes (`cd tests && bun test run-controller.test.ts docker-preflight.test.ts docker-support.test.ts browser-sidecar.test.ts`; `bun run typecheck`).
+- [x] 5.1 Add failing tests: `tests/run-controller.test.ts` asserts a sidecar-backed Vitest spawn carries `CRVY_RPRTR_DOCKER_IMAGE` (and a local spawn does not); `tests/docker-preflight.test.ts` asserts a drifting Vitest pin rejects the run before `sidecar.ensure` with the image tag as the remedy while unpinned/unverifiable pins pass and a reader failure only warns; `tests/docker-support.test.ts` pins the extracted `playwrightImageTag` helper (`cd tests && bun test run-controller.test.ts docker-preflight.test.ts docker-support.test.ts browser-sidecar.test.ts` — fails).
+- [x] 5.2 Extract `playwrightImageTag(version)` into `src/docker-image.ts`, expose the started image from `src/server/browser-sidecar.ts`/`prepareVitestSidecar`, set the env var in `src/server/run-controller.ts`, and run the Vitest pin preflight in `prepareVitestRun` through an injected reader seam until 5.1 passes (`cd tests && bun test run-controller.test.ts docker-preflight.test.ts docker-support.test.ts browser-sidecar.test.ts`; `bun run typecheck`).
 
 ## 6. Docs, example, and full gate
 

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import { collectForwardedEnvNames } from './docker-env.ts'
 import { DOCKER_WORK_DIR, type DockerOptions } from './docker-launcher.ts'
 import { rewritePlaywrightArgs, type Warn } from './docker-support.ts'
@@ -103,7 +104,7 @@ export function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], de
     args.push('-v', mount)
   }
   args.push('-e', `CRVY_RPRTR_SERVER_URL=ws://${DOCKER_HOST_GATEWAY}:${deps.port}`)
-  args.push('-e', `CRVY_RPRTR_DOCKER_IMAGE=${deps.image}`)
+  args.push('-e', `${DOCKER_IMAGE_ENV}=${deps.image}`)
   args.push('-e', 'CRVY_RPRTR_PORTABLE_ARTIFACTS=1', '-e', 'TZ=UTC', '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8')
   args.push('-e', 'PLAYWRIGHT_HTML_OPEN=never')
   if (deps.docker?.fontRendering !== 'inherit') {
