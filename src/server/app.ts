@@ -16,6 +16,7 @@ import {
   type IncomingWebSocketMessage,
 } from '../schemas.ts'
 import { type BrowserSidecar } from './browser-sidecar.ts'
+import { discoveryLogLabel, seedDiscoveredTests, withoutDiscoveredTests } from './discovered-tests.ts'
 import { type DockerOptions } from './docker-launcher.ts'
 import { fileExists } from './file-utils.ts'
 import {
@@ -37,7 +38,7 @@ import { type RunLauncher } from './run-launcher.ts'
 import { type RunMode } from './run-mode.ts'
 import { createCloseHandler, createRunControllerAndHandlers } from './server-factories.ts'
 import { broadcastToBrowsers } from './utils.ts'
-import { resolveSeedRunContext, seedDiscoveredTests, withoutDiscoveredTests } from './vitest-seeding.ts'
+import { resolveSeedRunContext } from './vitest-seeding.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
 export interface ServerOptions {
@@ -215,7 +216,7 @@ async function setupRoutesContext(
   return { routesContext, launcher, localLauncher, browserSidecar, configuredRunMode }
 }
 
-/** Fire-and-forget startup listing for a discovered Vitest project: the sidebar
+/** Fire-and-forget startup listing for a discovered project: the sidebar
  * pre-populates when it lands; the run controls stay enabled even if it fails. */
 function startVitestDiscovery(
   runContext: RoutesContext['runContext'],
@@ -230,7 +231,7 @@ function startVitestDiscovery(
     },
   }).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('[VitestDiscovery] test listing failed:', message)
+    console.error(`[${discoveryLogLabel(runContext)}] test listing failed:`, message)
   })
 }
 

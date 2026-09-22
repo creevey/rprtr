@@ -1,4 +1,3 @@
-import { spawn } from 'child_process'
 import { relative } from 'path'
 
 import { z } from 'zod'
@@ -6,6 +5,8 @@ import { z } from 'zod'
 import { safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { browserLabelFromProjectName, relativeFileTokens } from '../vitest-helpers.ts'
+import { DISCOVERED_ID_PREFIX } from './discovered-tests.ts'
+import { createRealListSpawn, type ListSpawn } from './list-spawn.ts'
 import { resolveLocalCommand } from './run-launcher.ts'
 
 export interface VitestListEntry {
@@ -17,17 +18,6 @@ export interface VitestListEntry {
     column?: number
   }
 }
-
-export interface ListProcess {
-  stdout: {
-    on(event: 'data', cb: (chunk: string | Buffer) => void): void
-  }
-  on(event: 'close', cb: (code: number | null) => void): void
-  on(event: 'error', cb: (err: Error) => void): void
-  kill(signal: 'SIGKILL' | 'SIGTERM'): void
-}
-
-export type ListSpawn = (cmd: string, args: string[], opts: Record<string, unknown>) => ListProcess
 
 const VitestListEntrySchema = z.object({
   name: z.string(),
@@ -52,21 +42,6 @@ export function parseVitestListStdout(stdout: string): VitestListEntry[] {
   return raw
     .map((item: unknown) => safeParse(VitestListEntrySchema, item))
     .filter((entry): entry is VitestListEntry => entry !== null)
-}
-
-function createRealListSpawn(): ListSpawn {
-  return (cmd, args, opts): ListProcess => {
-    const cp = spawn(cmd, args, opts)
-    return {
-      stdout: {
-        on: (event, cb) => cp.stdout?.on(event, cb),
-      },
-      on: (event, cb) => cp.on(event, cb),
-      kill: (signal) => {
-        cp.kill(signal)
-      },
-    }
-  }
 }
 
 const DEFAULT_VITEST_LIST_TIMEOUT_MS = 30_000
@@ -123,18 +98,6 @@ export function runVitestList(options: RunVitestListOptions): Promise<VitestList
   })
 }
 
-/** Prefix marking test ids synthesized from discovery rather than a real run. */
-export const DISCOVERED_ID_PREFIX = 'discovered:'
-
-/**
- * Stable identity of a discovered test: (file, full title path). Survives across
- * runs, unlike Vitest's runtime task ids, so discovered entries can be matched
- * against tests a loaded report already knows.
- */
-export function discoveredTestIdentity(file: string, fullName: string): string {
-  return `${file}\u0000${fullName}`
-}
-
 function toTitlePath(fullName: string): string[] {
   return fullName.split(' > ').slice(0, -1)
 }
@@ -146,7 +109,9 @@ function toTitlePath(fullName: string): string[] {
  * name, and a `discovered:`-prefixed id so provenance stays explicit.
  * Multi-project configs emit one entry per project; the project-derived
  * browser label keeps them distinct, mirroring how streamed results separate
- * browsers.
+ * browsers. The location always carries the absolute test file — line falls
+ * back the same way the Vitest reporter's streamed events do — so a discovered
+ * entry stays identifiable as (file, full title path).
  */
 export function synthesizeDiscoveredTests(entries: VitestListEntry[], root: string): TestData[] {
   const byId = new Map<string, TestData>()
@@ -165,55 +130,14 @@ export function synthesizeDiscoveredTests(entries: VitestListEntry[], root: stri
       browser,
       projectName: entry.projectName,
       title: nameParts[nameParts.length - 1] ?? entry.name,
-      ...(location === undefined
-        ? {}
-        : {
-            location: {
-              file: entry.file,
-              line: location.line,
-              ...(location.column === undefined ? {} : { column: location.column }),
-            },
-          }),
+      location: {
+        file: entry.file,
+        line: location?.line ?? 1,
+        ...(location?.column === undefined ? {} : { column: location.column }),
+      },
       provider: 'vitest',
       status: 'pending',
     })
   }
   return [...byId.values()]
-}
-
-/**
- * Identity of a test a real run streamed: (location file, full title path) — the
- * same tuple a discovered entry is identified by, so the two can be matched.
- */
-function reportTestIdentity(test: TestData): string | null {
-  const file = test.location?.file
-  if (file === undefined) return null
-  return discoveredTestIdentity(file, [...test.titlePath, test.title].join(' > '))
-}
-
-/**
- * Merges discovered entries into the report state, filling only identities the
- * report does not already know — loaded results are never downgraded to pending.
- * Returns true when anything was added.
- */
-export function mergeDiscoveredTests(
-  reportData: { tests: Record<string, TestData> },
-  entries: VitestListEntry[],
-  root: string,
-): boolean {
-  const knownIdentities = new Set<string>()
-  for (const test of Object.values(reportData.tests)) {
-    const identity = reportTestIdentity(test)
-    if (identity !== null) knownIdentities.add(identity)
-  }
-
-  let changed = false
-  for (const entry of entries) {
-    if (knownIdentities.has(discoveredTestIdentity(entry.file, entry.name))) continue
-    const [test] = synthesizeDiscoveredTests([entry], root)
-    if (test === undefined || reportData.tests[test.id] !== undefined) continue
-    reportData.tests[test.id] = test
-    changed = true
-  }
-  return changed
 }

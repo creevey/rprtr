@@ -2,13 +2,7 @@ import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdir, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 
-import {
-  discoveredTestIdentity,
-  runVitestList,
-  synthesizeDiscoveredTests,
-  type VitestListEntry,
-} from '../src/server/vitest-discovery'
-import type { TestData } from '../src/types'
+import { runVitestList, synthesizeDiscoveredTests, type VitestListEntry } from '../src/server/vitest-discovery'
 
 const TMP_ROOT = join(import.meta.dir, 'fixtures', 'vitest-discovery-tmp')
 
@@ -246,25 +240,5 @@ describe('synthesizeDiscoveredTests', () => {
     const [second] = synthesizeDiscoveredTests([entry], root)
     expect(first?.id).toBe(second?.id)
     expect(first?.id.startsWith('discovered:')).toBe(true)
-  })
-
-  test('identity is (file, full title path) and matches a streamed report test', () => {
-    expect(discoveredTestIdentity('/proj/tests/a.test.ts', 'outer > inner > does the thing')).toBe(
-      discoveredTestIdentity('/proj/tests/a.test.ts', 'outer > inner > does the thing'),
-    )
-    expect(discoveredTestIdentity('/proj/tests/a.test.ts', 'a test')).not.toBe(
-      discoveredTestIdentity('/proj/tests/b.test.ts', 'a test'),
-    )
-
-    const streamed: TestData = {
-      id: 'runtime-id',
-      titlePath: ['outer', 'inner'],
-      title: 'does the thing',
-      browser: 'chromium',
-      location: { file: '/proj/tests/a.test.ts', line: 3 },
-    }
-    expect(discoveredTestIdentity('/proj/tests/a.test.ts', 'outer > inner > does the thing')).toBe(
-      discoveredTestIdentity(streamed.location?.file ?? '', [...streamed.titlePath, streamed.title].join(' > ')),
-    )
   })
 })

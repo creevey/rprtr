@@ -12,7 +12,7 @@ import {
 } from './report-utils.ts'
 import type { ScreenshotDeclaration } from './reporter-utils.ts'
 import type { RunBeginData, TestBeginData, TestEndData } from './schemas.ts'
-import { DISCOVERED_ID_PREFIX } from './server/vitest-discovery.ts'
+import { DISCOVERED_ID_PREFIX } from './server/discovered-tests.ts'
 import type { Images, TestData, TestResult } from './types.ts'
 
 export interface MutableReportData {

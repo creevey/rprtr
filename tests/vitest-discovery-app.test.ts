@@ -4,8 +4,7 @@ import { join } from 'path'
 
 import { createServerApp, type ServerApp } from '../src/server/app'
 import { RunController, type ChildProcessLike, type RunControllerDeps } from '../src/server/run-controller'
-import { mergeDiscoveredTests, type VitestListEntry } from '../src/server/vitest-discovery'
-import { resolveSeedRunContext, withoutDiscoveredTests } from '../src/server/vitest-seeding'
+import { resolveSeedRunContext } from '../src/server/vitest-seeding'
 import type { TestData } from '../src/types'
 
 const TMP_ROOT = join(import.meta.dir, 'fixtures', 'vitest-discovery-tmp')
@@ -201,63 +200,8 @@ describe('startup seeding', () => {
   })
 })
 
-describe('mergeDiscoveredTests', () => {
-  const root = '/proj'
-
-  function createReportData(tests: Record<string, TestData>): {
-    isRunning: boolean
-    isUpdateMode: boolean
-    tests: Record<string, TestData>
-  } {
-    return { isRunning: false, isUpdateMode: false, tests }
-  }
-
-  function streamedTest(id: string, file: string, title: string, status: TestData['status']): TestData {
-    return {
-      id,
-      titlePath: [],
-      title,
-      browser: 'chromium',
-      location: { file, line: 5 },
-      status,
-      results: [{ status: status === 'success' ? 'success' : 'failed', retries: 0 }],
-    }
-  }
-
-  test('discovered entries fill only identities absent from the loaded report', () => {
-    const knownFile = '/proj/tests/button.test.ts'
-    const reportData = createReportData({
-      'run-id-1': streamedTest('run-id-1', knownFile, 'matches the button baseline', 'failed'),
-    })
-
-    const changed = mergeDiscoveredTests(
-      reportData,
-      [
-        { name: 'matches the button baseline', file: knownFile, projectName: 'chromium' },
-        { name: 'expands on click', file: '/proj/tests/expandable.test.ts', projectName: 'chromium' },
-      ],
-      root,
-    )
-
-    expect(changed).toBe(true)
-    expect(reportData.tests['run-id-1']?.status).toBe('failed')
-    expect(reportData.tests['run-id-1']?.results?.[0]?.status).toBe('failed')
-    const discoveredIds = Object.keys(reportData.tests).filter((id) => id.startsWith('discovered:'))
-    expect(discoveredIds.length).toBe(1)
-    expect(reportData.tests[discoveredIds[0]!]?.status).toBe('pending')
-    expect(reportData.tests[discoveredIds[0]!]?.title).toBe('expands on click')
-  })
-
-  test('merging the same entries twice adds nothing', () => {
-    const entries: VitestListEntry[] = [{ name: 'expands on click', file: '/proj/tests/expandable.test.ts' }]
-    const reportData = createReportData({})
-    expect(mergeDiscoveredTests(reportData, entries, root)).toBe(true)
-    const afterFirst = Object.keys(reportData.tests).length
-    expect(mergeDiscoveredTests(reportData, entries, root)).toBe(false)
-    expect(Object.keys(reportData.tests).length).toBe(afterFirst)
-  })
-
-  test('starting a run from the UI keeps discovered entries so the sidebar structure stays put', () => {
+describe('starting a run from the UI', () => {
+  test('keeps discovered entries so the sidebar structure stays put', () => {
     const discoveredId = 'discovered:tests/a.test.ts:chromium:stale'
     const discovered: TestData = {
       id: discoveredId,
@@ -291,26 +235,5 @@ describe('mergeDiscoveredTests', () => {
     expect(result).toEqual({ ok: true })
     expect(reportData.tests[discoveredId]).toBeDefined()
     expect(reportData.tests[discoveredId]?.status).toBe('pending')
-  })
-})
-
-describe('withoutDiscoveredTests', () => {
-  test('filters discovered ids but keeps every other field', () => {
-    const data = {
-      isRunning: false,
-      isUpdateMode: true,
-      browsers: ['chromium'],
-      screenshotDir: './screenshots',
-      tests: {
-        'discovered:a': { id: 'discovered:a', titlePath: [], title: 'x', browser: 'chromium' } satisfies TestData,
-        'run-id-1': { id: 'run-id-1', titlePath: [], title: 'y', browser: 'chromium' } satisfies TestData,
-      },
-    }
-    const persisted = withoutDiscoveredTests(data)
-    expect(Object.keys(persisted.tests)).toEqual(['run-id-1'])
-    expect(persisted.isRunning).toBe(false)
-    expect(persisted.isUpdateMode).toBe(true)
-    expect(persisted.browsers).toEqual(['chromium'])
-    expect(data.tests['discovered:a']).toBeDefined()
   })
 })
