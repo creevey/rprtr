@@ -341,28 +341,39 @@ describe('runPlaywrightList', () => {
     expect(call.opts.cwd).toBe('/proj')
     const stdio = call.opts.stdio as string[]
     expect(stdio[0]).toBe('ignore')
-    expect(result.map(({ title }) => title)).toEqual(['flat test', 'flat test', 'nested test', 'reaches the bottom'])
+    const entries = result.ok ? result.entries : []
+    expect(entries.map(({ title }) => title)).toEqual(['flat test', 'flat test', 'nested test', 'reaches the bottom'])
   })
 
-  test('malformed stdout yields an empty list', async () => {
+  test('a valid report without tests is a successful empty listing', async () => {
+    const { spawn } = createFakeSpawn({ stdout: JSON.stringify({ config: { rootDir: ROOT_DIR }, suites: [] }) })
+    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual({ ok: true, entries: [] })
+  })
+
+  test('malformed stdout is a parse failure', async () => {
     const { spawn } = createFakeSpawn({ stdout: 'not json at all' })
-    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual([])
+    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual({ ok: false, reason: 'parse' })
   })
 
-  test('a non-object report yields an empty list', async () => {
+  test('a non-object report is a parse failure', async () => {
     const { spawn } = createFakeSpawn({ stdout: '[]' })
-    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual([])
+    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual({ ok: false, reason: 'parse' })
   })
 
-  test('spawn error yields an empty list', async () => {
+  test('non-zero exit is a failure even when stdout parses', async () => {
+    const { spawn } = createFakeSpawn({ stdout: JSON.stringify(listReport()), exitCode: 1 })
+    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual({ ok: false, reason: 'exit' })
+  })
+
+  test('spawn error is a failure', async () => {
     const { spawn } = createFakeSpawn({ emitError: new Error('ENOENT') })
-    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual([])
+    expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual({ ok: false, reason: 'spawn' })
   })
 
-  test('kill timeout yields an empty list', async () => {
+  test('kill timeout is a failure and kills the listing', async () => {
     const { spawn, calls } = createFakeSpawn({ neverCloses: true })
     const result = await runPlaywrightList({ configFile, cwd: '/proj', spawn, timeoutMs: 5 })
-    expect(result).toEqual([])
+    expect(result).toEqual({ ok: false, reason: 'timeout' })
     expect(calls[0]?.child.killedWith).toBe('SIGKILL')
   })
 })

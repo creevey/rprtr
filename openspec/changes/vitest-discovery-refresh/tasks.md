@@ -9,8 +9,8 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 2. Listing results distinguish failure from empty
 
-- [ ] 2.1 Failing test first: extend `tests/vitest-discovery.test.ts` — `runVitestList` returns success-with-entries, success-with-zero for valid empty JSON, and failure for non-zero exit, spawn error, unparseable stdout, and timeout. Implement the result union in `src/server/vitest-discovery.ts` and update startup handling in `src/server/discovered-tests.ts` so failed and empty startup listings keep today's behavior (one log, controls stay enabled, tree untouched). Verify: `cd tests && bun test vitest-discovery.test.ts discovered-tests.test.ts && cd .. && bun run typecheck`
-- [ ] 2.2 Failing test first: extend `tests/playwright-discovery.test.ts` the same way for `runPlaywrightList`, keeping startup behavior identical. Verify: `cd tests && bun test playwright-discovery.test.ts discovered-tests.test.ts && cd .. && bun run typecheck`
+- [x] 2.1 Failing test first: extend `tests/vitest-discovery.test.ts` — `runVitestList` returns success-with-entries, success-with-zero for valid empty JSON, and failure for non-zero exit, spawn error, unparseable stdout, and timeout. Implement the result union in `src/server/vitest-discovery.ts` and update startup handling in `src/server/discovered-tests.ts` so failed and empty startup listings keep today's behavior (one log, controls stay enabled, tree untouched). Verify: `cd tests && bun test vitest-discovery.test.ts discovered-tests.test.ts && cd .. && bun run typecheck`
+- [x] 2.2 Failing test first: extend `tests/playwright-discovery.test.ts` the same way for `runPlaywrightList`, keeping startup behavior identical. Verify: `cd tests && bun test playwright-discovery.test.ts discovered-tests.test.ts && cd .. && bun run typecheck`
 
 ## 3. Reconcile the discovered layer
 

@@ -2,12 +2,12 @@ import { relative, resolve } from 'path'
 
 import { z } from 'zod'
 
-import { readPlaywrightListReport } from '../project-pins.ts'
+import { readPlaywrightListOutcome } from '../project-pins.ts'
 import { safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { browserLabelFromProjectName, relativeFileTokens } from '../vitest-helpers.ts'
 import { DISCOVERED_ID_PREFIX } from './discovered-tests.ts'
-import type { ListSpawn } from './list-spawn.ts'
+import type { ListResult, ListSpawn } from './list-spawn.ts'
 
 export interface PlaywrightListEntry {
   /** Absolute path to the test file, resolved from the report's rootDir-relative location. */
@@ -152,14 +152,16 @@ export interface RunPlaywrightListOptions {
  * --reporter=json` — collection only, no browser launch. The command resolves
  * through the same package-manager resolution UI-launched runs use, and the
  * config path is passed explicitly so a server started with `--config` outside
- * the project lists the configured project. Any failure — spawn error,
- * malformed output, timeout — yields an empty list; callers decide how to log.
+ * the project lists the configured project. Failures — spawn error, malformed
+ * output, non-zero exit, timeout — stay distinguishable from a genuinely empty
+ * project so callers never erase a valid tree on a failed listing.
  */
-export async function runPlaywrightList(options: RunPlaywrightListOptions): Promise<PlaywrightListEntry[]> {
-  const report = await readPlaywrightListReport(options.cwd, {
+export async function runPlaywrightList(options: RunPlaywrightListOptions): Promise<ListResult<PlaywrightListEntry>> {
+  const outcome = await readPlaywrightListOutcome(options.cwd, {
     configFile: options.configFile,
     timeoutMs: options.timeoutMs,
     spawn: options.spawn,
   })
-  return report === null ? [] : parsePlaywrightListReport(report)
+  if (outcome.failure !== null) return { ok: false, reason: outcome.failure }
+  return { ok: true, entries: outcome.report === null ? [] : parsePlaywrightListReport(outcome.report) }
 }

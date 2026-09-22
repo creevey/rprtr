@@ -1,12 +1,14 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 
 import {
   DISCOVERED_ID_PREFIX,
   discoveredTestIdentity,
   mergeDiscoveredTests,
+  seedDiscoveredTests,
   withoutDiscoveredTests,
 } from '../src/server/discovered-tests'
-import type { TestData } from '../src/types'
+import type { RunContext } from '../src/server/run-controller'
+import type { ClientWebSocketMessage, TestData } from '../src/types'
 
 interface ReportData {
   isRunning: boolean
@@ -143,6 +145,102 @@ describe('mergeDiscoveredTests', () => {
 
     expect(changed).toBe(true)
     expect(reportData.tests['discovered:tests/a.test.ts:chromium:no location']).toBeDefined()
+  })
+})
+
+describe('seedDiscoveredTests', () => {
+  const VITEST_RUN_CONTEXT: RunContext = {
+    configFile: '/proj/vitest.config.ts',
+    cwd: '/proj',
+    rootDir: '/proj',
+    runner: 'vitest',
+  }
+
+  const LISTED = discoveredTest('discovered:tests/a.test.ts:chromium:listed', {
+    title: 'listed',
+    fileTokens: ['tests', 'a.test.ts'],
+    location: { file: '/proj/tests/a.test.ts', line: 1 },
+  })
+
+  test('a failed startup listing logs once and leaves the tree untouched', async () => {
+    const errorSpy = spyOn(console, 'error')
+    const reportData = createReportData({
+      'run-id-1': discoveredTest('run-id-1', { status: 'failed' }),
+    })
+    const broadcasts: ClientWebSocketMessage[] = []
+
+    await seedDiscoveredTests({
+      runContext: VITEST_RUN_CONTEXT,
+      reportData,
+      broadcast: (message): void => {
+        broadcasts.push(message)
+      },
+      list: () => Promise.resolve({ ok: false, reason: 'exit' }),
+    })
+
+    expect(Object.keys(reportData.tests)).toEqual(['run-id-1'])
+    expect(broadcasts).toEqual([])
+    const logs = errorSpy.mock.calls.filter((call) => String(call[0]).includes('VitestDiscovery'))
+    expect(logs.length).toBe(1)
+    errorSpy.mockRestore()
+  })
+
+  test('a successful empty startup listing logs once and leaves the tree untouched', async () => {
+    const errorSpy = spyOn(console, 'error')
+    const reportData = createReportData()
+    const broadcasts: ClientWebSocketMessage[] = []
+
+    await seedDiscoveredTests({
+      runContext: VITEST_RUN_CONTEXT,
+      reportData,
+      broadcast: (message): void => {
+        broadcasts.push(message)
+      },
+      list: () => Promise.resolve({ ok: true, entries: [] }),
+    })
+
+    expect(Object.keys(reportData.tests)).toEqual([])
+    expect(broadcasts).toEqual([])
+    const logs = errorSpy.mock.calls.filter((call) => String(call[0]).includes('VitestDiscovery'))
+    expect(logs.length).toBe(1)
+    errorSpy.mockRestore()
+  })
+
+  test('a successful listing merges the discovered entries and broadcasts once', async () => {
+    const reportData = createReportData()
+    const broadcasts: ClientWebSocketMessage[] = []
+
+    await seedDiscoveredTests({
+      runContext: VITEST_RUN_CONTEXT,
+      reportData,
+      broadcast: (message): void => {
+        broadcasts.push(message)
+      },
+      list: () => Promise.resolve({ ok: true, entries: [LISTED] }),
+    })
+
+    expect(reportData.tests[LISTED.id]).toBeDefined()
+    expect(broadcasts).toEqual([{ type: 'sync', data: { tests: reportData.tests, isUpdateMode: false } }])
+  })
+
+  test('a run that started while the listing was in flight suppresses the merge', async () => {
+    const reportData = createReportData()
+    const broadcasts: ClientWebSocketMessage[] = []
+
+    await seedDiscoveredTests({
+      runContext: VITEST_RUN_CONTEXT,
+      reportData,
+      broadcast: (message): void => {
+        broadcasts.push(message)
+      },
+      list: () => {
+        reportData.isRunning = true
+        return Promise.resolve({ ok: true, entries: [LISTED] })
+      },
+    })
+
+    expect(Object.keys(reportData.tests)).toEqual([])
+    expect(broadcasts).toEqual([])
   })
 })
 

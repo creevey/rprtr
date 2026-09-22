@@ -6,7 +6,7 @@ import { safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { browserLabelFromProjectName, relativeFileTokens } from '../vitest-helpers.ts'
 import { DISCOVERED_ID_PREFIX } from './discovered-tests.ts'
-import { createRealListSpawn, type ListSpawn } from './list-spawn.ts'
+import { createRealListSpawn, type ListResult, type ListSpawn } from './list-spawn.ts'
 import { resolveLocalCommand } from './run-launcher.ts'
 
 export interface VitestListEntry {
@@ -31,14 +31,14 @@ const VitestListEntrySchema = z.object({
     .optional(),
 })
 
-export function parseVitestListStdout(stdout: string): VitestListEntry[] {
+export function parseVitestListStdout(stdout: string): VitestListEntry[] | null {
   let raw: unknown
   try {
     raw = JSON.parse(stdout)
   } catch {
-    return []
+    return null
   }
-  if (!Array.isArray(raw)) return []
+  if (!Array.isArray(raw)) return null
   return raw
     .map((item: unknown) => safeParse(VitestListEntrySchema, item))
     .filter((entry): entry is VitestListEntry => entry !== null)
@@ -58,23 +58,25 @@ export interface RunVitestListOptions {
  * Enumerates a Vitest project's tests via `CI=true vitest list --json` — collection
  * only, no browser launch. The command resolves through the same package-manager
  * resolution UI-launched runs use. Stdin is closed (`ignore`) and `CI` is forced so
- * Vitest cannot fall into interactive mode and hang the server. Any failure — spawn
- * error, malformed output, timeout — yields an empty list; callers decide how to log.
+ * Vitest cannot fall into interactive mode and hang the server. The result
+ * distinguishes a genuinely empty project (`ok: true` with no entries) from spawn
+ * errors, malformed output, non-zero exits, and timeouts, so callers never erase a
+ * valid tree on a failed listing.
  */
-export function runVitestList(options: RunVitestListOptions): Promise<VitestListEntry[]> {
+export function runVitestList(options: RunVitestListOptions): Promise<ListResult<VitestListEntry>> {
   const { configFile, cwd, timeoutMs = DEFAULT_VITEST_LIST_TIMEOUT_MS } = options
   const spawnFn = options.spawn ?? createRealListSpawn()
   const { cmd, args } = resolveLocalCommand('vitest', ['list', '--json', '--config', configFile])
 
-  return new Promise<VitestListEntry[]>((resolve) => {
+  return new Promise<ListResult<VitestListEntry>>((resolve) => {
     let stdout = ''
     let settled = false
     let killTimer: ReturnType<typeof setTimeout> | undefined
-    const finish = (entries: VitestListEntry[]): void => {
+    const finish = (result: ListResult<VitestListEntry>): void => {
       if (settled) return
       settled = true
       if (killTimer !== undefined) clearTimeout(killTimer)
-      resolve(entries)
+      resolve(result)
     }
 
     const child = spawnFn(cmd, args, {
@@ -86,14 +88,19 @@ export function runVitestList(options: RunVitestListOptions): Promise<VitestList
       stdout += typeof chunk === 'string' ? chunk : chunk.toString()
     })
     child.on('error', () => {
-      finish([])
+      finish({ ok: false, reason: 'spawn' })
     })
-    child.on('close', () => {
-      finish(parseVitestListStdout(stdout))
+    child.on('close', (code) => {
+      if (code !== 0) {
+        finish({ ok: false, reason: 'exit' })
+        return
+      }
+      const entries = parseVitestListStdout(stdout)
+      finish(entries === null ? { ok: false, reason: 'parse' } : { ok: true, entries })
     })
     killTimer = setTimeout(() => {
       child.kill('SIGKILL')
-      finish([])
+      finish({ ok: false, reason: 'timeout' })
     }, timeoutMs)
   })
 }

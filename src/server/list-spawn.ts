@@ -16,6 +16,16 @@ export interface ListProcess {
 
 export type ListSpawn = (cmd: string, args: string[], opts: Record<string, unknown>) => ListProcess
 
+/** Why a collection-only listing failed instead of producing entries. */
+export type ListFailure = 'exit' | 'parse' | 'spawn' | 'timeout'
+
+/**
+ * Collection-only listing outcome. `ok: false` must never be folded into an
+ * empty project: startup degrades to one log line, and refresh leaves the
+ * discovered layer untouched rather than erasing a valid tree.
+ */
+export type ListResult<T> = { ok: true; entries: T[] } | { ok: false; reason: ListFailure }
+
 export function createRealListSpawn(): ListSpawn {
   return (cmd, args, opts): ListProcess => {
     const cp = spawn(cmd, args, opts)

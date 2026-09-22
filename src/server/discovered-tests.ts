@@ -1,6 +1,7 @@
 import { dirname } from 'path'
 
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
+import type { ListResult } from './list-spawn.ts'
 import { runPlaywrightList, synthesizePlaywrightDiscoveredTests } from './playwright-discovery.ts'
 import type { RunContext } from './run-controller.ts'
 import { runVitestList, synthesizeDiscoveredTests } from './vitest-discovery.ts'
@@ -90,44 +91,59 @@ export interface SeedDiscoveredTestsDeps {
   runContext: RunContext | undefined
   reportData: { isRunning: boolean; tests: Record<string, TestData>; isUpdateMode: boolean }
   broadcast: (message: ClientWebSocketMessage) => void
+  /** Listing seam for tests; defaults to the runner-specific collection-only lister. */
+  list?: DiscoveryListing
 }
 
+/** Runner-specific listing that returns discovered tests, or why listing failed. */
+export type DiscoveryListing = (runContext: RunContext) => Promise<ListResult<TestData>>
+
 /**
- * Runner-specific listing: spawn, parse, and synthesize discovered tests.
- * An absent runner means Playwright, as elsewhere.
+ * Runs the runner's collection-only listing and maps successful entries onto
+ * discovered tests. An absent runner means Playwright, as elsewhere.
  */
-async function listDiscoveredTests(runContext: RunContext): Promise<TestData[]> {
+async function listDiscoveredTests(runContext: RunContext): Promise<ListResult<TestData>> {
   if (runContext.runner === 'vitest') {
-    const entries = await runVitestList({ configFile: runContext.configFile, cwd: runContext.cwd })
-    return synthesizeDiscoveredTests(entries, runContext.cwd)
+    const result = await runVitestList({ configFile: runContext.configFile, cwd: runContext.cwd })
+    return result.ok ? { ok: true, entries: synthesizeDiscoveredTests(result.entries, runContext.cwd) } : result
   }
-  const entries = await runPlaywrightList({ configFile: runContext.configFile, cwd: runContext.cwd })
+  const result = await runPlaywrightList({ configFile: runContext.configFile, cwd: runContext.cwd })
   // The reporter groups by config-dir-relative file tokens, so discovery does too.
-  return synthesizePlaywrightDiscoveredTests(entries, dirname(runContext.configFile))
+  return result.ok
+    ? { ok: true, entries: synthesizePlaywrightDiscoveredTests(result.entries, dirname(runContext.configFile)) }
+    : result
 }
 
 /**
  * One-shot startup listing for the seeded run context: enumerates the project's
  * tests and merges them into the report tree as `pending`. Fire-and-forget from
  * the caller's perspective — the server is interactive before this lands, and a
- * failed listing only logs, leaving the discovered run controls enabled.
+ * failed or empty listing only logs, leaving the discovered run controls enabled
+ * and the loaded report untouched.
  */
 export async function seedDiscoveredTests(deps: SeedDiscoveredTestsDeps): Promise<void> {
   const runContext = deps.runContext
   if (runContext === undefined) return
 
-  const discovered = await listDiscoveredTests(runContext)
+  const result = await (deps.list ?? listDiscoveredTests)(runContext)
   // A run that started while the listing was in flight replaces the whole tree;
   // discovered state must never be injected into an active run.
   if (deps.reportData.isRunning) return
-  if (discovered.length === 0) {
+  if (!result.ok) {
+    const { label, command } = discoveryRunner(runContext)
+    console.error(
+      `[${label}] \`${command}\` failed (${result.reason}); run controls stay enabled and the sidebar keeps its loaded state`,
+    )
+    return
+  }
+  if (result.entries.length === 0) {
     const { label, command } = discoveryRunner(runContext)
     console.error(
       `[${label}] \`${command}\` returned no tests; run controls stay enabled and the sidebar keeps its loaded state`,
     )
     return
   }
-  const changed = mergeDiscoveredTests(deps.reportData, discovered)
+  const changed = mergeDiscoveredTests(deps.reportData, result.entries)
   if (!changed) return
   deps.broadcast({
     type: 'sync',

@@ -92,7 +92,7 @@ describe('runVitestList', () => {
 
     const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
 
-    expect(result).toEqual(entries)
+    expect(result).toEqual({ ok: true, entries })
     expect(calls.length).toBe(1)
     const call = calls[0]!
     // Package-manager resolution may wrap the binary (npx/bun x); the resolved
@@ -109,16 +109,31 @@ describe('runVitestList', () => {
     expect(stdio[0]).toBe('ignore')
   })
 
-  test('malformed stdout yields an empty list', async () => {
-    const { spawn } = createFakeSpawn({ stdout: 'not json at all' })
+  test('valid empty JSON is a successful empty listing', async () => {
+    const { spawn } = createFakeSpawn({ stdout: '[]' })
     const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
-    expect(result).toEqual([])
+    expect(result).toEqual({ ok: true, entries: [] })
   })
 
-  test('non-array JSON yields an empty list', async () => {
+  test('malformed stdout is a parse failure', async () => {
+    const { spawn } = createFakeSpawn({ stdout: 'not json at all' })
+    const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
+    expect(result).toEqual({ ok: false, reason: 'parse' })
+  })
+
+  test('non-array JSON is a parse failure', async () => {
     const { spawn } = createFakeSpawn({ stdout: '{"name":"nope"}' })
     const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
-    expect(result).toEqual([])
+    expect(result).toEqual({ ok: false, reason: 'parse' })
+  })
+
+  test('non-zero exit is a failure even when stdout parses', async () => {
+    const { spawn } = createFakeSpawn({
+      stdout: fixtureStdout([{ name: 'collect failed', file: '/proj/tests/a.test.ts' }]),
+      exitCode: 1,
+    })
+    const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
+    expect(result).toEqual({ ok: false, reason: 'exit' })
   })
 
   test('invalid entries are filtered, valid ones kept', async () => {
@@ -130,16 +145,19 @@ describe('runVitestList', () => {
       ]),
     })
     const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
-    expect(result).toEqual([{ name: 'keep me', file: '/proj/tests/a.test.ts', projectName: 'chromium' }])
+    expect(result).toEqual({
+      ok: true,
+      entries: [{ name: 'keep me', file: '/proj/tests/a.test.ts', projectName: 'chromium' }],
+    })
   })
 
-  test('spawn error yields an empty list', async () => {
+  test('spawn error is a failure', async () => {
     const { spawn } = createFakeSpawn({ emitError: new Error('ENOENT') })
     const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
-    expect(result).toEqual([])
+    expect(result).toEqual({ ok: false, reason: 'spawn' })
   })
 
-  test('kill timeout yields an empty list', async () => {
+  test('kill timeout is a failure and kills the listing', async () => {
     const { spawn, calls } = createFakeSpawn({ neverCloses: true, stdout: fixtureStdout([]) })
     const result = await runVitestList({
       configFile: '/proj/vitest.config.ts',
@@ -147,7 +165,7 @@ describe('runVitestList', () => {
       spawn,
       timeoutMs: 5,
     })
-    expect(result).toEqual([])
+    expect(result).toEqual({ ok: false, reason: 'timeout' })
     expect(calls[0]?.child.killedWith).toBe('SIGKILL')
   })
 
@@ -161,9 +179,10 @@ describe('runVitestList', () => {
       configFile: join(projectDir, 'vitest.config.ts'),
       cwd: projectDir,
     })
-    const names = result.map((entry) => entry.name).sort()
+    const entries = result.ok ? result.entries : []
+    const names = entries.map((entry) => entry.name).sort()
     expect(names).toEqual(['greets the world', 'reaches the bottom'])
-    for (const entry of result) {
+    for (const entry of entries) {
       expect(entry.file.startsWith(projectDir)).toBe(true)
     }
   })
