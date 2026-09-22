@@ -109,7 +109,38 @@ export default defineConfig({
 With the default `warn` policy a drifted pin only annotates the run — tests still pass, and
 drifted screenshots remain reviewable and approvable. `browserPinPolicy: 'fail'` makes a
 drift fail the run at reporter init with the project, declared pin, effective build, and a
-remedy. In Docker mode a drifting pin rejects the run before any container starts.
+remedy. In Docker mode a drifting pin rejects the run before any container starts — for
+Playwright before the test container, for Vitest before the browser sidecar.
+
+### Vitest Browser Mode
+
+Vitest declares the same pin model in the reporter options. Vitest resolves one project per
+browser instance (`desktop (chromium)`, or just `chromium` when the instance has no name), so
+`browserPins` is keyed by the Vitest project name, and `browserPin` is the fallback for every
+browser project without a keyed pin:
+
+```ts
+// vitest.config.ts
+new CrvyRprtrVitestReporter({
+  // one entry per browser instance project, as the sidebar labels it
+  browserPins: { 'desktop (chromium)': { browser: 'chromium', version: '147' } },
+  // fallback for every browser project the reporter reports on
+  browserPin: { browser: 'chromium', version: '147' },
+  browserPinPolicy: 'fail',
+})
+```
+
+- Pins are validated at reporter init against the resolved projects, the same way
+  `metadata.crvyRprtr` pins are: an invalid pin, or a declared browser that disagrees with the
+  project's configured browser, fails the run naming the option and the offending value.
+- A `browserPins` key that matches no project of the current run (for example a filtered
+  per-test rerun) warns once and the fallback still applies. `crvy-rprtr browsers check`
+  evaluates the unfiltered project set and reports such a key as an invalid pin.
+- A Vitest run resolves the effective build from the browser package its provider launches —
+  the project's installed `playwright` — and, in Docker mode, from the version-pinned sidecar
+  image (`playwright run-server`) derived from that same install, recording the image with the
+  environment. Non-Playwright providers, remote endpoints, branded channels, explicit
+  executables, and custom images are reported as `unverifiable`.
 
 ### Migrating from creevey
 
@@ -137,7 +168,10 @@ npx crvy-rprtr browsers check --strict       # exit non-zero when a pin drifted 
 `resolve` recommends the newest matching build and lists alternatives when a prefix matches
 several; it fails with the nearest major versions when nothing matches. `check` is fully
 offline, reports each pinned project's declared pin, effective build, and status, and never
-fails on `unpinned` or `unverifiable` projects.
+fails on `unpinned` or `unverifiable` projects. It reads both runners: Playwright pins from
+project metadata and Vitest pins from the reporter options, evaluating the project's Vitest
+config through its own Vitest without starting a browser. The installed environment's state
+resolves from the project's `playwright` package, so Vitest-only projects work too.
 
 ## Server CLI Options
 
@@ -222,15 +256,18 @@ The extraction that powers passing tests reads literal string arguments: `toMatc
 
 ### Vitest Reporter Options
 
-| Option              | Type      | Default                        | Description                                                            |
-| ------------------- | --------- | ------------------------------ | ---------------------------------------------------------------------- |
-| `serverUrl`         | `string`  | `"ws://localhost:3000"`        | WebSocket URL of the Crvy Rprtr server                                 |
-| `screenshotDir`     | `string`  | `"./screenshots"`              | Directory for saving screenshot artifacts in offline/CI runs           |
-| `offlineReportPath` | `string`  | `"./crvy-rprtr-{worker}.json"` | Path for offline report when server is unavailable                     |
-| `reportHtmlPath`    | `string`  | `"./crvy-rprtr.html"`          | Path for the browser-openable static report HTML                       |
-| `ci`                | `boolean` | auto-detected                  | Force offline/CI mode (content-addressed copies, portable artifacts)   |
-| `referenceDir`      | `string`  | `"__screenshots__"`            | Overrides Vitest's default reference directory for location resolution |
-| `attachmentsDir`    | `string`  | `".vitest-attachments"`        | Overrides Vitest's default attachments directory for artifact lookup   |
+| Option              | Type                                   | Default                        | Description                                                                                 |
+| ------------------- | -------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------- |
+| `serverUrl`         | `string`                               | `"ws://localhost:3000"`        | WebSocket URL of the Crvy Rprtr server                                                      |
+| `screenshotDir`     | `string`                               | `"./screenshots"`              | Directory for saving screenshot artifacts in offline/CI runs                                |
+| `offlineReportPath` | `string`                               | `"./crvy-rprtr-{worker}.json"` | Path for offline report when server is unavailable                                          |
+| `reportHtmlPath`    | `string`                               | `"./crvy-rprtr.html"`          | Path for the browser-openable static report HTML                                            |
+| `ci`                | `boolean`                              | auto-detected                  | Force offline/CI mode (content-addressed copies, portable artifacts)                        |
+| `referenceDir`      | `string`                               | `"__screenshots__"`            | Overrides Vitest's default reference directory for location resolution                      |
+| `attachmentsDir`    | `string`                               | `".vitest-attachments"`        | Overrides Vitest's default attachments directory for artifact lookup                        |
+| `browserPin`        | `{ browser, version }`                 | `undefined`                    | Fallback browser pin for every browser project the reporter reports on                      |
+| `browserPins`       | `Record<string, { browser, version }>` | `undefined`                    | Browser pins keyed by Vitest project name; overrides `browserPin`                           |
+| `browserPinPolicy`  | `"warn" \| "fail"`                     | `"warn"`                       | What a drifted browser pin does: `warn` annotates the run, `fail` fails it at reporter init |
 
 ### Supported Layouts and Limitations
 
@@ -292,7 +329,7 @@ provider: playwright({
 }),
 ```
 
-Explicit `--run-mode docker` without the hook fails fast with `docker-missing-browser-hook`; `auto` warns once and runs locally. The variable is inert without a docker-mode server, so the same config works in CI against a sidecar you manage yourself.
+Explicit `--run-mode docker` without the hook fails fast with `docker-missing-browser-hook`; `auto` warns once and runs locally. The variable is inert without a docker-mode server, so the same config works in CI against a sidecar you manage yourself. Before the sidecar container starts, rprtr preflights the declared Vitest browser pins against the image it is about to use: a drifting pin rejects the run with the matching image tag as the remedy, while unpinned and unverifiable projects pass.
 
 | Mode             | Behavior                                                                        |
 | ---------------- | ------------------------------------------------------------------------------- |

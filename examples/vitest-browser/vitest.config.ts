@@ -25,6 +25,6 @@ export default defineConfig({
     // array is silent, even on failures); CrvyRprtrVitestReporter adds live
     // streaming to the rprtr UI server, falling back to offline artifacts
     // (crvy-rprtr.html + crvy-rprtr-*.json) when no server is running.
-    reporters: ['default', new CrvyRprtrVitestReporter()],
+    reporters: ['default', new CrvyRprtrVitestReporter({ browserPin: { browser: 'chromium', version: '147' } })],
   },
 })

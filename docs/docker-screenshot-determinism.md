@@ -176,8 +176,24 @@ Docker image tag) that ships the pinned build, and `crvy-rprtr browsers check --
 CI on it. With `browserPinPolicy: 'fail'` a drifting pin fails the run at reporter init; in
 Docker mode it rejects the run before a container starts.
 
+Vitest browser-mode suites declare the same pin in the reporter options, keyed by Vitest
+project name with `browserPin` as the fallback:
+
+```ts
+new CrvyRprtrVitestReporter({
+  browserPins: { 'desktop (chromium)': { browser: 'chromium', version: '147' } },
+  browserPin: { browser: 'chromium', version: '147' },
+})
+```
+
+The reporter resolves the build from the project's installed `playwright` (or the sidecar
+image derived from it in Docker mode) and records it with the run.
+`crvy-rprtr browsers check --strict` and the sidecar preflight cover Vitest pins the same way
+they cover Playwright pins, so one image and one browser build guard both runners.
+
 **Migrating from creevey:** creevey's `browserVersion` option had the same purpose. It is not
-read by rprtr — translate it to the `metadata.crvyRprtr` pin above. See
+read by rprtr — translate it to the `metadata.crvyRprtr` pin above (or the Vitest reporter
+options for a Vitest suite). See
 [Browser Pinning](../README.md#browser-pinning).
 
 ## Vitest browser mode: same image via a browser sidecar
