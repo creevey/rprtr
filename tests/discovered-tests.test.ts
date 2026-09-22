@@ -4,6 +4,7 @@ import {
   DISCOVERED_ID_PREFIX,
   discoveredTestIdentity,
   mergeDiscoveredTests,
+  reconcileDiscoveredTests,
   seedDiscoveredTests,
   withoutDiscoveredTests,
 } from '../src/server/discovered-tests'
@@ -145,6 +146,90 @@ describe('mergeDiscoveredTests', () => {
 
     expect(changed).toBe(true)
     expect(reportData.tests['discovered:tests/a.test.ts:chromium:no location']).toBeDefined()
+  })
+})
+
+describe('reconcileDiscoveredTests', () => {
+  const keptFile = '/proj/tests/kept.test.ts'
+
+  function loadedReport(): ReportData {
+    return createReportData({
+      'run-id-1': {
+        id: 'run-id-1',
+        titlePath: [],
+        title: 'recorded',
+        browser: 'chromium',
+        location: { file: keptFile, line: 5 },
+        status: 'failed',
+        results: [{ status: 'failed', retries: 0 }],
+        approved: { snapshot: 0 },
+      },
+      'discovered:tests/gone.test.ts:chromium:removed test': discoveredTest(
+        'discovered:tests/gone.test.ts:chromium:removed test',
+        { title: 'removed test', location: { file: '/proj/tests/gone.test.ts', line: 1 } },
+      ),
+    })
+  }
+
+  test('drops stale placeholders and adds newly listed tests as pending', () => {
+    const reportData = loadedReport()
+
+    const changed = reconcileDiscoveredTests(reportData, [
+      discoveredTest('discovered:tests/kept.test.ts:chromium:recorded', {
+        title: 'recorded',
+        location: { file: keptFile, line: 5 },
+      }),
+      discoveredTest('discovered:tests/new.test.ts:chromium:new test', {
+        title: 'new test',
+        location: { file: '/proj/tests/new.test.ts', line: 3 },
+      }),
+    ])
+
+    expect(changed).toBe(true)
+    expect(Object.keys(reportData.tests)).toEqual(['run-id-1', 'discovered:tests/new.test.ts:chromium:new test'])
+    expect(reportData.tests['discovered:tests/new.test.ts:chromium:new test']?.status).toBe('pending')
+  })
+
+  test('preserves recorded results and approvals without duplicates', () => {
+    const reportData = loadedReport()
+    const recorded = reportData.tests['run-id-1']
+
+    reconcileDiscoveredTests(reportData, [
+      discoveredTest('discovered:tests/kept.test.ts:chromium:recorded', {
+        title: 'recorded',
+        location: { file: keptFile, line: 5 },
+      }),
+    ])
+
+    const ids = Object.keys(reportData.tests)
+    expect(ids.filter((id) => id.startsWith('discovered:'))).toEqual([])
+    expect(ids).toEqual(['run-id-1'])
+    expect(reportData.tests['run-id-1']).toBe(recorded)
+    expect(reportData.tests['run-id-1']?.status).toBe('failed')
+    expect(reportData.tests['run-id-1']?.results?.[0]?.status).toBe('failed')
+    expect(reportData.tests['run-id-1']?.approved).toEqual({ snapshot: 0 })
+  })
+
+  test('clears the whole discovered layer for a successful empty listing', () => {
+    const reportData = loadedReport()
+
+    const changed = reconcileDiscoveredTests(reportData, [])
+
+    expect(changed).toBe(true)
+    expect(Object.keys(reportData.tests)).toEqual(['run-id-1'])
+  })
+
+  test('returns false when the listing matches the current tree', () => {
+    const reportData = createReportData()
+    const listed = discoveredTest('discovered:tests/a.test.ts:chromium:listed', {
+      title: 'listed',
+      location: { file: '/proj/tests/a.test.ts', line: 1 },
+    })
+
+    expect(reconcileDiscoveredTests(reportData, [listed])).toBe(true)
+    expect(reconcileDiscoveredTests(reportData, [listed])).toBe(false)
+    expect(Object.keys(reportData.tests)).toEqual([listed.id])
+    expect(reportData.tests[listed.id]?.status).toBe('pending')
   })
 })
 

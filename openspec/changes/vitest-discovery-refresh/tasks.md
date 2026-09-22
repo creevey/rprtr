@@ -14,7 +14,7 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 3. Reconcile the discovered layer
 
-- [ ] 3.1 Failing test first: extend `tests/discovered-tests.test.ts` — `reconcileDiscoveredTests` removes placeholders whose identities are missing from the new listing, adds newly listed tests as `pending`, preserves recorded results and approvals without duplicates, and clears the whole discovered layer for a successful empty listing. Implement in `src/server/discovered-tests.ts`. Verify: `cd tests && bun test discovered-tests.test.ts && cd .. && bun run typecheck`
+- [x] 3.1 Failing test first: extend `tests/discovered-tests.test.ts` — `reconcileDiscoveredTests` removes placeholders whose identities are missing from the new listing, adds newly listed tests as `pending`, preserves recorded results and approvals without duplicates, and clears the whole discovered layer for a successful empty listing. Implement in `src/server/discovered-tests.ts`. Verify: `cd tests && bun test discovered-tests.test.ts && cd .. && bun run typecheck`
 
 ## 4. Serialized refresh session
 

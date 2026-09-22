@@ -53,6 +53,34 @@ export function mergeDiscoveredTests(reportData: { tests: Record<string, TestDat
 }
 
 /**
+ * Replaces the discovered layer with the latest listing against the loaded
+ * report state: placeholders for identities the listing no longer names
+ * disappear, newly listed tests are merged in as `pending`, and recorded
+ * results, approvals, and run state of known tests are never downgraded or
+ * duplicated. Still-listed placeholders are kept as they are, so an unchanged
+ * listing reports no change. Returns true when the tree changed; a successful
+ * listing with no entries clears the whole discovered layer.
+ */
+export function reconcileDiscoveredTests(
+  reportData: { tests: Record<string, TestData> },
+  discovered: TestData[],
+): boolean {
+  const listedIds = new Set(discovered.map((test) => test.id))
+  const kept: Record<string, TestData> = {}
+  let removed = false
+  for (const [id, test] of Object.entries(reportData.tests)) {
+    if (isDiscoveredId(id) && !listedIds.has(id)) {
+      removed = true
+      continue
+    }
+    kept[id] = test
+  }
+  if (removed) reportData.tests = kept
+  const added = mergeDiscoveredTests(reportData, discovered)
+  return added || removed
+}
+
+/**
  * The persisted view of the report state: discovered-but-never-run entries are
  * filtered out so report.json — and through it offline JSON review and the
  * static HTML artifact — stays derived from actual run events only.
@@ -62,12 +90,16 @@ export function withoutDiscoveredTests<T extends { tests: Record<string, TestDat
   return { ...data, tests: filterDiscoveredIds(data.tests) }
 }
 
+function isDiscoveredId(id: string): boolean {
+  return id.startsWith(DISCOVERED_ID_PREFIX)
+}
+
 function hasDiscoveredIds(tests: Record<string, TestData>): boolean {
-  return Object.keys(tests).some((id) => id.startsWith(DISCOVERED_ID_PREFIX))
+  return Object.keys(tests).some(isDiscoveredId)
 }
 
 function filterDiscoveredIds(tests: Record<string, TestData>): Record<string, TestData> {
-  return Object.fromEntries(Object.entries(tests).filter(([id]) => !id.startsWith(DISCOVERED_ID_PREFIX)))
+  return Object.fromEntries(Object.entries(tests).filter(([id]) => !isDiscoveredId(id)))
 }
 
 interface DiscoveryRunner {
