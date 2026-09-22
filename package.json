@@ -73,6 +73,7 @@
     "knip": "knip-bun --strict",
     "duplicates": "jscpd",
     "lockfiles": "bun scripts/check-lockfiles.ts",
+    "release:preflight": "bun scripts/release-preflight.ts",
     "test:bun": "bun run build && cd tests && bun test *.test.ts",
     "test:browser": "bun run build && cd tests/browser && bun test *.test.ts",
     "test:playwright": "bun run build && bunx playwright test",
