@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+
 /**
  * Both test runners are optional peer dependencies (see `peerDependenciesMeta`),
  * so a consumer can reach a reporter whose runner was never installed. Left
@@ -21,10 +23,15 @@ export function missingPeerError(peer: string, entryPoint: string, cause: unknow
  * `vitest` is imported by the Vitest reporter for types only, so nothing
  * resolves it at runtime: without this check the reporter constructs fine in a
  * project with no Vitest and then silently never runs.
+ *
+ * `createRequire` rather than `import.meta.resolve`: Vite bundles a
+ * `vitest.config.ts` as CJS in projects without `"type": "module"` and stubs
+ * `import.meta.resolve` out of bundled configs, so the latter would report
+ * vitest as missing inside its own config.
  */
 export function ensureVitestInstalled(): void {
   try {
-    import.meta.resolve('vitest')
+    createRequire(import.meta.url).resolve('vitest')
   } catch (error) {
     throw missingPeerError('vitest', '@crvy/rprtr/vitest', error)
   }

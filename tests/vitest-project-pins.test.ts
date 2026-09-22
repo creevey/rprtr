@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -68,6 +68,18 @@ function pinDeclaringReporter(options: { browserPin?: unknown; browserPins?: unk
 
 const tempDirs: string[] = []
 
+/**
+ * Vite's CJS config loader only compiles the bundled config when the require
+ * hook's filename equals `realpath(fileName)`. A symlinked temp root (e.g.
+ * `/var` -> `/private/var` on macOS) silently loads the raw TS config instead,
+ * so fixtures must live under a realpath'd root to exercise config bundling.
+ */
+async function tempFixtureDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(await realpath(tmpdir()), prefix))
+  tempDirs.push(dir)
+  return dir
+}
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
@@ -131,8 +143,7 @@ describe('readVitestProjectPins', () => {
   })
 
   test('an unresolvable vitest/node yields no pins and one diagnostic', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'crvy-vitest-project-pins-missing-'))
-    tempDirs.push(dir)
+    const dir = await tempFixtureDir('crvy-vitest-project-pins-missing-')
     await writeFile(join(dir, 'package.json'), '{}')
     const warnings: string[] = []
 
@@ -194,8 +205,7 @@ export default defineConfig({
 
 describe('readVitestProjectPins through the project’s own Vitest', () => {
   test('evaluates a fixture config and returns its declared pins', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'crvy-vitest-project-pins-'))
-    tempDirs.push(dir)
+    const dir = await tempFixtureDir('crvy-vitest-project-pins-')
     await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'fixture', private: true }))
     await symlink(join(REPO_ROOT, 'node_modules'), join(dir, 'node_modules'), 'dir')
     await writeFile(join(dir, 'vitest.config.ts'), FIXTURE_CONFIG)
