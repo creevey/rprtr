@@ -4,7 +4,7 @@ import { createDockerLauncher, DockerUnavailableError, DOCKER_WORK_DIR } from '.
 import type { DockerExec, DockerExecResult } from '../src/server/docker-support'
 import { CONTAINER_FONTCONFIG_PATH, GRAYSCALE_FONTCONFIG_XML, hostFontconfigPath } from '../src/server/fontconfig'
 import type { RunContext } from '../src/server/run-controller'
-import type { RunLauncher } from '../src/server/run-launcher'
+import { createLocalLauncher, type RunLauncher } from '../src/server/run-launcher'
 
 const CTX: RunContext = { configFile: '/proj/playwright.config.ts', cwd: '/proj' }
 
@@ -187,6 +187,10 @@ describe('DockerLauncher.launch', () => {
       '-e',
       'CRVY_RPRTR_PORTABLE_ARTIFACTS=1',
       '-e',
+      'CRVY_RPRTR_DOCKER=1',
+      '-e',
+      'CRVY_RPRTR_HOST_GATEWAY=host.docker.internal',
+      '-e',
       'TZ=UTC',
       '-e',
       'LANG=C.UTF-8',
@@ -204,6 +208,29 @@ describe('DockerLauncher.launch', () => {
       `${DOCKER_WORK_DIR}/playwright.config.ts`,
     ])
     expect(spec.env.CI).toBeUndefined()
+  })
+
+  test('exports the docker-only gateway contract next to the rendering pins', async () => {
+    const { launcher } = makeLauncher()
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const args = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] }).args
+
+    expect(args).toContain('CRVY_RPRTR_DOCKER=1')
+    expect(args).toContain('CRVY_RPRTR_HOST_GATEWAY=host.docker.internal')
+    expect(args).toContain('TZ=UTC')
+    expect(args).toContain('LANG=C.UTF-8')
+    expect(args).toContain('LC_ALL=C.UTF-8')
+  })
+
+  test('local launches never carry the docker gateway contract', () => {
+    const launcher = createLocalLauncher({
+      port: 3000,
+      env: { CRVY_RPRTR_DOCKER: '1', CRVY_RPRTR_HOST_GATEWAY: 'elsewhere.example' },
+    })
+    const spec = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] })
+
+    expect(spec.env.CRVY_RPRTR_DOCKER).toBeUndefined()
+    expect(spec.env.CRVY_RPRTR_HOST_GATEWAY).toBeUndefined()
   })
 
   test('rewrites --config under ctx.cwd to the container work dir', async () => {
@@ -350,6 +377,8 @@ describe('DockerLauncher.launch', () => {
         PLAYWRIGHT_BROWSERS_PATH: '/host/cache',
         TZ: 'Berlin',
         CRVY_RPRTR_SERVER_URL: 'ws://evil',
+        CRVY_RPRTR_DOCKER: '1',
+        CRVY_RPRTR_HOST_GATEWAY: 'evil.example',
         EMPTY: undefined,
         PATH: 'C:\\Windows\\system32;C:\\Windows',
         Path: 'C:\\Windows\\system32',
@@ -370,6 +399,8 @@ describe('DockerLauncher.launch', () => {
     expect(envFlags).not.toContain('PLAYWRIGHT_BROWSERS_PATH')
     expect(envFlags).not.toContain('TZ')
     expect(envFlags).not.toContain('CRVY_RPRTR_SERVER_URL')
+    expect(envFlags).not.toContain('CRVY_RPRTR_DOCKER')
+    expect(envFlags).not.toContain('CRVY_RPRTR_HOST_GATEWAY')
     expect(envFlags).not.toContain('EMPTY')
     expect(envFlags).not.toContain('PATH')
     expect(envFlags).not.toContain('Path')

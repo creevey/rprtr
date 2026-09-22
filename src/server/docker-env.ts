@@ -8,6 +8,10 @@ const ENV_DENYLIST = new Set([
   'PLAYWRIGHT_BROWSERS_PATH',
   'CRVY_RPRTR_SERVER_URL',
   'CRVY_RPRTR_PORTABLE_ARTIFACTS',
+  // Docker-only contract, set explicitly by buildDockerRunArgs: a same-named host
+  // variable must not be forwarded (name-only `-e NAME` would let it shadow the value).
+  'CRVY_RPRTR_DOCKER',
+  'CRVY_RPRTR_HOST_GATEWAY',
   'TZ',
   // The container must use its own home: a forwarded host HOME makes NSS (browser cert
   // store init) and npm resolve their state under it, and a Windows-style value like

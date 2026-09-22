@@ -1,15 +1,13 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { DOCKER_HOST_GATEWAY, DOCKER_HOST_GATEWAY_ENV, DOCKER_MODE_ENV } from '../docker-contract.ts'
 import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import { collectForwardedEnvNames } from './docker-env.ts'
 import { DOCKER_WORK_DIR, type DockerOptions } from './docker-launcher.ts'
 import { rewritePlaywrightArgs, type Warn } from './docker-support.ts'
 import { CONTAINER_FONTCONFIG_PATH, ensureGrayscaleFontconfig } from './fontconfig.ts'
 import type { RunContext } from './run-controller.ts'
-
-/** Module-private: only the arg vector built here uses it. */
-const DOCKER_HOST_GATEWAY = 'host.docker.internal'
 
 /** Module-private: local CLI candidates in resolution order, mirroring resolvePlaywrightVersion. */
 const PLAYWRIGHT_CLI_SEGMENTS = [
@@ -105,7 +103,9 @@ export function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], de
   }
   args.push('-e', `CRVY_RPRTR_SERVER_URL=ws://${DOCKER_HOST_GATEWAY}:${deps.port}`)
   args.push('-e', `${DOCKER_IMAGE_ENV}=${deps.image}`)
-  args.push('-e', 'CRVY_RPRTR_PORTABLE_ARTIFACTS=1', '-e', 'TZ=UTC', '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8')
+  args.push('-e', 'CRVY_RPRTR_PORTABLE_ARTIFACTS=1')
+  args.push('-e', `${DOCKER_MODE_ENV}=1`, '-e', `${DOCKER_HOST_GATEWAY_ENV}=${DOCKER_HOST_GATEWAY}`)
+  args.push('-e', 'TZ=UTC', '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8')
   args.push('-e', 'PLAYWRIGHT_HTML_OPEN=never')
   if (deps.docker?.fontRendering !== 'inherit') {
     args.push('-v', `${ensureGrayscaleFontconfig()}:${CONTAINER_FONTCONFIG_PATH}:ro`)

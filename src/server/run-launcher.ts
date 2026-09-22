@@ -1,6 +1,7 @@
 import { resolveCommand } from 'package-manager-detector/commands'
 import { getUserAgent } from 'package-manager-detector/detect'
 
+import { DOCKER_HOST_GATEWAY_ENV, DOCKER_MODE_ENV } from '../docker-contract.ts'
 import { grayscaleFontconfigEnv, type GrayscaleFontconfigEnvOptions } from '../fontconfig.ts'
 import type { FontRendering } from '../rendering.ts'
 import type { RunContext } from './run-controller.ts'
@@ -56,6 +57,13 @@ export interface SpawnEnvOptions extends GrayscaleFontconfigEnvOptions {
   fontRendering?: FontRendering
 }
 
+/**
+ * Never propagated from the host into a local (or sidecar-backed Vitest) spawn:
+ * `CI` makes Playwright behave differently, and the docker gateway contract
+ * describes a container this process is not running in.
+ */
+const LOCAL_ENV_DENYLIST = new Set(['CI', DOCKER_MODE_ENV, DOCKER_HOST_GATEWAY_ENV])
+
 export function buildSpawnEnv(
   port: number,
   baseEnv: Record<string, string | undefined> = process.env,
@@ -63,7 +71,7 @@ export function buildSpawnEnv(
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {}
   for (const [key, value] of Object.entries(baseEnv)) {
-    if (key === 'CI') continue
+    if (LOCAL_ENV_DENYLIST.has(key.toUpperCase())) continue
     env[key] = value
   }
   env.CRVY_RPRTR_SERVER_URL = `ws://localhost:${port}`
