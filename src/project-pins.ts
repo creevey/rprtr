@@ -1,6 +1,5 @@
-import { spawn } from 'node:child_process'
-
 import { resolveProjectPins, type PlaywrightProjectLike, type ResolvedProjectPin } from './browser-pins.ts'
+import { createRealListSpawn, type ListSpawn } from './server/list-spawn.ts'
 import { resolveLocalCommand } from './server/run-launcher.ts'
 
 const LIST_TIMEOUT_MS = 60_000
@@ -25,17 +24,34 @@ export function parseProjectPinsFromListReport(report: unknown): ResolvedProject
   })
 }
 
+export interface ReadPlaywrightListOptions {
+  /** Appended as `--config <path>` so a server started with an explicit config lists that project. */
+  configFile?: string
+  /** Kill the listing after this long; a hung listing resolves null. */
+  timeoutMs?: number
+  spawn?: ListSpawn
+}
+
 /**
- * Spawns the project's own `playwright test --list --reporter=json`. Null when
- * the command fails without parseable output (no Playwright, broken config) —
- * callers treat that as "pins unknown", never as an error.
+ * Spawns the project's own `playwright test --list --reporter=json` — optionally
+ * pinned to a config path — and returns the parsed report. Null when the command
+ * fails without parseable output (no Playwright, broken config, timeout) —
+ * callers treat that as "listing unknown", never as an error.
  */
-export function readPlaywrightListReport(cwd: string): Promise<Record<string, unknown> | null> {
-  const { cmd, args } = resolveLocalCommand('playwright', ['test', '--list', '--reporter=json'])
+export function readPlaywrightListReport(
+  cwd: string,
+  options: ReadPlaywrightListOptions = {},
+): Promise<Record<string, unknown> | null> {
+  const listArgs = ['test', '--list', '--reporter=json']
+  if (options.configFile !== undefined) listArgs.push('--config', options.configFile)
+  const { cmd, args } = resolveLocalCommand('playwright', listArgs)
+  const spawnFn = options.spawn ?? createRealListSpawn()
+  const timeoutMs = options.timeoutMs ?? LIST_TIMEOUT_MS
+
   return new Promise((resolve) => {
     let stdout = ''
     let settled = false
-    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawnFn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
     const finish = (value: Record<string, unknown> | null): void => {
       if (settled) return
       settled = true
@@ -45,9 +61,9 @@ export function readPlaywrightListReport(cwd: string): Promise<Record<string, un
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       finish(null)
-    }, LIST_TIMEOUT_MS)
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
+    }, timeoutMs)
+    child.stdout.on('data', (chunk: string | Buffer) => {
+      stdout += typeof chunk === 'string' ? chunk : chunk.toString()
     })
     child.on('error', () => {
       finish(null)

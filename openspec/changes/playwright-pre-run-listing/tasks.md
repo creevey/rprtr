@@ -7,10 +7,10 @@
 
 ## 2. Playwright list parsing and synthesis
 
-- [ ] 2.1 Add failing unit tests in `tests/playwright-discovery.test.ts` for `parsePlaywrightListReport` / `synthesizePlaywrightDiscoveredTests` over a JSON list report: nested describe title paths, one entry per project test, file tokens relative to the config directory, absolute locations resolved from `rootDir`-relative ones, browser label from the project name, `pending` status, and `discovered:` ids (`cd tests && bun test playwright-discovery.test.ts`).
-- [ ] 2.2 Implement `parsePlaywrightListReport` and `synthesizePlaywrightDiscoveredTests` in `src/server/playwright-discovery.ts` until 2.1 passes (`cd tests && bun test playwright-discovery.test.ts`; `bun run typecheck`).
-- [ ] 2.3 Add failing tests for `runPlaywrightList` with an injected spawn: the command is `playwright test --list --reporter=json --config <configFile>` resolved through `resolveLocalCommand`, stdin is closed, and spawn errors, malformed output, and timeouts yield an empty list (`cd tests && bun test playwright-discovery.test.ts`).
-- [ ] 2.4 Extend `readPlaywrightListReport` in `src/project-pins.ts` with the optional config path and spawn seam, implement `runPlaywrightList` on top of it, and verify the new tests plus the pins regressions pass (`cd tests && bun test playwright-discovery.test.ts cli-browsers.test.ts docker-preflight.test.ts browser-pin-reporter.test.ts`; `bun run typecheck`).
+- [x] 2.1 Add failing unit tests in `tests/playwright-discovery.test.ts` for `parsePlaywrightListReport` / `synthesizePlaywrightDiscoveredTests` over a JSON list report: nested describe title paths, one entry per project test, file tokens relative to the config directory, absolute locations resolved from `rootDir`-relative ones, browser label from the project name, `pending` status, and `discovered:` ids (`cd tests && bun test playwright-discovery.test.ts`).
+- [x] 2.2 Implement `parsePlaywrightListReport` and `synthesizePlaywrightDiscoveredTests` in `src/server/playwright-discovery.ts` until 2.1 passes (`cd tests && bun test playwright-discovery.test.ts`; `bun run typecheck`).
+- [x] 2.3 Add failing tests for `runPlaywrightList` with an injected spawn: the command is `playwright test --list --reporter=json --config <configFile>` resolved through `resolveLocalCommand`, stdin is closed, and spawn errors, malformed output, and timeouts yield an empty list (`cd tests && bun test playwright-discovery.test.ts`).
+- [x] 2.4 Extend `readPlaywrightListReport` in `src/project-pins.ts` with the optional config path and spawn seam, implement `runPlaywrightList` on top of it, and verify the new tests plus the pins regressions pass (`cd tests && bun test playwright-discovery.test.ts cli-browsers.test.ts docker-preflight.test.ts browser-pin-reporter.test.ts`; `bun run typecheck`).
 
 ## 3. Startup dispatch and integration
 
