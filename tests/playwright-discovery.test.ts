@@ -390,7 +390,11 @@ describe('readPlaywrightListWithConfig', () => {
 
     const call = calls[0]!
     expect(call.args.join(' ')).toContain(`--reporter=json,${configDumpReporterPath()}`)
-    const dumpPath = (call.opts.env as Record<string, string | undefined>)[DOCKER_CONFIG_DUMP_ENV]
+    const env = call.opts.env as Record<string, string | undefined>
+    // The listing resolves the config as the container will see it.
+    expect(env.CRVY_RPRTR_DOCKER).toBe('1')
+    expect(env.CRVY_RPRTR_HOST_GATEWAY).toBe('host.docker.internal')
+    const dumpPath = env[DOCKER_CONFIG_DUMP_ENV]
     expect(dumpPath).toBeDefined()
     // Read-and-delete: the dump does not survive the listing.
     expect(existsSync(dumpPath!)).toBe(false)

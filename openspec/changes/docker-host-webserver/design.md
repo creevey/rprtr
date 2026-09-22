@@ -39,6 +39,8 @@ See `proposal.md - Why`. Constraints and existing machinery this design builds o
 
 The docker preflight spawn already loads the project config. It gains `--reporter=json,<generated reporter path>` plus `CRVY_RPRTR_CONFIG_DUMP=<temp file>`; the reporter writes `{ webServers, projects: [{ name, baseURL }] }` to that file on `onConfigure` and never throws. The generated file is a `.cjs` module written from a string constant (fontconfig precedent) to `tmpdir()/crvy-rprtr/config-dump-reporter.cjs`, so no dist entry, knip entry, or exports-map change is needed. The dump is read and deleted after the spawn; a missing dump degrades to no diagnostic.
 
+The listing also runs with the gateway contract exported (`CRVY_RPRTR_DOCKER=1`, `CRVY_RPRTR_HOST_GATEWAY=host.docker.internal`): the summary has to reflect the container's resolution, otherwise a project using the documented recipe would be diagnosed from its host fallback (`localhost`) and warned about a divergence that does not exist.
+
 - The reporter must declare `version() { return 'v2' }`: legacy reporters receive the config on `onBegin`, not `onConfigure`.
 - Array-form webServers come from the internal `configInternalSymbol` after a description check and a structural `Array.isArray(internal.webServers)` guard; if Playwright renames the symbol, single-object webServers and `baseURL` still work and only array entries drop out.
 - Alternative: parse only the JSON list report — rejected: arrays become `null` and `baseURL` is absent, which was the reason this scope was chosen.
@@ -46,7 +48,7 @@ The docker preflight spawn already loads the project config. It gains `--reporte
 
 ### 3. Diagnostic timing: cached config, live probe per run
 
-The parsed summary is produced with the memoized docker prepare (same lifetime as pin validation). The probe itself runs on every run request inside `src/server/docker-preflight.ts`, exported as a diagnostic the docker launcher exposes to `run-preparation.ts`; `RunLauncher` gains an optional async diagnostic hook, absent for local runs.
+The parsed summary is produced with the memoized docker prepare (same lifetime as pin validation). The probe itself runs on every run request inside `src/server/docker-host-services.ts` (split out of `src/server/docker-preflight.ts` for module limits), exported as a diagnostic the docker launcher exposes to `run-preparation.ts`; `RunLauncher` gains an optional async diagnostic hook, absent for local runs.
 
 - Alternative: run everything inside the memoized prepare — rejected: the host service can start or stop between runs, and the warning would go stale or never appear.
 - Alternative: re-list the config per run — rejected: test collection is the expensive part and config edits already require a server restart for pins; documented trade-off.

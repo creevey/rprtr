@@ -23,6 +23,11 @@ export interface RunLauncher {
   readonly available?: boolean
   /** Docker: probe the daemon, resolve image and container command, pull if missing. */
   prepare?(params: { ctx: RunContext; onProgress: (phase: string) => void }): Promise<void>
+  /**
+   * Docker: per-run host-service divergence diagnostic, based on the config summary
+   * cached by `prepare` and probed live on every call. Absent for local runs.
+   */
+  diagnose?(): Promise<string[]>
   launch(params: LaunchParams): LaunchSpec
   /** Docker: best-effort removal of the named container on the SIGKILL path. */
   onForceKill?(): void

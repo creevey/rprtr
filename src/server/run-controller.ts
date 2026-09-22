@@ -107,6 +107,8 @@ export class RunController {
   private browserWs: string | null = null
   /** Image of the sidecar backing the current Vitest run, exported for offline pin resolution. */
   private browserImage: string | null = null
+  /** Host-service divergence notices collected by the last prepareRun, broadcast with the run. */
+  private runNotices: string[] = []
 
   constructor(private readonly deps: RunControllerDeps) {}
 
@@ -234,8 +236,9 @@ export class RunController {
     return { ok: true }
   }
 
-  async prepareRun(): Promise<{ ok: true } | { ok: false; reason: 'docker-unavailable' }> {
+  async prepareRun(): Promise<{ ok: true; notices?: string[] } | { ok: false; reason: 'docker-unavailable' }> {
     const ctx = this.deps.getRunContext()
+    this.runNotices = []
     if (ctx === null) return { ok: true }
     const prepared = await prepareRunForContext(ctx, this.deps)
     if (!prepared.ok) return { ok: false, reason: 'docker-unavailable' }
@@ -243,7 +246,8 @@ export class RunController {
       this.browserWs = prepared.sidecar.endpoint
       this.browserImage = prepared.sidecar.image ?? null
     }
-    return { ok: true }
+    this.runNotices = prepared.notices ?? []
+    return prepared.notices === undefined ? { ok: true } : { ok: true, notices: prepared.notices }
   }
 
   dispose(): void {

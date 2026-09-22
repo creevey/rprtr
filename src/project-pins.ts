@@ -1,4 +1,5 @@
 import { resolveProjectPins, type PlaywrightProjectLike, type ResolvedProjectPin } from './browser-pins.ts'
+import { DOCKER_HOST_GATEWAY, DOCKER_HOST_GATEWAY_ENV, DOCKER_MODE_ENV } from './docker-contract.ts'
 import {
   configDumpPath,
   DOCKER_CONFIG_DUMP_ENV,
@@ -106,11 +107,12 @@ export interface PlaywrightListWithConfigResult {
 }
 
 /**
- * One dump-aware listing spawn for the docker preflight: the JSON list report plus
- * the resolved config summary, which is only reachable from inside a `v2` reporter
- * (array-form `webServer`, `use.baseURL`). The generated reporter is written
- * synchronously before the spawn; a missing or malformed dump degrades to a null
- * summary and never fails the listing.
+ * One dump-aware listing spawn for the docker preflight. The listing runs with the
+ * docker gateway contract exported, so the config resolves as the container will
+ * see it (`CRVY_RPRTR_DOCKER` / `CRVY_RPRTR_HOST_GATEWAY` recipes included), and
+ * returns the JSON list report plus the resolved config summary, which is only
+ * reachable from inside a `v2` reporter (array-form `webServer`, `use.baseURL`).
+ * A missing or malformed dump degrades to a null summary and never fails the listing.
  */
 export async function readPlaywrightListWithConfig(
   cwd: string,
@@ -121,7 +123,11 @@ export async function readPlaywrightListWithConfig(
   const report = await readPlaywrightListReport(cwd, {
     ...options,
     extraReporter: reporter,
-    env: { [DOCKER_CONFIG_DUMP_ENV]: dumpPath },
+    env: {
+      [DOCKER_MODE_ENV]: '1',
+      [DOCKER_HOST_GATEWAY_ENV]: DOCKER_HOST_GATEWAY,
+      [DOCKER_CONFIG_DUMP_ENV]: dumpPath,
+    },
   })
   return { report, config: readAndDeleteConfigDump(dumpPath) }
 }

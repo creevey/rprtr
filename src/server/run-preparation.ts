@@ -23,7 +23,7 @@ export interface RunPreparationDeps {
 }
 
 export type PrepareRunResult =
-  | { ok: true; sidecar?: { endpoint: string; image?: string } }
+  | { ok: true; sidecar?: { endpoint: string; image?: string }; notices?: string[] }
   | { ok: false; reason: 'docker-unavailable' }
 
 function warnSink(deps: RunPreparationDeps): (message: string) => void {
@@ -33,6 +33,19 @@ function warnSink(deps: RunPreparationDeps): (message: string) => void {
       console.warn(message)
     })
   )
+}
+
+/**
+ * Docker-only host-service diagnostic. Never blocks a run: a throwing hook is
+ * treated as "no divergence known" — the run proceeds with no notices.
+ */
+async function collectNotices(launcher: RunLauncher): Promise<string[]> {
+  if (launcher.diagnose === undefined) return []
+  try {
+    return await launcher.diagnose()
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -51,7 +64,8 @@ export async function prepareRunForContext(ctx: RunContext, deps: RunPreparation
         deps.broadcast({ type: 'run-status', data: { running: true, mode: launcher.mode, phase } })
       },
     })
-    return { ok: true }
+    const notices = await collectNotices(launcher)
+    return notices.length > 0 ? { ok: true, notices } : { ok: true }
   } catch (error) {
     deps.broadcast({ type: 'run-status', data: { running: false, mode: launcher.mode } })
     const message = error instanceof Error ? error.message : String(error)

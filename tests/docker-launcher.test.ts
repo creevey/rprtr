@@ -506,6 +506,61 @@ describe('DockerLauncher.launch', () => {
   })
 })
 
+describe('DockerLauncher.diagnose', () => {
+  const SUMMARY = {
+    webServers: [{ command: 'npm run storybook', url: 'http://localhost:6006', reuseExistingServer: true }],
+    projects: [],
+  }
+
+  test('exposes the host-service diagnostic from the prepared config summary', async () => {
+    const { launcher } = makeLauncher({
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(SUMMARY),
+      probeHostService: { http: () => Promise.resolve(200) },
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    const notices = await launcher.diagnose!()
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('http://localhost:6006')
+    expect(notices[0]).toContain('npm run storybook')
+  })
+
+  test('reports nothing before prepare completes', async () => {
+    const { launcher } = makeLauncher({
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(SUMMARY),
+    })
+
+    expect(await launcher.diagnose!()).toEqual([])
+  })
+
+  test('reports nothing when the preflight produced no summary', async () => {
+    const { launcher } = makeLauncher({
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(null),
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    expect(await launcher.diagnose!()).toEqual([])
+  })
+
+  test('probes the host live on every diagnose call', async () => {
+    let status: number | null = null
+    const { launcher } = makeLauncher({
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(SUMMARY),
+      probeHostService: { http: () => Promise.resolve(status) },
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    expect(await launcher.diagnose!()).toEqual([])
+    status = 200
+    expect(await launcher.diagnose!()).toHaveLength(1)
+  })
+})
+
 describe('DockerLauncher.onForceKill', () => {
   test('issues docker rm -f for the named container', async () => {
     const { exec, calls } = execScript({ info: ok, 'image inspect': ok, rm: ok })

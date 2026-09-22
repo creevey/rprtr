@@ -1,4 +1,6 @@
 import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
+import type { DockerConfigSummary } from './config-dump.ts'
+import { diagnoseDockerHostServices, type HostServiceProbe } from './docker-host-services.ts'
 import { assertDockerPinsSatisfied } from './docker-preflight.ts'
 import { buildDockerRunArgs, stripCi } from './docker-run-args.ts'
 import {
@@ -52,8 +54,12 @@ export interface DockerLauncherOptions {
   warn?: Warn
   /** Injectable host-platform seam for tests; defaults to process.platform. */
   platform?: NodeJS.Platform
-  /** Injectable pin reader for tests; defaults to spawning `playwright test --list --reporter=json`. */
+  /** Injectable pin reader for tests; defaults to the dump-aware `playwright test --list` listing. */
   readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  /** Injectable config summary reader for tests; defaults to the dump-aware preflight listing. */
+  readConfigSummary?: (cwd: string) => Promise<DockerConfigSummary | null>
+  /** Injectable host-service probe for the per-run diagnostic; defaults to real HTTP/TCP probes. */
+  probeHostService?: Partial<HostServiceProbe>
   /** Injectable executable-path seam for tests; defaults to the installed browser types. */
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
 }
@@ -66,6 +72,8 @@ interface LauncherState {
   image: string | null
   command: readonly string[]
   warnedWin32: boolean
+  /** Config summary cached with the memoized prepare; the host probe runs per run request. */
+  configSummary: DockerConfigSummary | null
 }
 
 interface PrepareDeps {
@@ -75,6 +83,7 @@ interface PrepareDeps {
   warn: Warn
   platform: NodeJS.Platform
   readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  readConfigSummary?: (cwd: string) => Promise<DockerConfigSummary | null>
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
 }
 
@@ -112,11 +121,12 @@ async function prepareDocker(
   }
   state.image = image
 
-  await assertDockerPinsSatisfied({
+  state.configSummary = await assertDockerPinsSatisfied({
     cwd: ctx.cwd,
     image,
     warn: deps.warn,
     readProjectPins: deps.readProjectPins,
+    readConfigSummary: deps.readConfigSummary,
     browserExecutablePaths: deps.browserExecutablePaths,
   })
 
@@ -147,6 +157,8 @@ interface LauncherDeps {
   docker?: DockerOptions
   port: number
   readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
+  readConfigSummary?: (cwd: string) => Promise<DockerConfigSummary | null>
+  probeHostService?: Partial<HostServiceProbe>
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
 }
 
@@ -157,6 +169,7 @@ function createState(docker?: DockerOptions): LauncherState {
     image: null,
     command: docker?.command ?? DEFAULT_CONTAINER_COMMAND,
     warnedWin32: false,
+    configSummary: null,
   }
 }
 
@@ -177,6 +190,7 @@ function prepareLauncher(
       warn: deps.warn,
       platform: deps.platform,
       readProjectPins: deps.readProjectPins,
+      readConfigSummary: deps.readConfigSummary,
       browserExecutablePaths: deps.browserExecutablePaths,
     },
     onProgress,
@@ -184,6 +198,7 @@ function prepareLauncher(
     // Reset so a later run re-probes after the user fixes the problem.
     state.prepared = null
     state.warnedWin32 = false
+    state.configSummary = null
     throw error
   })
   return state.prepared
@@ -197,6 +212,9 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
     },
     prepare({ ctx, onProgress }): Promise<void> {
       return prepareLauncher(state, deps, ctx, onProgress)
+    },
+    diagnose(): Promise<string[]> {
+      return diagnoseDockerHostServices({ config: state.configSummary, probe: deps.probeHostService })
     },
     launch({ ctx, playwrightArgs }: LaunchParams): LaunchSpec {
       const image = state.image ?? resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
@@ -235,6 +253,8 @@ export function createDockerLauncher(options: DockerLauncherOptions): RunLaunche
     docker: options.docker,
     port: options.port,
     readProjectPins: options.readProjectPins,
+    readConfigSummary: options.readConfigSummary,
+    probeHostService: options.probeHostService,
     browserExecutablePaths: options.browserExecutablePaths,
   })
 }

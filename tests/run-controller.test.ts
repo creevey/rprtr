@@ -62,6 +62,8 @@ interface Fixture {
   sidecarEnsureCalls: { value: number }
   sidecarDisposeCalls: { value: number }
   sidecarPhases: string[]
+  diagnoseCalls: { value: number }
+  setLauncherDiagnose: (fn: (() => Promise<string[]>) | null) => void
 }
 
 function createFixture(
@@ -93,6 +95,8 @@ function createFixture(
   const sidecarEnsureCalls = { value: 0 }
   const sidecarDisposeCalls = { value: 0 }
   const sidecarPhases: string[] = []
+  const diagnoseCalls = { value: 0 }
+  let launcherDiagnose: (() => Promise<string[]>) | null = null
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -134,6 +138,10 @@ function createFixture(
       prepare: (): Promise<void> => {
         prepareCalls.value += 1
         return Promise.resolve()
+      },
+      diagnose: (): Promise<string[]> => {
+        diagnoseCalls.value += 1
+        return launcherDiagnose === null ? Promise.resolve([]) : launcherDiagnose()
       },
       launch: ({ ctx, playwrightArgs }: LaunchParams): LaunchSpec => {
         const name = ctx.runner === 'vitest' ? 'vitest' : 'playwright'
@@ -233,6 +241,10 @@ function createFixture(
     sidecarEnsureCalls,
     sidecarDisposeCalls,
     sidecarPhases,
+    diagnoseCalls,
+    setLauncherDiagnose: (fn): void => {
+      launcherDiagnose = fn
+    },
   }
 }
 
@@ -736,6 +748,36 @@ describe('RunController.prepareRun Vitest sidecar', () => {
     f.controller.start({})
     f.child.exitEmitters.forEach((cb) => cb(0))
     expect(f.broadcasts).toContainEqual({ type: 'run-status', data: { running: false, mode: 'docker' } })
+  })
+})
+
+describe('RunController.prepareRun notices', () => {
+  test('collects diagnostic notices for a docker context', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLauncherMode('docker')
+    f.setLauncherDiagnose(() => Promise.resolve(['Docker mode: nothing serves http://host.docker.internal:6006']))
+
+    expect(await f.controller.prepareRun()).toEqual({
+      ok: true,
+      notices: ['Docker mode: nothing serves http://host.docker.internal:6006'],
+    })
+    expect(f.diagnoseCalls.value).toBe(1)
+  })
+
+  test('omits notices when the diagnostic finds no divergence', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLauncherMode('docker')
+    f.setLauncherDiagnose(() => Promise.resolve([]))
+
+    expect(await f.controller.prepareRun()).toEqual({ ok: true })
+  })
+
+  test('treats a throwing diagnostic as no notices and does not block', async () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLauncherMode('docker')
+    f.setLauncherDiagnose(() => Promise.reject(new Error('probe exploded')))
+
+    expect(await f.controller.prepareRun()).toEqual({ ok: true })
   })
 })
 

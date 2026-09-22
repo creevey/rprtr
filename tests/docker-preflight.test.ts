@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import type { PinBrowser, ResolvedProjectPin } from '../src/browser-pins'
+import { diagnoseDockerHostServices, type HostServiceProbe } from '../src/server/docker-host-services'
 import { createDockerLauncher } from '../src/server/docker-launcher'
 import { assertDockerPinsSatisfied } from '../src/server/docker-preflight'
 import type { DockerExec, DockerExecResult } from '../src/server/docker-support'
@@ -217,6 +218,186 @@ describe('docker config preflight', () => {
 
     expect(result).toEqual(SUMMARY)
     expect(warnings.join('\n')).toContain('config exploded')
+  })
+})
+
+describe('host service diagnostic', () => {
+  const unreachable: HostServiceProbe = {
+    http: () => Promise.resolve(null),
+    tcp: () => Promise.resolve(false),
+  }
+
+  test('warns when a loopback webServer with reuse intent is masked inside the container', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: {
+        webServers: [{ command: 'npm run storybook', url: 'http://localhost:6006', reuseExistingServer: true }],
+        projects: [],
+      },
+      probe: { http: () => Promise.resolve(200) },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('http://localhost:6006')
+    expect(notices[0]).toContain('npm run storybook')
+    expect(notices[0]).toContain('CRVY_RPRTR_HOST_GATEWAY')
+    expect(notices[0]).toContain('docs/docker-host-services.md')
+  })
+
+  test('names the array entry that will be masked', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: {
+        webServers: [
+          { command: 'npm run api', port: 4000, reuseExistingServer: true },
+          { command: 'npm run storybook', name: 'storybook', url: 'http://localhost:6006', reuseExistingServer: true },
+        ],
+        projects: [],
+      },
+      probe: { http: () => Promise.resolve(200), tcp: () => Promise.resolve(true) },
+    })
+
+    expect(notices).toHaveLength(2)
+    const storybook = notices.find((notice) => notice.includes('storybook'))
+    expect(storybook).toBeDefined()
+    expect(storybook).toContain('http://localhost:6006')
+    expect(storybook).toContain('npm run storybook')
+  })
+
+  test('warns for an uncovered loopback baseURL whose host service answers', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://127.0.0.1:5173' }] },
+      probe: { http: () => Promise.resolve(200) },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('http://127.0.0.1:5173')
+    expect(notices[0]).toContain('CRVY_RPRTR_HOST_GATEWAY')
+  })
+
+  test('judges a baseURL served by a webServer entry by that entry and warns once', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: {
+        webServers: [{ command: 'npm run dev', url: 'http://localhost:6006', reuseExistingServer: true }],
+        projects: [{ name: 'chromium', baseURL: 'http://localhost:6006' }],
+      },
+      probe: { http: () => Promise.resolve(200) },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('npm run dev')
+  })
+
+  test('warns when nothing serves a host-gateway address', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      probe: unreachable,
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('http://host.docker.internal:6006')
+    expect(notices[0]).toContain('fail or time out')
+    expect(notices[0]).toContain('docs/docker-host-services.md')
+  })
+
+  test('does not warn without divergence', async () => {
+    // A loopback webServer without reuse intent: Playwright starts its own server in-container.
+    const withoutIntent = await diagnoseDockerHostServices({
+      config: {
+        webServers: [{ command: 'npm run dev', url: 'http://localhost:6006' }],
+        projects: [{ name: 'chromium', baseURL: 'http://localhost:6006' }],
+      },
+      probe: { http: () => Promise.resolve(200) },
+    })
+
+    // A gateway address whose service answers on the host.
+    const served = await diagnoseDockerHostServices({
+      config: {
+        webServers: [{ command: 'npm run dev', url: 'http://host.docker.internal:6006', reuseExistingServer: true }],
+        projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }],
+      },
+      probe: { http: () => Promise.resolve(200) },
+    })
+
+    expect(withoutIntent).toEqual([])
+    expect(served).toEqual([])
+  })
+
+  test('produces nothing for an unresolvable config and never probes', async () => {
+    const probed: string[] = []
+    const notices = await diagnoseDockerHostServices({
+      config: null,
+      probe: {
+        http: (url) => {
+          probed.push(url)
+          return Promise.resolve(200)
+        },
+        tcp: (host, port) => {
+          probed.push(`${host}:${port}`)
+          return Promise.resolve(true)
+        },
+      },
+    })
+
+    const malformed = await diagnoseDockerHostServices({
+      config: { webServers: [{ command: 'npm run dev', url: 'not-a-url' }], projects: [{ name: 'p', baseURL: ':::' }] },
+      probe: unreachable,
+    })
+
+    expect(notices).toEqual([])
+    expect(malformed).toEqual([])
+    expect(probed).toEqual([])
+  })
+
+  test('counts a 404-at-root server answering /index.html as available', async () => {
+    const probed: string[] = []
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      probe: {
+        http: (url) => {
+          probed.push(url)
+          return Promise.resolve(url.endsWith('/index.html') ? 200 : 404)
+        },
+      },
+    })
+
+    expect(notices).toEqual([])
+    expect(probed).toContain('http://host.docker.internal:6006/index.html')
+  })
+
+  test('falls back to the loopback alias when the gateway hostname does not answer', async () => {
+    const probed: string[] = []
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      probe: {
+        http: (url) => {
+          probed.push(url)
+          return Promise.resolve(url.includes('localhost') ? 200 : null)
+        },
+      },
+    })
+
+    expect(notices).toEqual([])
+    expect(probed).toEqual(['http://host.docker.internal:6006/', 'http://localhost:6006/'])
+  })
+
+  test('strips credentials and tokens from warned addresses', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: {
+        webServers: [
+          {
+            command: 'npm run dev',
+            url: 'http://dev:secret@localhost:6006/?token=abc#frag',
+            reuseExistingServer: true,
+          },
+        ],
+        projects: [],
+      },
+      probe: { http: () => Promise.resolve(200) },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('http://localhost:6006')
+    expect(notices[0]).not.toContain('secret')
+    expect(notices[0]).not.toContain('token')
   })
 })
 
