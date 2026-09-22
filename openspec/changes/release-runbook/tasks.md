@@ -16,5 +16,5 @@
 
 ## 3. Docs and full gate
 
-- [ ] 3.1 Add a short releasing pointer to the Development section of `README.md` (`bun run release:preflight` plus the skill location). Verify: `bunx oxfmt --check README.md` passes and the section reads correctly in context
-- [ ] 3.2 Run the full gate and strict-validate this change; no browser behavior changed, so `bun run test:playwright` is not required. Verify: `bun run check && openspec validate release-runbook --strict`
+- [x] 3.1 Add a short releasing pointer to the Development section of `README.md` (`bun run release:preflight` plus the skill location). Verify: `bunx oxfmt --check README.md` passes and the section reads correctly in context
+- [x] 3.2 Run the full gate and strict-validate this change; no browser behavior changed, so `bun run test:playwright` is not required. Verify: `bun run check && openspec validate release-runbook --strict`

@@ -451,6 +451,12 @@ bun run test     # Run tests
 bun run lint     # Lint with oxlint
 ```
 
+Releases are cut in CI through `.github/workflows/publish.yml`. Before dispatching, run the
+fail-closed preflight (`bun run release:preflight -- --bump patch|minor|major`) and follow the
+`release-runbook` skill in `.opencode/skills/release-runbook/SKILL.md` (mirrored at
+`.claude/skills/release-runbook/SKILL.md`), which covers the confirmation gate, post-release
+verification, and partial-failure recovery.
+
 ## License
 
 MIT
