@@ -559,6 +559,38 @@ describe('DockerLauncher.diagnose', () => {
     status = 200
     expect(await launcher.diagnose!()).toHaveLength(1)
   })
+
+  test('passes the launcher platform seam to the per-run diagnostic', async () => {
+    const gatewaySummary = {
+      webServers: [],
+      projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }],
+    }
+    const loopbackAnswering = {
+      http: (url: string): Promise<number | null> => Promise.resolve(url.includes('localhost') ? 200 : null),
+    }
+
+    const linux = makeLauncher({
+      platform: 'linux',
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(gatewaySummary),
+      probeHostService: loopbackAnswering,
+    })
+    await linux.launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const notices = await linux.launcher.diagnose!()
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('loopback')
+
+    const darwin = makeLauncher({
+      platform: 'darwin',
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(gatewaySummary),
+      probeHostService: loopbackAnswering,
+    })
+    await darwin.launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    expect(await darwin.launcher.diagnose!()).toEqual([])
+  })
 })
 
 describe('DockerLauncher.onForceKill', () => {

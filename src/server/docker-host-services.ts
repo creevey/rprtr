@@ -1,4 +1,5 @@
 import { connect } from 'node:net'
+import { networkInterfaces } from 'node:os'
 
 import pLimit from 'p-limit'
 
@@ -27,11 +28,18 @@ export interface HostServiceProbe {
 export interface DockerHostDiagnosticDeps {
   /** Resolved Playwright config summary; null when the preflight listing could not produce one. */
   config: DockerConfigSummary | null
+  /** Host platform the container will diverge from; defaults to `process.platform`. */
+  platform?: NodeJS.Platform
   /** Injectable probe seams for tests. */
   probe?: Partial<HostServiceProbe>
+  /** Injectable host-interface seam for tests; defaults to the host's non-internal IPv4 addresses. */
+  hostAddresses?: () => readonly string[]
   /** Timeout for the default HTTP and TCP probes. */
   timeoutMs?: number
 }
+
+/** What a container would reach at a probed address, judged from the host platform. */
+type Availability = 'reachable' | 'loopback-only' | 'unreachable'
 
 interface HostAddress {
   host: string
@@ -104,15 +112,53 @@ async function isHttpAvailable(probe: HostServiceProbe, url: string): Promise<bo
   return indexStatus !== null && indexStatus >= 200 && indexStatus < 404
 }
 
+/** How the container would reach an address, judged from the host platform. */
+type ResolveOptions = { desktop: boolean; hostAddresses: readonly string[] }
+
 /**
- * A gateway address is probed at the gateway hostname first and at the loopback alias
- * second, so a host service bound to a non-loopback interface is not reported missing.
+ * Probes the host's non-loopback addresses, in order, until one answers. The list is
+ * the host's interfaces, so the recursion stays shallow; probing sequentially keeps
+ * the short-circuit (and never exceeds the candidate's own concurrency slot).
  */
-async function isAddressAvailable(probe: HostServiceProbe, address: HostAddress): Promise<boolean> {
-  if (address.portOnly) return probe.tcp(address.host, address.port)
-  if (await isHttpAvailable(probe, probeUrl(address, address.host))) return true
-  if (!address.gateway) return false
-  return isHttpAvailable(probe, probeUrl(address, 'localhost'))
+async function anyHostAddressAvailable(
+  probe: HostServiceProbe,
+  address: HostAddress,
+  hosts: readonly string[],
+  index = 0,
+): Promise<boolean> {
+  const host = hosts[index]
+  if (host === undefined) return false
+  if (!isLoopbackHost(host) && (await isHttpAvailable(probe, probeUrl(address, host)))) return true
+  return anyHostAddressAvailable(probe, address, hosts, index + 1)
+}
+
+/**
+ * A gateway address is judged by what the container can reach: the gateway hostname
+ * first, then the host's non-loopback IPv4 addresses, then the loopback alias —
+ * which Docker Desktop forwards into containers but Linux does not.
+ */
+async function resolveAvailability(
+  probe: HostServiceProbe,
+  address: HostAddress,
+  options: ResolveOptions,
+): Promise<Availability> {
+  if (address.portOnly) return (await probe.tcp(address.host, address.port)) ? 'reachable' : 'unreachable'
+  if (await isHttpAvailable(probe, probeUrl(address, address.host))) return 'reachable'
+  if (!address.gateway) return 'unreachable'
+  if (await anyHostAddressAvailable(probe, address, options.hostAddresses)) return 'reachable'
+  if (!(await isHttpAvailable(probe, probeUrl(address, 'localhost')))) return 'unreachable'
+  return options.desktop ? 'reachable' : 'loopback-only'
+}
+
+/** The host's non-internal IPv4 addresses: the interfaces the gateway can route to. */
+function hostNonLoopbackAddresses(): readonly string[] {
+  const addresses = new Set<string>()
+  for (const entries of Object.values(networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      if (entry.family === 'IPv4' && !entry.internal) addresses.add(entry.address)
+    }
+  }
+  return [...addresses]
 }
 
 function createDefaultProbe(timeoutMs: number): HostServiceProbe {
@@ -167,6 +213,16 @@ function gatewayNotice(address: HostAddress): string {
   return `Docker mode: no host service answers at ${address.origin}; that address can only be served from the host, so the run will fail or time out. Start the service on the host or point the config at a container-local address (see ${DOCS_PATH}).`
 }
 
+function loopbackOnlyNotice(address: HostAddress): string {
+  return `Docker mode: the host service at ${address.origin} answers only on the host's loopback alias, which a Linux container cannot reach through ${DOCKER_HOST_GATEWAY}. Bind the service to 0.0.0.0 (or a non-loopback interface) so the host gateway can reach it (see ${DOCS_PATH}).`
+}
+
+/** The divergence notice for a gateway address the container cannot reach, if any. */
+function gatewayDivergence(address: HostAddress, availability: Availability): string | null {
+  if (!address.gateway || availability === 'reachable') return null
+  return availability === 'loopback-only' ? loopbackOnlyNotice(address) : gatewayNotice(address)
+}
+
 /** Addresses are deduplicated and a baseURL served by a webServer entry is judged by that entry. */
 function collectCandidates(config: DockerConfigSummary): DiagnosticCandidate[] {
   const candidates: DiagnosticCandidate[] = []
@@ -187,18 +243,25 @@ function collectCandidates(config: DockerConfigSummary): DiagnosticCandidate[] {
   return candidates
 }
 
-async function diagnoseCandidate(probe: HostServiceProbe, candidate: DiagnosticCandidate): Promise<string | null> {
+async function diagnoseCandidate(
+  probe: HostServiceProbe,
+  candidate: DiagnosticCandidate,
+  options: ResolveOptions,
+): Promise<string | null> {
   const { address } = candidate
-  const available = await isAddressAvailable(probe, address)
+  const availability = await resolveAvailability(probe, address, options)
   if (candidate.kind === 'webserver') {
-    if (address.loopback && candidate.entry.reuseExistingServer === true && available) {
+    if (address.loopback && candidate.entry.reuseExistingServer === true && availability === 'reachable') {
       return maskedNotice(address, candidate.entry)
     }
-    return address.gateway && !available ? gatewayNotice(address) : null
+    return gatewayDivergence(address, availability)
   }
-  if (address.loopback && available) return uncoveredNotice(address)
-  return address.gateway && !available ? gatewayNotice(address) : null
+  if (address.loopback && availability === 'reachable') return uncoveredNotice(address)
+  return gatewayDivergence(address, availability)
 }
+
+/** Docker Desktop forwards host loopback into containers; every other platform follows the Linux rule. */
+const DOCKER_DESKTOP_PLATFORMS = new Set<NodeJS.Platform>(['darwin', 'win32'])
 
 /**
  * Host-service divergence diagnostic for docker mode: probes the host side of every
@@ -210,8 +273,14 @@ export async function diagnoseDockerHostServices(deps: DockerHostDiagnosticDeps)
   const config = deps.config
   if (config === null) return []
   const probe = resolveProbe(deps)
+  const options = {
+    desktop: DOCKER_DESKTOP_PLATFORMS.has(deps.platform ?? process.platform),
+    hostAddresses: (deps.hostAddresses ?? hostNonLoopbackAddresses)(),
+  }
   const candidates = collectCandidates(config)
   const limit = pLimit(HOST_PROBE_CONCURRENCY)
-  const notices = await Promise.all(candidates.map((candidate) => limit(() => diagnoseCandidate(probe, candidate))))
+  const notices = await Promise.all(
+    candidates.map((candidate) => limit(() => diagnoseCandidate(probe, candidate, options))),
+  )
   return notices.filter((notice): notice is string => notice !== null)
 }

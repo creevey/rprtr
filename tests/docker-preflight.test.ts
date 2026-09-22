@@ -367,6 +367,8 @@ describe('host service diagnostic', () => {
     const probed: string[] = []
     const notices = await diagnoseDockerHostServices({
       config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      platform: 'darwin',
+      hostAddresses: () => [],
       probe: {
         http: (url) => {
           probed.push(url)
@@ -377,6 +379,66 @@ describe('host service diagnostic', () => {
 
     expect(notices).toEqual([])
     expect(probed).toEqual(['http://host.docker.internal:6006/', 'http://localhost:6006/'])
+  })
+
+  test('reports a loopback-only bind on Linux instead of staying silent', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      platform: 'linux',
+      hostAddresses: () => ['192.168.1.10'],
+      probe: { http: (url) => Promise.resolve(url.includes('localhost') ? 200 : null) },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('http://host.docker.internal:6006')
+    expect(notices[0]).toContain('loopback')
+    expect(notices[0]).toContain('0.0.0.0')
+    expect(notices[0]).toContain('docs/docker-host-services.md')
+  })
+
+  test('treats a non-loopback interface answer as reachable on Linux', async () => {
+    const probed: string[] = []
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      platform: 'linux',
+      hostAddresses: () => ['192.168.1.10'],
+      probe: {
+        http: (url) => {
+          probed.push(url)
+          return Promise.resolve(url.includes('192.168.1.10') ? 200 : null)
+        },
+      },
+    })
+
+    expect(notices).toEqual([])
+    expect(probed).toContain('http://192.168.1.10:6006/')
+    expect(probed).not.toContain('http://localhost:6006/')
+  })
+
+  test('keeps the loopback alias reachable on Docker Desktop hosts', async () => {
+    for (const platform of ['darwin', 'win32'] as const) {
+      const notices = await diagnoseDockerHostServices({
+        config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+        platform,
+        hostAddresses: () => ['192.168.1.10'],
+        probe: { http: (url) => Promise.resolve(url.includes('localhost') ? 200 : null) },
+      })
+
+      expect(notices).toEqual([])
+    }
+  })
+
+  test('keeps the gateway notice when nothing answers anywhere', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      platform: 'linux',
+      hostAddresses: () => ['192.168.1.10'],
+      probe: unreachable,
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('fail or time out')
+    expect(notices[0]).not.toContain('0.0.0.0')
   })
 
   test('strips credentials and tokens from warned addresses', async () => {

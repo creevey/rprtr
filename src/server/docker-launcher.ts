@@ -214,7 +214,11 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
       return prepareLauncher(state, deps, ctx, onProgress)
     },
     diagnose(): Promise<string[]> {
-      return diagnoseDockerHostServices({ config: state.configSummary, probe: deps.probeHostService })
+      return diagnoseDockerHostServices({
+        config: state.configSummary,
+        platform: deps.platform,
+        probe: deps.probeHostService,
+      })
     },
     launch({ ctx, playwrightArgs }: LaunchParams): LaunchSpec {
       const image = state.image ?? resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
