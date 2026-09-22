@@ -3,6 +3,7 @@ import { isAbsolute, relative, sep } from 'node:path'
 
 import { detect } from 'package-manager-detector/detect'
 
+import { playwrightImageTag } from '../docker-image.ts'
 import type { RunContext } from './run-controller.ts'
 
 export interface DockerExecResult {
@@ -77,7 +78,7 @@ export async function forceRemoveContainer(exec: DockerExec, name: string): Prom
 export function resolveDockerImage(options: { image?: string; version: string | null }): string | null {
   if (options.image !== undefined && options.image !== '') return options.image
   if (options.version === null) return null
-  return `mcr.microsoft.com/playwright:v${options.version}-noble`
+  return playwrightImageTag(options.version)
 }
 
 /**

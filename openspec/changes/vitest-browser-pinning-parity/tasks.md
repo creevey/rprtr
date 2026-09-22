@@ -1,0 +1,31 @@
+# Tasks
+
+## 1. Vitest pin model and resolution core
+
+- [x] 1.1 Add failing tests in `tests/vitest-pins.test.ts` pinning the model: effective pin selection (`browserPin` fallback, `browserPins[project.name]` override, declared-browser/engine mismatch, unmatched key warns instead of failing, invalid shape throws `BrowserPinValidationError` naming the value), environment resolution (local Chromium resolves `pinned`/`drift` from an injected manifest and executable path; non-playwright provider, remote endpoint, channel, explicit executable, custom image, and manifest entries with `revisionOverrides` resolve `unverifiable`; the managed sidecar env with the canonical image resolves the manifest default revision and records `dockerImage`), and `resolveInstalledExecutablePath` preferring the project's `playwright` over `@playwright/test` (`cd tests && bun test vitest-pins.test.ts` — fails against the missing module).
+- [x] 1.2 Implement the pin options in `src/vitest-options.ts` (`browserPin`, `browserPins`, `browserPinPolicy`) and `src/vitest-pins.ts` (pin selection/validation, provider and launch-option checks, sidecar-image resolution, environment building on `browser-pins.ts`/`playwright-install.ts`), and add `resolveInstalledExecutablePath`/`resolveBrowserExecutablePaths` to `src/playwright-install.ts` until 1.1 passes (`cd tests && bun test vitest-pins.test.ts playwright-install.test.ts`; `bun run typecheck`).
+
+## 2. Vitest reporter integration
+
+- [ ] 2.1 Add failing tests in `tests/vitest-reporter-pins.test.ts`: the register payload carries environments keyed by project name with the pinned status; the run-end payload carries them in offline/CI mode; `browserPinPolicy: 'fail'` throws at `onInit` with the project, pin, effective build, and remedy; the warn policy logs once and the run proceeds; an unmatched `browserPins` key warns once and the fallback still applies; an invalid pin throws at initialization; an unpinned browser project is recorded `unpinned` (`cd tests && bun test vitest-reporter-pins.test.ts` — fails).
+- [ ] 2.2 Resolve pins and environments in `src/vitest.ts` at `onInit` (before any browser starts), apply the policy, and include the map in every `register` payload and the `transport.finish` run-end data until 2.1 passes, with the existing reporter behavior unchanged (`cd tests && bun test vitest-reporter-pins.test.ts vitest-reporter.test.ts vitest-helpers.test.ts`; `bun run typecheck`).
+
+## 3. Vitest config reader for CLI and preflight
+
+- [ ] 3.1 Add failing tests in `tests/vitest-project-pins.test.ts` for `readVitestProjectPins`: an injected loader seam returns per-instance `ResolvedProjectPin[]` with keyed and fallback pins; unmatched `browserPins` keys come back as invalid pins; an unresolvable `vitest/node` or a throwing config load yields no pins plus one diagnostic and still closes the instance; and one fixture-backed test builds a temp Vitest config that imports the built reporter with `browserPins` and resolves it through the repository's Vitest (`cd tests && bun test vitest-project-pins.test.ts` — fails).
+- [ ] 3.2 Implement `src/vitest-project-pins.ts`: resolve the project's `vitest/node`, `createVitest` without `standalone()`/`init()`, read a duck-typed `declaredPinOptions()` off `vitest.config.reporters`, map `vitest.projects` names/engines to `ResolvedProjectPin[]`, and close in a `finally` until 3.1 passes (`cd tests && bun test vitest-project-pins.test.ts`; `bun run typecheck`).
+
+## 4. CLI parity
+
+- [ ] 4.1 Add failing tests in `tests/cli-browsers.test.ts`: `check` merges Playwright and Vitest pins and reports each with status; an unmatched Vitest key is reported as an invalid pin and `--strict` exits non-zero; a missing or unreadable Vitest config reports no Vitest pins and exits zero; `resolve`'s installed-state probe resolves through `resolveBrowserExecutablePaths` when only `playwright` is installed (`cd tests && bun test cli-browsers.test.ts playwright-install.test.ts` — fails).
+- [ ] 4.2 Wire `readVitestProjectPins` into `createDefaultBrowsersDeps.readPins` and switch the installed-state probe to the project's `playwright`-first resolution until 4.1 passes (`cd tests && bun test cli-browsers.test.ts playwright-install.test.ts`; `bun run typecheck`).
+
+## 5. Docker sidecar provenance and preflight
+
+- [ ] 5.1 Add failing tests: `tests/run-controller.test.ts` asserts a sidecar-backed Vitest spawn carries `CRVY_RPRTR_DOCKER_IMAGE` (and a local spawn does not); `tests/docker-preflight.test.ts` asserts a drifting Vitest pin rejects the run before `sidecar.ensure` with the image tag as the remedy while unpinned/unverifiable pins pass and a reader failure only warns; `tests/docker-support.test.ts` pins the extracted `playwrightImageTag` helper (`cd tests && bun test run-controller.test.ts docker-preflight.test.ts docker-support.test.ts browser-sidecar.test.ts` — fails).
+- [ ] 5.2 Extract `playwrightImageTag(version)` into `src/docker-image.ts`, expose the started image from `src/server/browser-sidecar.ts`/`prepareVitestSidecar`, set the env var in `src/server/run-controller.ts`, and run the Vitest pin preflight in `prepareVitestRun` through an injected reader seam until 5.1 passes (`cd tests && bun test run-controller.test.ts docker-preflight.test.ts docker-support.test.ts browser-sidecar.test.ts`; `bun run typecheck`).
+
+## 6. Docs, example, and full gate
+
+- [ ] 6.1 Update README.md (Browser Pinning gains the Vitest declaration and CLI-check coverage; Vitest Reporter Options table gains `browserPin`, `browserPins`, `browserPinPolicy`; Docker Mode notes the sidecar pin preflight) and `docs/docker-screenshot-determinism.md` (pin section gets the Vitest equivalent), declare `browserPin: { browser: 'chromium', version: '147' }` in `examples/vitest-browser/vitest.config.ts` so the example exercises the runtime path end to end, and verify `bun run format:check`.
+- [ ] 6.2 Full gate: `bun run check` (lint, typecheck, format:check, knip, test:bun, duplicates, publint), plus the Vitest example against the freshly packed tarball — `cd examples/vitest-browser && bun run pack && bun install && bun run example:vitest` (as CI does) — and `openspec validate vitest-browser-pinning-parity --strict`. Playwright runtime behavior is unchanged, so `bun run test:playwright` is not required.

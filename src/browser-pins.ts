@@ -87,15 +87,24 @@ function crvyRprtrMetadata(metadata: unknown): unknown {
   return 'crvyRprtr' in metadata ? metadata.crvyRprtr : undefined
 }
 
-function parseDeclaredPin(owner: string, value: unknown): BrowserPin | undefined {
+/**
+ * Parses an unknown `{ browser, version }` pin, throwing
+ * `BrowserPinValidationError` naming the owner (`project "chromium"`,
+ * `option "browserPin"`, …) and the offending value.
+ */
+export function parseBrowserPin(owner: string, value: unknown): BrowserPin | undefined {
   if (value === undefined) return undefined
   const parsed = BrowserPinSchema.safeParse(value)
   if (!parsed.success) {
     throw new BrowserPinValidationError(
-      `Invalid crvyRprtr pin for project "${owner}": ${JSON.stringify(value)} — browser must be one of ${PIN_BROWSERS.join(', ')} and version must be one or more dot-separated numeric segments (for example "147")`,
+      `Invalid crvyRprtr pin for ${owner}: ${JSON.stringify(value)} — browser must be one of ${PIN_BROWSERS.join(', ')} and version must be one or more dot-separated numeric segments (for example "147")`,
     )
   }
   return parsed.data
+}
+
+function parseDeclaredPin(owner: string, value: unknown): BrowserPin | undefined {
+  return parseBrowserPin(`project "${owner}"`, value)
 }
 
 /**

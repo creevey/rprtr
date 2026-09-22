@@ -76,6 +76,58 @@ export interface ReadInstalledEnvironmentOptions extends Omit<
   cwd: string
 }
 
+/** Module-private: browser types resolved through the project's Playwright packages. */
+function executablePathFor(module: unknown, browser: PinBrowser): string | null {
+  if (typeof module !== 'object' || module === null) return null
+  const browserType: unknown = Reflect.get(module, browser)
+  if (typeof browserType !== 'object' || browserType === null) return null
+  const executablePath: unknown = Reflect.get(browserType, 'executablePath')
+  if (typeof executablePath !== 'function') return null
+  const resolved: unknown = Reflect.apply(executablePath, browserType, [])
+  return typeof resolved === 'string' ? resolved : null
+}
+
+/** Module-private: all three bundled browsers from one package; null if any is missing. */
+function browserPathsFor(module: unknown): Record<PinBrowser, string> | null {
+  const chromium = executablePathFor(module, 'chromium')
+  const firefox = executablePathFor(module, 'firefox')
+  const webkit = executablePathFor(module, 'webkit')
+  if (chromium === null || firefox === null || webkit === null) return null
+  return { chromium, firefox, webkit }
+}
+
+/** Module-private: `playwright` first (Vitest browser projects configure the provider from it), then `@playwright/test`. */
+function resolveFromPlaywrightPackages<T>(cwd: string, resolve: (module: unknown) => T | null): T | null {
+  try {
+    const req = createRequire(join(cwd, 'package.json'))
+    for (const name of PLAYWRIGHT_PACKAGES) {
+      try {
+        const resolved = resolve(req(name))
+        if (resolved !== null) return resolved
+      } catch {
+        // Try the next candidate package.
+      }
+    }
+  } catch {
+    // The cwd has no resolvable package.json.
+  }
+  return null
+}
+
+/**
+ * Resolves a browser executable through the project's installed Playwright,
+ * preferring `playwright` (the package Vitest browser projects configure the
+ * provider with) over `@playwright/test`. Null when neither package resolves.
+ */
+export function resolveInstalledExecutablePath(cwd: string, browser: PinBrowser): string | null {
+  return resolveFromPlaywrightPackages(cwd, (module) => executablePathFor(module, browser))
+}
+
+/** Resolves every bundled browser's executable path; null unless all three resolve. */
+export function resolveBrowserExecutablePaths(cwd: string): Record<PinBrowser, string> | null {
+  return resolveFromPlaywrightPackages(cwd, browserPathsFor)
+}
+
 /** Combines installed-version, manifest, and executable-path resolution for one project. */
 export function readInstalledEnvironment(options: ReadInstalledEnvironmentOptions): ProjectEnvironment {
   const { cwd, ...rest } = options
