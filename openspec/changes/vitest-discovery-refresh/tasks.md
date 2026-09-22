@@ -18,7 +18,7 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 4. Serialized refresh session
 
-- [ ] 4.1 Failing test first: extend `tests/discovered-tests.test.ts` — one listing runs at a time; changes during an in-flight listing produce exactly one follow-up; changes while `isRunning` are queued and flushed by `notifyRunSettled()`; a failed listing leaves the tree untouched and logs once; watch roots update after each successful listing; `dispose()` cancels queued work. Implement the session in `src/server/discovered-tests.ts`. Verify: `cd tests && bun test discovered-tests.test.ts && cd .. && bun run typecheck`
+- [x] 4.1 Failing test first: extend `tests/discovered-tests.test.ts` — one listing runs at a time; changes during an in-flight listing produce exactly one follow-up; changes while `isRunning` are queued and flushed by `notifyRunSettled()`; a failed listing leaves the tree untouched and logs once; watch roots update after each successful listing; `dispose()` cancels queued work. Implement the session in `src/server/discovered-tests.ts`. Verify: `cd tests && bun test discovered-tests.test.ts && cd .. && bun run typecheck`
 
 ## 5. Server wiring: startup, settlement, disposal
 

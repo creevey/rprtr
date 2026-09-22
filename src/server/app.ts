@@ -16,7 +16,7 @@ import {
   type IncomingWebSocketMessage,
 } from '../schemas.ts'
 import { type BrowserSidecar } from './browser-sidecar.ts'
-import { discoveryLogLabel, seedDiscoveredTests, withoutDiscoveredTests } from './discovered-tests.ts'
+import { seedDiscoveredTests, withoutDiscoveredTests } from './discovered-tests.ts'
 import { type DockerOptions } from './docker-launcher.ts'
 import { fileExists } from './file-utils.ts'
 import {
@@ -232,7 +232,8 @@ function startDiscovery(
     },
   }).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[${discoveryLogLabel(runContext)}] test listing failed:`, message)
+    const label = runContext?.runner === 'vitest' ? 'VitestDiscovery' : 'PlaywrightDiscovery'
+    console.error(`[${label}] test listing failed:`, message)
   })
 }
 
