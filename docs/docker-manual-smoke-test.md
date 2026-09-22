@@ -101,7 +101,8 @@ docker ps -a --filter name=crvy-rprtr-run   # must be EMPTY
 - Mounts include `<project dir>:/work:rw` (and a `<path>:<path>:ro` mount for `--test-list`
   tmpfiles when running filtered subsets).
 - Env contains `CRVY_RPRTR_SERVER_URL=ws://host.docker.internal:4321`,
-  `CRVY_RPRTR_PORTABLE_ARTIFACTS=1`, `TZ=UTC`, `LANG=C.UTF-8`, `LC_ALL=C.UTF-8`,
+  `CRVY_RPRTR_PORTABLE_ARTIFACTS=1`, `CRVY_RPRTR_DOCKER=1`,
+  `CRVY_RPRTR_HOST_GATEWAY=host.docker.internal`, `TZ=UTC`, `LANG=C.UTF-8`, `LC_ALL=C.UTF-8`,
   `PLAYWRIGHT_HTML_OPEN=never`.
 - Env does **not** contain `CI` or `PLAYWRIGHT_BROWSERS_PATH` (denylist works).
 - After the run: container is gone (`--rm` + no orphans).
@@ -328,16 +329,17 @@ curl -X POST http://localhost:4327/api/run -H 'Content-Type: application/json' -
 
 ## Troubleshooting
 
-| Symptom                                       | Likely cause                                  | Check                                                                                                                             |
-| --------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Run starts, no test events ever arrive        | Reporter can't reach host                     | `CRVY_RPRTR_SERVER_URL` in `docker inspect`; on Linux confirm `--add-host host.docker.internal:host-gateway` is in the arg vector |
-| `docker-unavailable` despite running daemon   | Server started before daemon                  | Re-POST `/api/run` — prepare re-probes                                                                                            |
-| `docker-missing-browser-hook` on a Vitest run | Config lacks the `CRVY_RPRTR_BROWSER_WS` hook | Add the env snippet from S13 to `vitest.config.ts`; auto mode warns and runs locally instead                                      |
-| First run appears stuck                       | Image pull (hundreds of MB)                   | UI should show `pulling`; `docker images` grows                                                                                   |
-| 404s for images in UI                         | Non-portable absolute paths leaked            | report.json image URLs must be relative `screenshots/...`                                                                         |
-| Baselines written but next run can't see them | Snapshot dir outside project root             | Approve routing resolves under `configDir`; keep snapshots under the bind-mounted cwd                                             |
-| `webServer` tests fail in container           | Server bound to `127.0.0.1` or host-only URL  | Bind `0.0.0.0`; hosts must resolve in the container network namespace                                                             |
-| Linux: permission errors on written artifacts | Container root vs host UID                    | Pass `--user $(id -u):$(id -g)` via `docker.extraArgs` (programmatic API)                                                         |
+| Symptom                                       | Likely cause                                   | Check                                                                                                                                                           |
+| --------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Run starts, no test events ever arrive        | Reporter can't reach host                      | `CRVY_RPRTR_SERVER_URL` in `docker inspect`; on Linux confirm `--add-host host.docker.internal:host-gateway` is in the arg vector                               |
+| `docker-unavailable` despite running daemon   | Server started before daemon                   | Re-POST `/api/run` — prepare re-probes                                                                                                                          |
+| `docker-missing-browser-hook` on a Vitest run | Config lacks the `CRVY_RPRTR_BROWSER_WS` hook  | Add the env snippet from S13 to `vitest.config.ts`; auto mode warns and runs locally instead                                                                    |
+| First run appears stuck                       | Image pull (hundreds of MB)                    | UI should show `pulling`; `docker images` grows                                                                                                                 |
+| 404s for images in UI                         | Non-portable absolute paths leaked             | report.json image URLs must be relative `screenshots/...`                                                                                                       |
+| Baselines written but next run can't see them | Snapshot dir outside project root              | Approve routing resolves under `configDir`; keep snapshots under the bind-mounted cwd                                                                           |
+| `webServer` tests fail in container           | Server bound to `127.0.0.1` or host-only URL   | Bind `0.0.0.0`; hosts must resolve in the container network namespace                                                                                           |
+| UI warns about a host service / gateway       | Container cannot reuse or reach a host service | Follow [docker-host-services.md](./docker-host-services.md): derive `webServer.url`/`baseURL` from `CRVY_RPRTR_HOST_GATEWAY`; Linux needs a `0.0.0.0` host bind |
+| Linux: permission errors on written artifacts | Container root vs host UID                     | Pass `--user $(id -u):$(id -g)` via `docker.extraArgs` (programmatic API)                                                                                       |
 
 ## Cleanup
 

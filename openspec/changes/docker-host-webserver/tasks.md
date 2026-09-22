@@ -28,8 +28,8 @@
 
 ## 5. Docs
 
-- [ ] 5.1 Write `docs/docker-host-services.md`: silent reuse/start behavior, the three divergence cases, the `CRVY_RPRTR_DOCKER` / `CRVY_RPRTR_HOST_GATEWAY` recipe (derive `webServer.url` and `baseURL`, fall back to `localhost`), and the platform matrix (Linux requires a `0.0.0.0` host bind; Docker Desktop reaches loopback-only host services). Verify: `bun run format:check`.
-- [ ] 5.2 Update the README Docker Mode note ("that server now starts inside the container") and add the troubleshooting row to `docs/docker-manual-smoke-test.md`, both pointing at the new page. Verify: `bun run format:check`.
+- [x] 5.1 Write `docs/docker-host-services.md`: silent reuse/start behavior, the three divergence cases, the `CRVY_RPRTR_DOCKER` / `CRVY_RPRTR_HOST_GATEWAY` recipe (derive `webServer.url` and `baseURL`, fall back to `localhost`), and the platform matrix (Linux requires a `0.0.0.0` host bind; Docker Desktop reaches loopback-only host services). Verify: `bun run format:check`.
+- [x] 5.2 Update the README Docker Mode note ("that server now starts inside the container") and add the troubleshooting row to `docs/docker-manual-smoke-test.md`, both pointing at the new page. Verify: `bun run format:check`.
 
 ## 6. Full verification
 
