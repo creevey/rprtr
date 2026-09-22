@@ -36,9 +36,11 @@ Before a Playwright run launches in docker mode, the server SHALL resolve the pr
 
 - a loopback address with `reuseExistingServer` intent while a service answers on the host: the container will not reuse the host service and will run the `webServer` command inside the container;
 - a loopback `baseURL` not served by a declared `webServer` entry while a service answers on the host: tests will address the container's own loopback instead of the host service;
-- a host-gateway address while no corresponding service answers on the host: that address can only be served from the host, so the run will fail or time out.
+- a host-gateway address the container cannot reach: that address can only be served from the host, so the run will fail or time out.
 
-Addresses SHALL be deduplicated and a `baseURL` served by a `webServer` entry SHALL be judged by that entry's rules rather than independently. The diagnostic SHALL NOT warn when no service answers at a loopback address, when a host-gateway address answers, or when the configured host is neither loopback nor the host gateway. An unresolvable configuration or a failed listing SHALL produce no diagnostic and SHALL NOT block or fail the run. The probe SHALL mirror Playwright's readiness semantics, counting an HTTP response below 404 as available — including a dev server that returns 404 at `/` but 200 at `/index.html`. Warned addresses SHALL be reported without credentials or token query parameters.
+A host-gateway address SHALL count as reachable when a service answers at the gateway hostname or at one of the host's non-loopback IPv4 addresses. A service answering only at the host's loopback alias SHALL count as reachable only on Docker Desktop hosts (macOS and Windows); on Linux hosts — including WSL2 — a gateway address answering only at loopback SHALL be reported as a divergence whose warning names the loopback-only bind and the non-loopback bind remedy.
+
+Addresses SHALL be deduplicated and a `baseURL` served by a `webServer` entry SHALL be judged by that entry's rules rather than independently. The diagnostic SHALL NOT warn when no service answers at a loopback address, when a host-gateway address is reachable, or when the configured host is neither loopback nor the host gateway. An unresolvable configuration or a failed listing SHALL produce no diagnostic and SHALL NOT block or fail the run. The probe SHALL mirror Playwright's readiness semantics, counting an HTTP response below 404 as available — including a dev server that returns 404 at `/` but 200 at `/index.html`. Warned addresses SHALL be reported without credentials or token query parameters.
 
 #### Scenario: Host service masked inside the container
 
@@ -62,12 +64,27 @@ Addresses SHALL be deduplicated and a `baseURL` served by a `webServer` entry SH
 
 #### Scenario: Gateway address without a host service
 
-- **WHEN** docker mode prepares a run whose config addresses the host gateway and no service answers on the host at that port
+- **WHEN** docker mode prepares a run whose config addresses the host gateway and no service answers at any host address reachable from the container at that port
 - **THEN** the server warns that the address can only be served from the host and that the run will fail or time out, and the run proceeds
+
+#### Scenario: Linux gateway address answering only on loopback
+
+- **WHEN** docker mode prepares a run on a Linux host whose config addresses the host gateway and the service answers only at the host's loopback alias
+- **THEN** the server warns that the service is bound to loopback only and names the non-loopback bind remedy, and the run proceeds
+
+#### Scenario: Docker Desktop gateway address answering on loopback
+
+- **WHEN** docker mode prepares a run on a macOS or Windows host whose config addresses the host gateway and the service answers only at the host's loopback alias
+- **THEN** no warning is emitted, because Docker Desktop forwards host loopback to containers
+
+#### Scenario: Linux gateway address answering on a non-loopback interface
+
+- **WHEN** docker mode prepares a run on a Linux host whose config addresses the host gateway and the service answers at a non-loopback IPv4 address of the host
+- **THEN** no warning is emitted
 
 #### Scenario: No warning without divergence
 
-- **WHEN** a loopback address has no `reuseExistingServer` intent and is not referenced by a `baseURL`, or a host-gateway address answers on the host
+- **WHEN** a loopback address has no `reuseExistingServer` intent and is not referenced by a `baseURL`, or a host-gateway address is reachable from the container
 - **THEN** no warning is emitted
 
 #### Scenario: Unresolvable config degrades silently
