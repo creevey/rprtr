@@ -102,6 +102,16 @@ function visitStep(step: TestStep, state: ExtractionState): boolean {
   return hasNestedScreenshotDeclaration
 }
 
+/**
+ * Formats a Playwright error report for the terminal: the failure message, then its
+ * stack when present. A non-Error throw carries only `value`, which still names the
+ * failure, so it stands in for the missing message.
+ */
+export function formatErrorReport(error: { message?: string; stack?: string; value?: string }): string {
+  const message = error.message ?? error.value ?? 'Playwright reported an error without a message.'
+  return error.stack === undefined || error.stack === '' ? message : `${message}\n${error.stack}`
+}
+
 /** Describe-block titles of a test, outermost first. */
 export function describeTitlePath(test: TestCase): string[] {
   const titlePath: string[] = []

@@ -8,9 +8,9 @@
 
 ## 2. Reporter output passthrough
 
-- [ ] 2.1 Add failing cases in a new `tests/reporter-output.test.ts`: `onError` writes the message and stack to the injected stderr seam, `onStdOut`/`onStdErr` write chunks verbatim to the matching seams, both hold with `ci: true` and with no live transport, and the emitted report messages are unchanged. Verify: `bun run build && cd tests && bun test reporter-output.test.ts` fails.
-- [ ] 2.2 Implement `onError`/`onStdOut`/`onStdErr` in `src/reporter.ts`, extend `ReporterSeams` with `stdout`/`stderr` write seams defaulting to the process streams, and add the error formatter next to the display helpers in `src/reporter-utils.ts`. Verify: `bun run build && cd tests && bun test reporter-output.test.ts` passes and `bun run typecheck` is clean.
-- [ ] 2.3 Add a regression case that forwarded output leaves persisted report state and offline artifacts unchanged, then run it alongside the existing artifact suites. Verify: `bun run build && cd tests && bun test reporter-output.test.ts offline-artifact.test.ts` passes.
+- [x] 2.1 Add failing cases in a new `tests/reporter-output.test.ts`: `onError` writes the message and stack to the injected stderr seam, `onStdOut`/`onStdErr` write chunks verbatim to the matching seams, both hold with `ci: true` and with no live transport, and the emitted report messages are unchanged. Verify: `bun run build && cd tests && bun test reporter-output.test.ts` fails.
+- [x] 2.2 Implement `onError`/`onStdOut`/`onStdErr` in `src/reporter.ts`, extend `ReporterSeams` with `stdout`/`stderr` write seams defaulting to the process streams, and add the error formatter next to the display helpers in `src/reporter-utils.ts`. Verify: `bun run build && cd tests && bun test reporter-output.test.ts` passes and `bun run typecheck` is clean.
+- [x] 2.3 Add a regression case that forwarded output leaves persisted report state and offline artifacts unchanged, then run it alongside the existing artifact suites. Verify: `bun run build && cd tests && bun test reporter-output.test.ts offline-artifact.test.ts` passes.
 
 ## 3. Docs
 

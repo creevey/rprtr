@@ -9,6 +9,7 @@ import type {
   Reporter,
   Suite,
   TestCase,
+  TestError,
   TestResult,
 } from '@playwright/test/reporter'
 import pLimit from 'p-limit'
@@ -29,6 +30,12 @@ import {
   type PendingPortableArtifact,
 } from './reporter-helpers.ts'
 import {
+  type RunnerOutputSeams,
+  writeRunnerError,
+  writeRunnerStderr,
+  writeRunnerStdout,
+} from './reporter-runner-output.ts'
+import {
   type AttachmentData,
   type ScreenshotDeclaration,
   describeTitlePath,
@@ -46,7 +53,7 @@ import { ReporterTransport } from './transport.ts'
 export type { CrvyRprtrOptions }
 export type { BrowserTypeLike }
 
-export interface ReporterSeams extends FontRenderingSeams {
+export interface ReporterSeams extends FontRenderingSeams, RunnerOutputSeams {
   /** Injectable browser types for tests; defaults to @playwright/test's. */
   browserTypes?: Partial<Record<PinBrowser, BrowserTypeLike>>
 }
@@ -252,6 +259,23 @@ export class CrvyRprtr implements Reporter {
       { status: result.status, ...(this.environments === undefined ? {} : { environments: this.environments }) },
       () => this.flushPendingArtifacts(),
     )
+  }
+
+  /**
+   * Playwright forwards the runner's fatal error reports and process output to every
+   * reporter that implements these hooks and drops them otherwise; see
+   * `reporter-runner-output.ts` for why crvy-rprtr prints them itself.
+   */
+  onError(error: TestError): void {
+    writeRunnerError(error, this.seams)
+  }
+
+  onStdOut(chunk: string): void {
+    writeRunnerStdout(chunk, this.seams)
+  }
+
+  onStdErr(chunk: string): void {
+    writeRunnerStderr(chunk, this.seams)
   }
 
   private async flushPendingArtifacts(): Promise<void> {
