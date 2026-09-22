@@ -4,8 +4,8 @@ All bun tests run inside `tests/` (after `bun run build`). Verification commands
 
 ## 1. Watcher primitives
 
-- [ ] 1.1 Failing test first: `tests/test-file-watcher.test.ts` — with an injected watch seam assert root computation (config file, deduped directories of listed files, run-context cwd), debounce coalescing of rapid events, artifact-location filtering (`node_modules`, `.git`, `dist`, `coverage`, report/screenshot output, `*-snapshots`, `__screenshots__`), recursive-to-non-recursive fallback with one log, and `dispose()` closing every handle. Implement `src/server/test-file-watcher.ts`. Verify: `cd tests && bun test test-file-watcher.test.ts && cd .. && bun run typecheck`
-- [ ] 1.2 Failing test first: extend `tests/test-file-watcher.test.ts` — a successful listing adds only new directories, closes removed ones, and never double-watches a directory already covered by an active recursive root. Implement root-set updates in `src/server/test-file-watcher.ts`. Verify: `cd tests && bun test test-file-watcher.test.ts && cd .. && bun run typecheck`
+- [x] 1.1 Failing test first: `tests/test-file-watcher.test.ts` — with an injected watch seam assert root computation (config file, deduped directories of listed files, run-context cwd), debounce coalescing of rapid events, artifact-location filtering (`node_modules`, `.git`, `dist`, `coverage`, report/screenshot output, `*-snapshots`, `__screenshots__`), recursive-to-non-recursive fallback with one log, and `dispose()` closing every handle. Implement `src/server/test-file-watcher.ts`. Verify: `cd tests && bun test test-file-watcher.test.ts && cd .. && bun run typecheck`
+- [x] 1.2 Failing test first: extend `tests/test-file-watcher.test.ts` — a successful listing adds only new directories, closes removed ones, and never double-watches a directory already covered by an active recursive root. Implement root-set updates in `src/server/test-file-watcher.ts`. Verify: `cd tests && bun test test-file-watcher.test.ts && cd .. && bun run typecheck`
 
 ## 2. Listing results distinguish failure from empty
 
