@@ -1,24 +1,23 @@
-import { existsSync } from 'fs'
 import { isAbsolute, relative, resolve } from 'path'
 
 import pLimit from 'p-limit'
 import type { Reporter, TestCase, TestProject, TestRunEndReason, Vitest } from 'vitest/node'
 
+import { type BrowserPinPolicy, type RunEnvironments } from './browser-pins.ts'
 import { log, logError } from './debug-log.ts'
 import { ensureVitestInstalled } from './peer-guard.ts'
 import { saveAttachments } from './reporter-artifact-ops.ts'
 import { pinReporterFontRendering, type FontRenderingSeams } from './reporter-font-rendering.ts'
-import type { AttachmentData, ScreenshotDeclaration } from './reporter-utils.ts'
+import type { AttachmentData } from './reporter-utils.ts'
 import { ReporterTransport } from './transport.ts'
 import {
   approvalTargetsFromEntries,
   buildAttachmentEntries,
   collectVisualEntries,
   mergeVisualEntries,
-  type VisualArtifactEntry,
   type VitestArtifactLayout,
 } from './vitest-artifacts.ts'
-import { extractVitestScreenshots, loadTestSource, type VitestDeclarationContext } from './vitest-declarations.ts'
+import { loadTestSource } from './vitest-declarations.ts'
 import {
   getBrowserName,
   getTitlePath,
@@ -28,6 +27,8 @@ import {
   relativeFileTokens,
 } from './vitest-helpers.ts'
 import type { CrvyRprtrVitestReporterOptions } from './vitest-options.ts'
+import { NO_PASSING_VISUAL_DATA, passingVisualData } from './vitest-passing-visuals.ts'
+import { resolveVitestRunEnvironments } from './vitest-reporter-environments.ts'
 
 export type { CrvyRprtrVitestReporterOptions }
 
@@ -36,13 +37,6 @@ interface PendingVitestArtifact {
   nativeAttachments: AttachmentData[]
   eventData: { attachments: AttachmentData[] }
 }
-
-interface PassingVisualData {
-  readonly entries: VisualArtifactEntry[]
-  readonly declarations: ScreenshotDeclaration[]
-}
-
-const NO_PASSING_VISUAL_DATA: PassingVisualData = { entries: [], declarations: [] }
 
 function mapRunReason(reason: TestRunEndReason): 'passed' | 'failed' | 'skipped' {
   switch (reason) {
@@ -85,11 +79,14 @@ export class CrvyRprtrVitestReporter implements Reporter {
   private readonly ci: boolean
   private readonly referenceDir: string
   private readonly attachmentsDir: string
+  private readonly pinOptions: { browserPin?: unknown; browserPins?: unknown }
+  private readonly pinPolicy: BrowserPinPolicy
   private projectRoot = process.cwd()
   private configFile: string | undefined
   private transportStarted = false
   private pendingArtifacts: PendingVitestArtifact[] = []
   private moduleSources = new Map<string, string | null>()
+  private environments: RunEnvironments | undefined
 
   constructor(options: CrvyRprtrVitestReporterOptions = {}, seams: FontRenderingSeams = {}) {
     // The missing-peer check comes first: without vitest there is no run to pin.
@@ -102,11 +99,29 @@ export class CrvyRprtrVitestReporter implements Reporter {
     this.ci = this.transport.ci
     this.referenceDir = options.referenceDir ?? '__screenshots__'
     this.attachmentsDir = options.attachmentsDir ?? '.vitest-attachments'
+    this.pinOptions = { browserPin: options.browserPin, browserPins: options.browserPins }
+    this.pinPolicy = options.browserPinPolicy ?? 'warn'
+  }
+
+  /**
+   * Pin options as declared, for `crvy-rprtr browsers check` to read off the
+   * project's evaluated Vitest config. Duck-typed by the reader so duplicate
+   * `@crvy/rprtr` copies do not have to agree on class identity.
+   */
+  declaredPinOptions(): { browserPin?: unknown; browserPins?: unknown } {
+    return { ...this.pinOptions }
   }
 
   onInit(vitest: Vitest): void {
     this.projectRoot = vitest.config.root
     this.configFile = resolveVitestConfigFile(vitest)
+    // Before any browser starts: invalid pins and policy failures must abort the run here.
+    this.environments = resolveVitestRunEnvironments({
+      projects: Array.isArray(vitest.projects) ? vitest.projects : [],
+      browserPin: this.pinOptions.browserPin,
+      browserPins: this.pinOptions.browserPins,
+      policy: this.pinPolicy,
+    })
   }
 
   onBrowserInit(project: TestProject): void {
@@ -152,7 +167,16 @@ export class CrvyRprtrVitestReporter implements Reporter {
     // Vitest records no screenshot artifacts for passing assertions, so the
     // reference must come from the test's own source declarations. Failing
     // tests keep their artifact/error-derived payload untouched.
-    const passing = result.state === 'passed' ? this.passingVisualData(testCase, browser) : NO_PASSING_VISUAL_DATA
+    const passing =
+      result.state === 'passed'
+        ? passingVisualData({
+            projectRoot: this.projectRoot,
+            referenceDir: this.referenceDir,
+            testCase,
+            browser,
+            moduleSource: (moduleId) => this.moduleSource(moduleId),
+          })
+        : NO_PASSING_VISUAL_DATA
     const mergedEntries = mergeVisualEntries(entries, passing.entries)
     const attachments = buildAttachmentEntries(mergedEntries)
     const approvalTargets = approvalTargetsFromEntries(mergedEntries)
@@ -183,7 +207,13 @@ export class CrvyRprtrVitestReporter implements Reporter {
     _unhandledErrors: ReadonlyArray<unknown>,
     reason: TestRunEndReason,
   ): Promise<void> {
-    await this.transport.finish({ status: mapRunReason(reason) }, () => this.flushPendingArtifacts())
+    await this.transport.finish(
+      {
+        status: mapRunReason(reason),
+        ...(this.environments === undefined ? {} : { environments: this.environments }),
+      },
+      () => this.flushPendingArtifacts(),
+    )
   }
 
   private ensureTransportStarted(): void {
@@ -219,6 +249,7 @@ export class CrvyRprtrVitestReporter implements Reporter {
         // Omitted for inline programmatic config: the server keeps the run
         // buttons hidden when the config file path is unknown.
         ...(this.configFile === undefined ? {} : { configFile: this.configFile }),
+        ...(this.environments === undefined ? {} : { environments: this.environments }),
         cwd: root,
         runner: 'vitest',
       },
@@ -238,38 +269,6 @@ export class CrvyRprtrVitestReporter implements Reporter {
    * Only references that exist on disk are surfaced — a missing reference is
    * logged and omitted (Vitest's own first-run behavior reports it honestly).
    */
-  private passingVisualData(testCase: TestCase, browser: string): PassingVisualData {
-    const source = this.moduleSource(testCase.module.moduleId)
-    if (source === null) return NO_PASSING_VISUAL_DATA
-
-    const context: VitestDeclarationContext = {
-      projectRoot: this.projectRoot,
-      referenceDir: this.referenceDir,
-      testFile: testCase.module.moduleId,
-      browser,
-    }
-    const entries: VisualArtifactEntry[] = []
-    const declarations: ScreenshotDeclaration[] = []
-    for (const { declaration, imageName, referencePath } of extractVitestScreenshots(
-      source,
-      getTitlePath(testCase),
-      testCase.name,
-      context,
-    )) {
-      if (!existsSync(referencePath)) {
-        log(
-          `[CrvyRprtrVitestReporter] Missing reference for passing screenshot "${imageName}"; ` +
-            'the image is not synthesized: ' +
-            referencePath,
-        )
-        continue
-      }
-      entries.push({ imageName, paths: { expected: referencePath } })
-      declarations.push(declaration)
-    }
-    return { entries, declarations }
-  }
-
   private moduleSource(moduleId: string): string | null {
     const cached = this.moduleSources.get(moduleId)
     if (cached !== undefined) return cached

@@ -7,8 +7,8 @@
 
 ## 2. Vitest reporter integration
 
-- [ ] 2.1 Add failing tests in `tests/vitest-reporter-pins.test.ts`: the register payload carries environments keyed by project name with the pinned status; the run-end payload carries them in offline/CI mode; `browserPinPolicy: 'fail'` throws at `onInit` with the project, pin, effective build, and remedy; the warn policy logs once and the run proceeds; an unmatched `browserPins` key warns once and the fallback still applies; an invalid pin throws at initialization; an unpinned browser project is recorded `unpinned` (`cd tests && bun test vitest-reporter-pins.test.ts` — fails).
-- [ ] 2.2 Resolve pins and environments in `src/vitest.ts` at `onInit` (before any browser starts), apply the policy, and include the map in every `register` payload and the `transport.finish` run-end data until 2.1 passes, with the existing reporter behavior unchanged (`cd tests && bun test vitest-reporter-pins.test.ts vitest-reporter.test.ts vitest-helpers.test.ts`; `bun run typecheck`).
+- [x] 2.1 Add failing tests in `tests/vitest-reporter-pins.test.ts`: the register payload carries environments keyed by project name with the pinned status; the run-end payload carries them in offline/CI mode; `browserPinPolicy: 'fail'` throws at `onInit` with the project, pin, effective build, and remedy; the warn policy logs once and the run proceeds; an unmatched `browserPins` key warns once and the fallback still applies; an invalid pin throws at initialization; an unpinned browser project is recorded `unpinned` (`cd tests && bun test vitest-reporter-pins.test.ts` — fails).
+- [x] 2.2 Resolve pins and environments in `src/vitest.ts` at `onInit` (before any browser starts), apply the policy, and include the map in every `register` payload and the `transport.finish` run-end data until 2.1 passes, with the existing reporter behavior unchanged (`cd tests && bun test vitest-reporter-pins.test.ts vitest-reporter.test.ts vitest-helpers.test.ts`; `bun run typecheck`).
 
 ## 3. Vitest config reader for CLI and preflight
 
