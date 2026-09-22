@@ -216,9 +216,10 @@ async function setupRoutesContext(
   return { routesContext, launcher, localLauncher, browserSidecar, configuredRunMode }
 }
 
-/** Fire-and-forget startup listing for a discovered project: the sidebar
- * pre-populates when it lands; the run controls stay enabled even if it fails. */
-function startVitestDiscovery(
+/** Fire-and-forget startup listing for a discovered project — Playwright or
+ * Vitest per the seeded run context: the sidebar pre-populates when it lands;
+ * the run controls stay enabled even if it fails. */
+function startDiscovery(
   runContext: RoutesContext['runContext'],
   reportData: ReportData,
   wsClients: Set<RuntimeWebSocket>,
@@ -269,7 +270,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   await loadReport(reportFile, reportData)
   await loadOfflineReports(reportData, offlineReportDir)
 
-  startVitestDiscovery(routesContext.runContext, reportData, wsClients)
+  startDiscovery(routesContext.runContext, reportData, wsClients)
 
   return {
     port,

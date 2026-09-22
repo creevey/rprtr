@@ -14,8 +14,8 @@
 
 ## 3. Startup dispatch and integration
 
-- [ ] 3.1 Add failing startup tests in `tests/playwright-discovery-app.test.ts` mirroring the Vitest app tests: a temp project with `playwright.config.ts` and a spec file seeds run controls and a `pending` tree with no prior run; a failing listing keeps the controls, leaves the tree empty, and logs once; a streamed test-begin replaces its discovered placeholder and `report.json` keeps no discovered entries (`cd tests && bun test playwright-discovery-app.test.ts`).
-- [ ] 3.2 Generalize the startup dispatch in `src/server/app.ts` (dispatch by `runContext.runner`, Playwright when absent) through `src/server/discovered-tests.ts` so the Playwright lister runs for a seeded Playwright context, then make 3.1 pass (`cd tests && bun test playwright-discovery-app.test.ts vitest-discovery-app.test.ts`; `bun run typecheck`).
+- [x] 3.1 Add failing startup tests in `tests/playwright-discovery-app.test.ts` mirroring the Vitest app tests: a temp project with `playwright.config.ts` and a spec file seeds run controls and a `pending` tree with no prior run; a failing listing keeps the controls, leaves the tree empty, and logs once; a streamed test-begin replaces its discovered placeholder and `report.json` keeps no discovered entries (`cd tests && bun test playwright-discovery-app.test.ts`).
+- [x] 3.2 Generalize the startup dispatch in `src/server/app.ts` (dispatch by `runContext.runner`, Playwright when absent) through `src/server/discovered-tests.ts` so the Playwright lister runs for a seeded Playwright context, then make 3.1 pass (`cd tests && bun test playwright-discovery-app.test.ts vitest-discovery-app.test.ts`; `bun run typecheck`).
 
 ## 4. Docs and full gate
 

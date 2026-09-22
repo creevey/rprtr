@@ -1,4 +1,7 @@
+import { dirname } from 'path'
+
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
+import { runPlaywrightList, synthesizePlaywrightDiscoveredTests } from './playwright-discovery.ts'
 import type { RunContext } from './run-controller.ts'
 import { runVitestList, synthesizeDiscoveredTests } from './vitest-discovery.ts'
 
@@ -91,14 +94,16 @@ export interface SeedDiscoveredTestsDeps {
 
 /**
  * Runner-specific listing: spawn, parse, and synthesize discovered tests.
- * Null for a runner without a listing path, so the caller adds nothing.
+ * An absent runner means Playwright, as elsewhere.
  */
-async function listDiscoveredTests(runContext: RunContext): Promise<TestData[] | null> {
+async function listDiscoveredTests(runContext: RunContext): Promise<TestData[]> {
   if (runContext.runner === 'vitest') {
     const entries = await runVitestList({ configFile: runContext.configFile, cwd: runContext.cwd })
     return synthesizeDiscoveredTests(entries, runContext.cwd)
   }
-  return null
+  const entries = await runPlaywrightList({ configFile: runContext.configFile, cwd: runContext.cwd })
+  // The reporter groups by config-dir-relative file tokens, so discovery does too.
+  return synthesizePlaywrightDiscoveredTests(entries, dirname(runContext.configFile))
 }
 
 /**
@@ -112,7 +117,6 @@ export async function seedDiscoveredTests(deps: SeedDiscoveredTestsDeps): Promis
   if (runContext === undefined) return
 
   const discovered = await listDiscoveredTests(runContext)
-  if (discovered === null) return
   // A run that started while the listing was in flight replaces the whole tree;
   // discovered state must never be injected into an active run.
   if (deps.reportData.isRunning) return
