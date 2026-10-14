@@ -100,6 +100,7 @@ function listReport(): Record<string, unknown> {
 
 interface FakeChild {
   stdout: { on(event: 'data', cb: (chunk: string | Buffer) => void): void }
+  stderr: { on(event: 'data', cb: (chunk: string | Buffer) => void): void }
   on(event: 'close', cb: (code: number | null) => void): void
   on(event: 'error', cb: (err: Error) => void): void
   kill(signal?: string): void
@@ -115,6 +116,7 @@ interface SpawnCall {
 
 interface FakeSpawnOptions {
   stdout?: string
+  stderr?: string
   exitCode?: number | null
   emitError?: Error
   neverCloses?: boolean
@@ -133,6 +135,11 @@ function createFakeSpawn(options: FakeSpawnOptions): {
       stdout: {
         on: (_event, cb): void => {
           if (options.stdout !== undefined) queueMicrotask(() => cb(options.stdout!))
+        },
+      },
+      stderr: {
+        on: (_event, cb): void => {
+          if (options.stderr !== undefined) queueMicrotask(() => cb(options.stderr!))
         },
       },
       on: (event, cb): void => {
@@ -360,6 +367,48 @@ describe('runPlaywrightList', () => {
     expect(result.ok).toBe(true)
     const env = calls[0]!.opts.env as Record<string, string | undefined> | undefined
     expect(env?.CRVY_RPRTR_DEBUG).toBe('1')
+  })
+
+  test('debug mode records a failed listing with command, reason, exit code, and stderr', async () => {
+    const { spawn } = createFakeSpawn({ stdout: 'not json at all', stderr: 'Error: cannot find module\n', exitCode: 1 })
+    const logs: string[] = []
+    const debug = createDebugLogger({ enabled: true, sink: (line): void => void logs.push(line) })
+
+    const result = await runPlaywrightList({ configFile, cwd: '/proj', spawn, debug })
+
+    expect(result).toEqual({ ok: false, reason: 'exit' })
+    const record = logs.find((line) => line.includes('event=listing-failed'))!
+    expect(record).toContain('command=')
+    expect(record).toContain('playwright')
+    expect(record).toContain('--list')
+    expect(record).toContain('cwd=/proj')
+    expect(record).toContain('reason=exit')
+    expect(record).toContain('exitCode=1')
+    expect(record).toContain('Error: cannot find module')
+  })
+
+  test('the recorded stderr excerpt is bounded to the tail', async () => {
+    const stderr = Array.from({ length: 200 }, (_, index) => `line-${index}-${'x'.repeat(40)}`).join('\n')
+    const { spawn } = createFakeSpawn({ stdout: '', stderr, exitCode: 1 })
+    const logs: string[] = []
+    const debug = createDebugLogger({ enabled: true, sink: (line): void => void logs.push(line) })
+
+    await runPlaywrightList({ configFile, cwd: '/proj', spawn, debug })
+
+    const record = logs.find((line) => line.includes('event=listing-failed'))!
+    expect(record).toContain('line-199')
+    expect(record).not.toContain('line-0-')
+    expect(record.length).toBeLessThan(2600)
+  })
+
+  test('with debug off a failed listing records nothing', async () => {
+    const { spawn } = createFakeSpawn({ stdout: 'not json at all', stderr: 'boom', exitCode: 1 })
+    const logs: string[] = []
+    const debug = createDebugLogger({ enabled: false, sink: (line): void => void logs.push(line) })
+
+    await runPlaywrightList({ configFile, cwd: '/proj', spawn, debug })
+
+    expect(logs).toEqual([])
   })
 
   test('malformed stdout is a parse failure', async () => {

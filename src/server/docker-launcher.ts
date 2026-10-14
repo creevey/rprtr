@@ -66,6 +66,8 @@ export interface DockerLauncherOptions {
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
   /** Server-side debug channel: container env, diagnostics records, and retention. */
   debug?: DebugLogger
+  /** Injectable mount-existence seam for debug records; defaults to the host filesystem. */
+  fileExists?: (path: string) => boolean
 }
 
 export { DockerUnavailableError }
@@ -89,6 +91,7 @@ interface PrepareDeps {
   readProjectPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
   readConfigSummary?: (cwd: string) => Promise<DockerConfigSummary | null>
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
+  debug?: DebugLogger
 }
 
 function defaultWarn(message: string): void {
@@ -132,6 +135,7 @@ async function prepareDocker(
     readProjectPins: deps.readProjectPins,
     readConfigSummary: deps.readConfigSummary,
     browserExecutablePaths: deps.browserExecutablePaths,
+    debug: deps.debug,
   })
 
   state.command = resolveContainerCommand({
@@ -165,6 +169,7 @@ interface LauncherDeps {
   probeHostService?: Partial<HostServiceProbe>
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
   debug?: DebugLogger
+  fileExists?: (path: string) => boolean
 }
 
 function createState(docker?: DockerOptions): LauncherState {
@@ -197,6 +202,7 @@ function prepareLauncher(
       readProjectPins: deps.readProjectPins,
       readConfigSummary: deps.readConfigSummary,
       browserExecutablePaths: deps.browserExecutablePaths,
+      debug: deps.debug,
     },
     onProgress,
   ).catch((error: unknown) => {
@@ -241,6 +247,7 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
         warn: deps.warn,
         platform: deps.platform,
         debug: deps.debug,
+        fileExists: deps.fileExists,
       })
       return {
         cmd: 'docker',
@@ -272,5 +279,6 @@ export function createDockerLauncher(options: DockerLauncherOptions): RunLaunche
     probeHostService: options.probeHostService,
     browserExecutablePaths: options.browserExecutablePaths,
     debug: options.debug,
+    fileExists: options.fileExists,
   })
 }

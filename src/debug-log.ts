@@ -67,3 +67,83 @@ export function resolveDebugSettings(input: DebugSettingsInput = {}): DebugLogge
       }),
   })
 }
+
+/** Fixed, documented allowlist of environment names whose values may be recorded. */
+const ENV_VALUE_ALLOWLIST = new Set(['CI', 'DEBUG', 'NODE_ENV', 'NODE_OPTIONS'])
+
+/** Prefix covering rprtr's own controls, whose values are safe to record. */
+const ENV_VALUE_PREFIX = 'CRVY_RPRTR_'
+
+/** Credential-shaped name fragments whose values must never be recorded. */
+const CREDENTIAL_NAME_PATTERN = /(?:TOKEN|SECRET|KEY|PASSWORD|AUTH)/i
+
+const isValueAllowlisted = (name: string): boolean => {
+  const upper = name.toUpperCase()
+  return upper.startsWith(ENV_VALUE_PREFIX) || ENV_VALUE_ALLOWLIST.has(upper)
+}
+
+/** Masks URL userinfo and credential-shaped query parameter values. */
+function maskUrlSecrets(value: string): string {
+  return value
+    .replace(/(\/\/)[^/\s@]+@/g, '$1***@')
+    .replace(/([?&][^=&#\s]*(?:TOKEN|SECRET|KEY|PASSWORD|AUTH)[^=&#\s]*=)[^&#\s]*/gi, '$1***')
+}
+
+/** One environment variable as it appears in a record: the name, and a value only when allowed. */
+export interface RedactedEnvEntry {
+  name: string
+  value?: string
+}
+
+/**
+ * Applies the redaction contract per environment variable: every name is
+ * recorded, values only for the fixed allowlist, never for credential-shaped
+ * names, and recorded values get URL userinfo and token-shaped query
+ * parameters masked.
+ */
+export function redactEnvironment(env: Record<string, string | undefined>): RedactedEnvEntry[] {
+  const entries: RedactedEnvEntry[] = []
+  for (const [name, value] of Object.entries(env)) {
+    if (value === undefined) continue
+    if (CREDENTIAL_NAME_PATTERN.test(name) || !isValueAllowlisted(name)) {
+      entries.push({ name })
+      continue
+    }
+    entries.push({ name, value: maskUrlSecrets(value) })
+  }
+  return entries
+}
+
+/** Renders the launch-environment record form: `NAME=value` for allowed values, bare names otherwise. */
+export function formatEnvironment(env: Record<string, string | undefined>): string {
+  return redactEnvironment(env)
+    .map((entry) => (entry.value === undefined ? entry.name : `${entry.name}=${entry.value}`))
+    .join(' ')
+}
+
+/** Scalar field values a record can carry. */
+export type DebugValue = string | number | boolean
+
+/**
+ * Caps a captured excerpt (listing stderr) at the last line boundary within
+ * `limit` characters, keeping the tail where failures state their cause.
+ */
+export function boundExcerpt(text: string, limit = 2048): string {
+  if (text.length <= limit) return text
+  const tail = text.slice(text.length - limit)
+  const firstNewline = tail.indexOf('\n')
+  return firstNewline === -1 ? tail : tail.slice(firstNewline + 1)
+}
+
+const needsQuoting = (value: string): boolean => value === '' || /\s/.test(value)
+
+/** Shared `key=value` record shape: `[prefix] key=value key2=value2`, quoting values with whitespace. */
+export function formatRecord(prefix: string, fields: Record<string, DebugValue | undefined>): string {
+  const pairs: string[] = []
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined) continue
+    const text = String(value)
+    pairs.push(`${key}=${needsQuoting(text) ? JSON.stringify(text) : text}`)
+  }
+  return pairs.length === 0 ? `[${prefix}]` : `[${prefix}] ${pairs.join(' ')}`
+}

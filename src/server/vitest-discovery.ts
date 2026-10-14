@@ -7,7 +7,7 @@ import { safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { browserLabelFromProjectName, relativeFileTokens } from '../vitest-helpers.ts'
 import { DISCOVERED_ID_PREFIX } from './discovered-tests.ts'
-import { createRealListSpawn, type ListResult, type ListSpawn } from './list-spawn.ts'
+import { createListDiagnostics, createRealListSpawn, type ListResult, type ListSpawn } from './list-spawn.ts'
 import { resolveLocalCommand } from './run-launcher.ts'
 
 export interface VitestListEntry {
@@ -70,18 +70,16 @@ export function runVitestList(options: RunVitestListOptions): Promise<ListResult
   const { configFile, cwd, timeoutMs = DEFAULT_VITEST_LIST_TIMEOUT_MS } = options
   const spawnFn = options.spawn ?? createRealListSpawn()
   const { cmd, args } = resolveLocalCommand('vitest', ['list', '--json', '--config', configFile])
-
   return new Promise<ListResult<VitestListEntry>>((resolve) => {
-    let stdout = ''
     let settled = false
     let killTimer: ReturnType<typeof setTimeout> | undefined
+    const diagnostics = createListDiagnostics({ debug: options.debug, prefix: 'VitestList', cmd, args, cwd })
     const finish = (result: ListResult<VitestListEntry>): void => {
       if (settled) return
       settled = true
       if (killTimer !== undefined) clearTimeout(killTimer)
       resolve(result)
     }
-
     const child = spawnFn(cmd, args, {
       cwd,
       env: {
@@ -91,22 +89,28 @@ export function runVitestList(options: RunVitestListOptions): Promise<ListResult
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    child.stdout.on('data', (chunk: string | Buffer) => {
-      stdout += typeof chunk === 'string' ? chunk : chunk.toString()
-    })
+    diagnostics.attach(child)
     child.on('error', () => {
+      diagnostics.emitFailure('spawn')
       finish({ ok: false, reason: 'spawn' })
     })
     child.on('close', (code) => {
       if (code !== 0) {
+        diagnostics.emitFailure('exit', code)
         finish({ ok: false, reason: 'exit' })
         return
       }
-      const entries = parseVitestListStdout(stdout)
-      finish(entries === null ? { ok: false, reason: 'parse' } : { ok: true, entries })
+      const entries = parseVitestListStdout(diagnostics.stdout())
+      if (entries === null) {
+        diagnostics.emitFailure('parse', code)
+        finish({ ok: false, reason: 'parse' })
+        return
+      }
+      finish({ ok: true, entries })
     })
     killTimer = setTimeout(() => {
       child.kill('SIGKILL')
+      diagnostics.emitFailure('timeout')
       finish({ ok: false, reason: 'timeout' })
     }, timeoutMs)
   })

@@ -106,6 +106,22 @@ describe('buildBrowserSidecarRunArgs', () => {
     })
     expect(args).toContain('CRVY_RPRTR_DEBUG=1')
   })
+
+  test('debug mode records the sidecar container details and mount existence', () => {
+    const logs: string[] = []
+    buildBrowserSidecarRunArgs({
+      ...base,
+      docker: { platform: 'linux/amd64' },
+      fileExists: (path) => path === base.cwd,
+      debug: createDebugLogger({ enabled: true, sink: (line): void => void logs.push(line) }),
+    })
+    const record = logs.find((line) => line.includes('event=container'))!
+    expect(record).toContain(`image=${base.image}`)
+    expect(record).toContain(`container=${base.containerName}`)
+    expect(record).toContain('platform=linux/amd64')
+    expect(record).toContain('/proj:exists')
+    expect(record).toContain(`${hostFontconfigPath()}:missing`)
+  })
 })
 
 describe('resolveSidecarCommand', () => {
@@ -304,6 +320,53 @@ describe('BrowserSidecar.ensure', () => {
     })
     await sidecar.ensure({ cwd: '/proj' }, noopProgress)
     expect(calls.find((call) => call[0] === 'run')).toContain(`crvy-rprtr-browser-${process.pid}`)
+  })
+})
+
+describe('BrowserSidecar debug preparation records', () => {
+  test('records each preparation phase with start and completion', async () => {
+    const { exec } = execScript({
+      info: ok,
+      'image inspect': fail,
+      pull: ok,
+      'run -d': ok,
+      'port crvy-rprtr-browser-1': { exitCode: 0, stdout: '127.0.0.1:49153\n', stderr: '' },
+    })
+    const logs: string[] = []
+    const { sidecar } = sidecarFixture({
+      exec,
+      debug: createDebugLogger({ enabled: true, sink: (line): void => void logs.push(line) }),
+    })
+
+    await sidecar.ensure({ cwd: '/proj' }, noopProgress)
+
+    const phaseLines = logs.filter((line) => line.includes('event=phase'))
+    for (const phase of ['daemon-probe', 'image-pull', 'sidecar-start', 'readiness']) {
+      expect(phaseLines.some((line) => line.includes(`phase=${phase} status=start`))).toBe(true)
+      expect(
+        phaseLines.some((line) => line.includes(`phase=${phase} status=completed`) && line.includes('durationMs=')),
+      ).toBe(true)
+    }
+  })
+
+  test('a failed readiness attempt records the phase failure', async () => {
+    const { exec } = execScript({
+      info: ok,
+      'image inspect': ok,
+      'run -d': ok,
+      'port crvy-rprtr-browser-1': { exitCode: 0, stdout: '127.0.0.1:49153\n', stderr: '' },
+    })
+    const logs: string[] = []
+    const { sidecar } = sidecarFixture({
+      exec,
+      probeTcp: () => Promise.resolve(false),
+      readinessTimeoutMs: 0,
+      debug: createDebugLogger({ enabled: true, sink: (line): void => void logs.push(line) }),
+    })
+
+    await rejectionOf(sidecar.ensure({ cwd: '/proj' }, noopProgress))
+
+    expect(logs.some((line) => line.includes('phase=readiness status=failed'))).toBe(true)
   })
 })
 

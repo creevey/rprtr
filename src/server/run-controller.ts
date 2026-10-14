@@ -1,5 +1,5 @@
 import { resolvePlaywrightVersion } from '../browser-pins.ts'
-import { DEBUG_ENV } from '../debug-log.ts'
+import { DEBUG_ENV, formatEnvironment, formatRecord } from '../debug-log.ts'
 import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import { BROWSER_WS_ENV } from './browser-sidecar.ts'
@@ -20,7 +20,7 @@ import type {
   StartResult,
   StopResult,
 } from './run-controller-types.ts'
-import { type RunLauncher } from './run-launcher.ts'
+import type { RunLauncher, LaunchSpec } from './run-launcher.ts'
 import { prepareRunForContext } from './run-preparation.ts'
 import { createRealSpawn, createRealTimers } from './run-process.ts'
 import { emitExitRecord, emitLog, emitWarn, renderLaunchRecord } from './run-records.ts'
@@ -144,6 +144,24 @@ export class RunController {
     })
   }
 
+  /**
+   * Debug-only launch-vector record: the exact command and arguments and the
+   * child's environment names, with values only from the redaction allowlist.
+   * Emitted before the spawn so a synchronous spawn failure stays attributable.
+   */
+  private emitDebugLaunch(spec: LaunchSpec, spawnEnv: Record<string, string | undefined>): void {
+    const debug = this.deps.debug
+    if (debug?.enabled !== true) return
+    debug.log(
+      formatRecord('RunController', {
+        event: 'launch',
+        cmd: spec.cmd,
+        args: spec.args.join(' '),
+        env: formatEnvironment(spawnEnv),
+      }),
+    )
+  }
+
   start(filters: RunFilters): StartResult {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: false, reason: 'no-config' }
@@ -171,6 +189,7 @@ export class RunController {
     emitLog(this.deps, renderLaunchRecord(mode, ctx, filters, spec, tests))
     const startedAt = (this.deps.now ?? Date.now)()
     const spawnEnv = this.deps.debug?.enabled === true ? { ...spec.env, [DEBUG_ENV]: '1' } : spec.env
+    this.emitDebugLaunch(spec, spawnEnv)
     let child: ChildProcessLike
     try {
       child = this.deps.spawn(spec.cmd, spec.args, { cwd: ctx.cwd, env: spawnEnv, stdio: 'inherit' })

@@ -15,15 +15,15 @@
 
 ## 3. Debug records
 
-- [ ] 3.1 Write failing tests for the redaction helper (`tests/debug-redact.test.ts`): allowlisted names carry values, credential-shaped names never do, URL userinfo and token-shaped query parameters are masked. Verify: `bun run build && cd tests && bun test debug-redact.test.ts` (new cases fail).
-- [ ] 3.2 Implement the redaction helper and the shared `key=value` record formatter in `src/debug-log.ts` (or a sibling module). Verify: task 3.1 tests pass.
-- [ ] 3.3 Write failing tests that a debug run records the exact command and arguments and the environment names (allowlisted values only), for Playwright and Vitest contexts. Verify: `cd tests && bun test run-controller.test.ts` (new cases fail).
-- [ ] 3.4 Implement the launch-vector record in `RunController.start` through the injected debug sink. Verify: task 3.3 tests pass.
-- [ ] 3.5 Write failing tests that a container launch record names image, container, pinned platform, and each bind-mount source with existence at launch. Verify: `cd tests && bun test docker-launcher.test.ts` (new cases fail).
-- [ ] 3.6 Implement container-detail records at the container-vector builder (post-refactor: the sidecar launch path). Verify: task 3.5 tests pass.
-- [ ] 3.7 Write failing tests that preparation phases (probe, pull, sidecar start, readiness) are recorded with start/completion, using fake docker execs. Verify: `cd tests && bun test browser-sidecar.test.ts` (new cases fail).
-- [ ] 3.8 Implement preparation-phase records in the launcher/sidecar preparation path. Verify: task 3.7 tests pass.
-- [ ] 3.9 Write failing tests that a failed listing records command, reason, exit code, and a bounded stderr excerpt; then implement it in `readPlaywrightListOutcome`/the Vitest equivalent, threading the debug sink through discovery. Verify: `cd tests && bun test playwright-discovery.test.ts vitest-discovery.test.ts`.
+- [x] 3.1 Write failing tests for the redaction helper (`tests/debug-redact.test.ts`): allowlisted names carry values, credential-shaped names never do, URL userinfo and token-shaped query parameters are masked. Verify: `bun run build && cd tests && bun test debug-redact.test.ts` (new cases fail).
+- [x] 3.2 Implement the redaction helper and the shared `key=value` record formatter in `src/debug-log.ts` (or a sibling module). Verify: task 3.1 tests pass.
+- [x] 3.3 Write failing tests that a debug run records the exact command and arguments and the environment names (allowlisted values only), for Playwright and Vitest contexts. Verify: `cd tests && bun test run-controller.test.ts` (new cases fail).
+- [x] 3.4 Implement the launch-vector record in `RunController.start` through the injected debug sink. Verify: task 3.3 tests pass.
+- [x] 3.5 Write failing tests that a container launch record names image, container, pinned platform, and each bind-mount source with existence at launch. Verify: `cd tests && bun test docker-launcher.test.ts` (new cases fail).
+- [x] 3.6 Implement container-detail records at the container-vector builder (post-refactor: the sidecar launch path). Verify: task 3.5 tests pass.
+- [x] 3.7 Write failing tests that preparation phases (probe, pull, sidecar start, readiness) are recorded with start/completion, using fake docker execs. Verify: `cd tests && bun test browser-sidecar.test.ts` (new cases fail).
+- [x] 3.8 Implement preparation-phase records in the launcher/sidecar preparation path. Verify: task 3.7 tests pass.
+- [x] 3.9 Write failing tests that a failed listing records command, reason, exit code, and a bounded stderr excerpt; then implement it in `readPlaywrightListOutcome`/the Vitest equivalent, threading the debug sink through discovery. Verify: `cd tests && bun test playwright-discovery.test.ts vitest-discovery.test.ts`.
 
 ## 4. Child output capture
 

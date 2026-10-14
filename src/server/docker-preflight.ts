@@ -1,4 +1,5 @@
 import { checkDockerPins, type PinBrowser, type ResolvedProjectPin } from '../browser-pins.ts'
+import type { DebugLogger } from '../debug-log.ts'
 import { resolveBrowserExecutablePaths } from '../playwright-install.ts'
 import {
   parseProjectPinsFromListReport,
@@ -29,6 +30,8 @@ export interface DockerPinPreflightDeps {
    */
   readConfigSummary?: (cwd: string) => Promise<DockerConfigSummary | null>
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
+  /** Server-side debug channel for pin-preflight listing records. */
+  debug?: DebugLogger
 }
 
 /** Diagnostics must not fail the preflight: an unreadable summary degrades to null. */
@@ -70,9 +73,10 @@ export async function assertDockerPinsSatisfied(deps: DockerPinPreflightDeps): P
     const readPins = deps.readProjectPins
     if (deps.readConfigSummary !== undefined) {
       config = await readConfigSummarySafe(deps.readConfigSummary, deps.cwd)
-      projects = readPins === undefined ? await readProjectPinsFromConfig(deps.cwd) : await readPins(deps.cwd)
+      projects =
+        readPins === undefined ? await readProjectPinsFromConfig(deps.cwd, deps.debug) : await readPins(deps.cwd)
     } else if (readPins === undefined) {
-      const listed = await readPlaywrightListWithConfig(deps.cwd)
+      const listed = await readPlaywrightListWithConfig(deps.cwd, { debug: deps.debug })
       config = listed.config
       projects = listed.report === null ? [] : parseProjectPinsFromListReport(listed.report)
     } else {

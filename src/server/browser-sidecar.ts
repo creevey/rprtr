@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { connect } from 'node:net'
 
-import type { DebugLogger } from '../debug-log.ts'
+import { formatRecord, type DebugLogger } from '../debug-log.ts'
 import { resolvePlaywrightVersion } from '../playwright-install.ts'
 import { type DockerOptions } from './docker-launcher.ts'
 import { buildBrowserSidecarRunArgs, resolveSidecarCommand } from './docker-run-args.ts'
@@ -15,6 +14,7 @@ import {
   resolveDockerImage,
   type DockerExec,
 } from './docker-support.ts'
+import { resolvePublishedPort, tcpProbe, waitForEndpoint } from './sidecar-readiness.ts'
 
 /** Env var a project's Vitest config reads to point the playwright provider at a remote browser. */
 export const BROWSER_WS_ENV = 'CRVY_RPRTR_BROWSER_WS'
@@ -36,63 +36,40 @@ export function hasBrowserEndpointHook(configFile: string): boolean {
   }
 }
 
-/** Module-private: bound for a single readiness TCP connect before counting it as failed. */
-const READINESS_CONNECT_TIMEOUT_MS = 1000
-
 const READINESS_TIMEOUT_MS = 15000
 const READINESS_INTERVAL_MS = 250
 
-function tcpProbe(host: string, port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = connect({ host, port })
-    const finish = (ok: boolean): void => {
-      socket.destroy()
-      resolve(ok)
-    }
-    socket.setTimeout(READINESS_CONNECT_TIMEOUT_MS, () => {
-      finish(false)
-    })
-    socket.once('connect', () => {
-      finish(true)
-    })
-    socket.once('error', () => {
-      finish(false)
-    })
-  })
-}
-
-/** Resolves the host port docker published for the sidecar's container port. */
-async function resolvePublishedPort(
-  exec: DockerExec,
-  containerName: string,
-  containerPort: number,
-): Promise<number | null> {
-  const result = await exec(['port', containerName, String(containerPort)])
-  if (result.exitCode !== 0) return null
-  for (const line of result.stdout.split('\n')) {
-    const trimmed = line.trim()
-    const index = trimmed.lastIndexOf(':')
-    if (index === -1) continue
-    const port = Number(trimmed.slice(index + 1))
-    if (Number.isInteger(port) && port > 0 && port <= 65535) return port
+/**
+ * Debug-only preparation-phase record: emits start, then completed or failed
+ * with the elapsed time. With debug off the wrapped work runs untouched, so
+ * the preparation path is byte-identical.
+ */
+async function runPhase<T>(debug: DebugLogger | undefined, name: string, run: () => Promise<T>): Promise<T> {
+  if (debug?.enabled !== true) return run()
+  const startedAt = Date.now()
+  debug.log(formatRecord('BrowserSidecar', { event: 'phase', phase: name, status: 'start' }))
+  try {
+    const result = await run()
+    debug.log(
+      formatRecord('BrowserSidecar', {
+        event: 'phase',
+        phase: name,
+        status: 'completed',
+        durationMs: Date.now() - startedAt,
+      }),
+    )
+    return result
+  } catch (error) {
+    debug.log(
+      formatRecord('BrowserSidecar', {
+        event: 'phase',
+        phase: name,
+        status: 'failed',
+        durationMs: Date.now() - startedAt,
+      }),
+    )
+    throw error
   }
-  return null
-}
-
-/** Probes until the endpoint answers or the timeout elapses; injectable sleep keeps tests instant. */
-function waitForEndpoint(input: {
-  probe: () => Promise<boolean>
-  timeoutMs: number
-  intervalMs: number
-  sleep: (ms: number) => Promise<void>
-}): Promise<boolean> {
-  const attempt = async (waited: number): Promise<boolean> => {
-    if (await input.probe()) return true
-    if (waited >= input.timeoutMs) return false
-    await input.sleep(input.intervalMs)
-    return attempt(waited + input.intervalMs)
-  }
-  return attempt(0)
 }
 
 export interface BrowserSidecar {
@@ -174,9 +151,11 @@ async function ensureSidecarImage(
   }
   if (!(await isDockerImagePresent(deps.exec, image))) {
     onProgress('pulling')
-    if (!(await pullDockerImage(deps.exec, image))) {
-      throw new Error(`Failed to pull docker image: ${image}`)
-    }
+    await runPhase(deps.debug, 'image-pull', async () => {
+      if (!(await pullDockerImage(deps.exec, image))) {
+        throw new Error(`Failed to pull docker image: ${image}`)
+      }
+    })
   }
   return image
 }
@@ -194,36 +173,41 @@ async function startSidecar(
   version: string | null,
 ): Promise<StartedSidecar> {
   const command = resolveSidecarCommand({ cwd: ctx.cwd, version, fileExists: deps.fileExists })
-  await forceRemoveContainer(deps.exec, deps.containerName)
-  const result = await deps.exec(
-    buildBrowserSidecarRunArgs({
-      cwd: ctx.cwd,
-      image,
-      containerName: deps.containerName,
-      command,
-      port: deps.containerPort,
-      docker: deps.docker,
-      debug: deps.debug,
-    }),
-  )
-  if (result.exitCode !== 0) {
-    throw new Error(`Failed to start the browser sidecar: ${result.stderr.trim() || `exit code ${result.exitCode}`}`)
-  }
-  const port = await resolvePublishedPort(deps.exec, deps.containerName, deps.containerPort)
-  if (port === null) {
-    await forceRemoveContainer(deps.exec, deps.containerName)
-    throw new DockerUnavailableError()
-  }
-  const ready = await waitForEndpoint({
-    probe: () => deps.probeTcp('127.0.0.1', port),
-    timeoutMs: deps.readinessTimeoutMs,
-    intervalMs: deps.readinessIntervalMs,
-    sleep: deps.sleep,
+  const runArgs = buildBrowserSidecarRunArgs({
+    cwd: ctx.cwd,
+    image,
+    containerName: deps.containerName,
+    command,
+    port: deps.containerPort,
+    docker: deps.docker,
+    debug: deps.debug,
+    fileExists: deps.fileExists,
   })
-  if (!ready) {
+  const port = await runPhase(deps.debug, 'sidecar-start', async () => {
     await forceRemoveContainer(deps.exec, deps.containerName)
-    throw new DockerUnavailableError()
-  }
+    const result = await deps.exec(runArgs)
+    if (result.exitCode !== 0) {
+      throw new Error(`Failed to start the browser sidecar: ${result.stderr.trim() || `exit code ${result.exitCode}`}`)
+    }
+    const publishedPort = await resolvePublishedPort(deps.exec, deps.containerName, deps.containerPort)
+    if (publishedPort === null) {
+      await forceRemoveContainer(deps.exec, deps.containerName)
+      throw new DockerUnavailableError()
+    }
+    return publishedPort
+  })
+  await runPhase(deps.debug, 'readiness', async () => {
+    const ready = await waitForEndpoint({
+      probe: () => deps.probeTcp('127.0.0.1', port),
+      timeoutMs: deps.readinessTimeoutMs,
+      intervalMs: deps.readinessIntervalMs,
+      sleep: deps.sleep,
+    })
+    if (!ready) {
+      await forceRemoveContainer(deps.exec, deps.containerName)
+      throw new DockerUnavailableError()
+    }
+  })
   return { endpoint: `ws://127.0.0.1:${port}/`, port }
 }
 
@@ -250,7 +234,8 @@ export function createBrowserSidecar(options: BrowserSidecarOptions = {}): Brows
       return resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
     },
     async ensure(ctx, onProgress): Promise<string> {
-      if (!(await probeDockerDaemon(deps.exec))) throw new DockerUnavailableError()
+      const daemonUp = await runPhase(deps.debug, 'daemon-probe', () => probeDockerDaemon(deps.exec))
+      if (!daemonUp) throw new DockerUnavailableError()
       if (endpoint !== undefined && publishedPort !== undefined && (await deps.probeTcp('127.0.0.1', publishedPort))) {
         return endpoint
       }

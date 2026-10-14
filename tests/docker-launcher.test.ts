@@ -229,6 +229,51 @@ describe('DockerLauncher.launch', () => {
     expect(args).toContain('CRVY_RPRTR_DEBUG=1')
   })
 
+  test('debug mode records image, container, platform, and mount existence', async () => {
+    const logs: string[] = []
+    const { launcher } = makeLauncher({
+      docker: { platform: 'linux/amd64' },
+      fileExists: () => true,
+      debug: createDebugLogger({ enabled: true, sink: (line): void => void logs.push(line) }),
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    launcher.launch({ ctx: CTX, playwrightArgs: ['test'] })
+
+    const record = logs.find((line) => line.includes('event=container'))!
+    expect(record).toContain('image=mcr.microsoft.com/playwright:v1.59.0-noble')
+    expect(record).toContain('container=test-container')
+    expect(record).toContain('platform=linux/amd64')
+    expect(record).toContain('/proj:exists')
+    expect(record).toContain(`${hostFontconfigPath()}:exists`)
+  })
+
+  test('a missing bind-mount source is marked missing at launch', async () => {
+    const logs: string[] = []
+    const { launcher } = makeLauncher({
+      fileExists: (path) => path === '/proj',
+      debug: createDebugLogger({ enabled: true, sink: (line): void => void logs.push(line) }),
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    launcher.launch({ ctx: CTX, playwrightArgs: ['test', '--test-list', '/tmp/crvy/list.txt'] })
+
+    const record = logs.find((line) => line.includes('event=container'))!
+    expect(record).toContain('/tmp/crvy/list.txt:missing')
+  })
+
+  test('with debug off no container record is emitted', async () => {
+    const logs: string[] = []
+    const { launcher } = makeLauncher({
+      debug: createDebugLogger({ enabled: false, sink: (line): void => void logs.push(line) }),
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    launcher.launch({ ctx: CTX, playwrightArgs: ['test'] })
+
+    expect(logs).toEqual([])
+  })
+
   test('with debug off the container vector carries no CRVY_RPRTR_DEBUG', async () => {
     const { launcher } = makeLauncher()
     await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })

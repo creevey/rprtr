@@ -645,6 +645,53 @@ describe('RunController debug propagation', () => {
   })
 })
 
+describe('RunController debug launch record', () => {
+  test('records the exact command, arguments, and redacted environment for Playwright', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setResolveLaunch(() => ({
+      cmd: 'pnpm',
+      args: ['exec', 'playwright', 'test', '--config', '/proj/playwright.config.ts'],
+    }))
+    f.setLaunchEnv({
+      CI: '1',
+      NODE_OPTIONS: '--max-old-space-size=4096',
+      GITHUB_TOKEN: 'ghp_sentinel_value',
+      STUB_ENV: 'sentinel-env-value',
+    })
+    f.setDebugEnabled(true)
+
+    f.controller.start({})
+
+    const record = f.debugLogs.find((line) => line.includes('event=launch'))!
+    expect(record).toContain('cmd=pnpm')
+    expect(record).toContain('args="exec playwright test --config /proj/playwright.config.ts"')
+    expect(record).toContain('CI=1')
+    expect(record).toContain('NODE_OPTIONS=--max-old-space-size=4096')
+    expect(record).toContain('GITHUB_TOKEN')
+    expect(record).not.toContain('ghp_sentinel_value')
+    expect(record).toContain('STUB_ENV')
+    expect(record).not.toContain('sentinel-env-value')
+    expect(record).toContain('CRVY_RPRTR_DEBUG=1')
+  })
+
+  test('records the launch vector for Vitest contexts', () => {
+    const f = createFixture(VITEST_CTX)
+    f.setDebugEnabled(true)
+
+    f.controller.start({})
+
+    const record = f.debugLogs.find((line) => line.includes('event=launch'))!
+    expect(record).toContain('cmd=npx')
+    expect(record).toContain('args="vitest run --config /proj/vitest.config.ts"')
+  })
+
+  test('emits no launch record with debug off', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    expect(f.debugLogs).toEqual([])
+  })
+})
+
 describe('RunController.start Vitest docker scoping', () => {
   test('explicit docker with the hook spawns local vitest with the sidecar endpoint', async () => {
     const f = createFixture(VITEST_CTX)

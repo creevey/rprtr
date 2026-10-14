@@ -9,7 +9,7 @@ import {
   type DockerConfigSummary,
 } from './server/config-dump.ts'
 import { stripCi } from './server/docker-env.ts'
-import { createRealListSpawn, type ListFailure, type ListSpawn } from './server/list-spawn.ts'
+import { createListDiagnostics, createRealListSpawn, type ListFailure, type ListSpawn } from './server/list-spawn.ts'
 import { resolveLocalCommand } from './server/run-launcher.ts'
 
 const LIST_TIMEOUT_MS = 60_000
@@ -85,20 +85,47 @@ export function readPlaywrightListOutcome(
   const listArgs = ['test', '--list', `--reporter=${reporter}`]
   if (options.configFile !== undefined) listArgs.push('--config', options.configFile)
   const { cmd, args } = resolveLocalCommand('playwright', listArgs)
-  const spawnFn = options.spawn ?? createRealListSpawn()
-  const timeoutMs = options.timeoutMs ?? LIST_TIMEOUT_MS
   const spawnOpts: Record<string, unknown> = { cwd, stdio: ['ignore', 'pipe', 'pipe'] }
-  if (options.env !== undefined || options.baseEnv !== undefined || options.debug?.enabled === true) {
-    spawnOpts.env = {
-      ...(options.baseEnv ?? process.env),
-      ...options.env,
-      ...(options.debug?.enabled === true ? { [DEBUG_ENV]: '1' } : {}),
-    }
-  }
+  const env = resolveListSpawnEnv(options)
+  if (env !== undefined) spawnOpts.env = env
+  return spawnPlaywrightList({
+    cmd,
+    args,
+    cwd,
+    spawnOpts,
+    spawnFn: options.spawn ?? createRealListSpawn(),
+    timeoutMs: options.timeoutMs ?? LIST_TIMEOUT_MS,
+    debug: options.debug,
+  })
+}
 
+/** The listing environment: the caller's merge plus the debug activation when enabled. */
+function resolveListSpawnEnv(options: ReadPlaywrightListOptions): Record<string, string | undefined> | undefined {
+  if (options.env === undefined && options.baseEnv === undefined && options.debug?.enabled !== true) {
+    return undefined
+  }
+  return {
+    ...(options.baseEnv ?? process.env),
+    ...options.env,
+    ...(options.debug?.enabled === true ? { [DEBUG_ENV]: '1' } : {}),
+  }
+}
+
+interface PlaywrightListRunInput {
+  cmd: string
+  args: string[]
+  cwd: string
+  spawnOpts: Record<string, unknown>
+  spawnFn: ListSpawn
+  timeoutMs: number
+  debug?: DebugLogger
+}
+
+function spawnPlaywrightList(input: PlaywrightListRunInput): Promise<PlaywrightListOutcome> {
+  const { cmd, args, cwd, spawnOpts, spawnFn, timeoutMs, debug } = input
   return new Promise((resolve) => {
-    let stdout = ''
     let settled = false
+    const diagnostics = createListDiagnostics({ debug, prefix: 'PlaywrightList', cmd, args, cwd })
     const child = spawnFn(cmd, args, spawnOpts)
     const finish = (value: PlaywrightListOutcome): void => {
       if (settled) return
@@ -108,21 +135,27 @@ export function readPlaywrightListOutcome(
     }
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
+      diagnostics.emitFailure('timeout')
       finish({ report: null, failure: 'timeout' })
     }, timeoutMs)
-    child.stdout.on('data', (chunk: string | Buffer) => {
-      stdout += typeof chunk === 'string' ? chunk : chunk.toString()
-    })
+    diagnostics.attach(child)
     child.on('error', () => {
+      diagnostics.emitFailure('spawn')
       finish({ report: null, failure: 'spawn' })
     })
     child.on('close', (code) => {
-      const report = parseListReport(stdout)
+      const report = parseListReport(diagnostics.stdout())
       if (code !== 0) {
+        diagnostics.emitFailure('exit', code)
         finish({ report, failure: 'exit' })
         return
       }
-      finish(report === null ? { report: null, failure: 'parse' } : { report, failure: null })
+      if (report === null) {
+        diagnostics.emitFailure('parse', code)
+        finish({ report: null, failure: 'parse' })
+        return
+      }
+      finish({ report, failure: null })
     })
   })
 }
@@ -141,8 +174,8 @@ export async function readPlaywrightListReport(
 }
 
 /** Reads the declared browser pins from a Playwright config; [] when unresolvable. */
-export async function readProjectPinsFromConfig(cwd: string): Promise<ResolvedProjectPin[]> {
-  const report = await readPlaywrightListReport(cwd)
+export async function readProjectPinsFromConfig(cwd: string, debug?: DebugLogger): Promise<ResolvedProjectPin[]> {
+  const report = await readPlaywrightListReport(cwd, { debug })
   return report === null ? [] : parseProjectPinsFromListReport(report)
 }
 
