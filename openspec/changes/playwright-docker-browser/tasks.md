@@ -1,0 +1,34 @@
+# Tasks
+
+## 1. Backend and launch planning
+
+- [ ] 1.1 Write failing tests for the generalized launch plan in `tests/run-controller.test.ts`: a Playwright run under a docker backend resolves to the local launcher with mode `docker` and is refused with `docker-unavailable` until a sidecar endpoint has been prepared; Vitest hook/auto-downgrade/refusal behavior stays byte-identical. Verify: `bun run build && cd tests && bun test run-controller.test.ts` (new cases fail).
+- [ ] 1.2 Generalize `src/server/vitest-backend.ts` into `src/server/run-backend.ts`: backend and launch-plan resolvers take the runner kind, Playwright docker always yields the sidecar (no config-hook scan), Vitest keeps its hook contract. Verify: task 1.1 tests pass.
+- [ ] 1.3 Compose the Playwright sidecar connection in `RunController.start`: `PW_TEST_CONNECT_WS_ENDPOINT` and `PW_TEST_CONNECT_EXPOSE_NETWORK=<loopback>` from the prepared endpoint, `CRVY_RPRTR_DOCKER_IMAGE` for provenance, `CI` stripped, no `docker run` wrapper, and the injected connection takes precedence over a config-declared `use.connectOptions`. Verify: `cd tests && bun test run-controller.test.ts browser-sidecar.test.ts`.
+- [ ] 1.4 Update `src/server/launcher-resolver.ts` (and `server-factories.ts`) so docker mode selects the local launcher plus sidecar for both runners and no longer builds `containerPathMapping`; simplify `RunLauncher` by removing the launcher-level `prepare`/`diagnose`/`onForceKill`/`available` members that existed only for in-container execution. Verify: `bun run typecheck && cd tests && bun test run-controller.test.ts run-launcher.test.ts`.
+
+## 2. Preparation, preflight, and sidecar options
+
+- [ ] 2.1 Write failing tests for Playwright run preparation: `prepareRun` ensures the sidecar for a docker-mode Playwright run, broadcasts the preparation phases, and maps failures (daemon down, pull failure, readiness timeout) to `docker-unavailable`; Vitest preparation is unchanged. Verify: `bun run build && cd tests && bun test run-controller.test.ts` (new cases fail).
+- [ ] 2.2 Implement the Playwright branch in `src/server/run-preparation.ts` on the helpers from task 1.2, including the declared-pin preflight against the resolved sidecar image before the container starts. Verify: task 2.1 tests pass.
+- [ ] 2.3 Resolve the pin-preflight listing under the run's host environment: no gateway contract variables, `CI` stripped, no config-dump reporter; retire `src/server/config-dump.ts` and the dump-aware listing path while keeping `parseProjectPinsFromListReport`. Verify: `cd tests && bun test docker-preflight.test.ts playwright-discovery.test.ts` after updating/removing `config-dump.test.ts`.
+- [ ] 2.4 Move `DockerOptions`, `DOCKER_WORK_DIR`, `buildBrowserSidecarRunArgs`, and `resolveSidecarCommand` into `src/server/browser-sidecar.ts`; append `docker.extraArgs` to the sidecar invocation for both runners; remove `docker.command` from `DockerOptions` and its CLI/app wiring. Verify: `cd tests && bun test browser-sidecar.test.ts docker-support.test.ts` after updating the sidecar arg assertions.
+
+## 3. Retirement and host-path cleanup
+
+- [ ] 3.1 Write failing/updated tests asserting host-side behavior: reporter register payloads, test descriptors, and `--test-list` entries keep host paths in docker mode; `resolveBaselineSnapshotPath` no longer special-cases container paths. Verify: `bun run build && cd tests && bun test run-controller.test.ts artifact-routes.test.ts register-container-paths.test.ts` (updated expectations fail against current code).
+- [ ] 3.2 Delete the retired modules and their call sites: `src/server/docker-launcher.ts`, `docker-run-args.ts`, `docker-env.ts`, `docker-host-services.ts`, `src/docker-contract.ts`, `src/server/config-dump.ts`; remove `containerPathMapping` from routes context, handlers, `docker-support.ts` rewriting helpers, and the `pathStyle` container branch. Verify: `bun run typecheck && bun run knip` and the task 3.1 tests pass.
+- [ ] 3.3 Remove the retired divergence notices from the protocol and UI: `run-status` `notices`, `RunController` notice collection, client rendering, and related tests. Verify: `bun run build && cd tests && bun test run-controller.test.ts register-message.test.ts` plus `bun run typecheck`.
+- [ ] 3.4 Honor project-declared `snapshotPathTemplate`: the reporter falls back from its option to the resolved project template for passed-baseline display, and the register payload carries per-project templates so server-side approval/baseline resolution uses them (reporter/server options keep precedence). Verify: `cd tests && bun test artifact-routes.test.ts snapshot-path-resolver.test.ts register-message.test.ts`.
+
+## 4. Integration coverage
+
+- [ ] 4.1 Add an end-to-end case to `tests/docker-smoke.test.ts` (skipped without a daemon) that runs a docker-mode Playwright fixture against the sidecar: test process is local, connection env is set, artifacts and snapshot names are host-side. Verify: `cd tests && bun test docker-smoke.test.ts` (runs where Docker is available, otherwise skips with the existing convention).
+- [ ] 4.2 Extend `tests/docker-preflight.test.ts` for the Playwright sidecar path: drift rejects before the sidecar starts with the image tag remedy; unpinned and unverifiable projects pass. Verify: `cd tests && bun test docker-preflight.test.ts`.
+
+## 5. Docs and verification
+
+- [ ] 5.1 Rewrite `docs/docker-host-services.md` short and task-first: the default is nothing to add (connection comes from Playwright's own `PW_TEST_CONNECT_*` chain, host services run on the host), the settings that remain and where they live (`--run-mode`, `--docker-image`, `--docker-platform`, `--font-rendering`; `startServer({ docker: { image, platform, extraArgs }, fontRendering })`), and the optional `snapshotPathTemplate` migration snippet for cross-host baseline names with what it does to approval resolution. Verify: `bun run format:check` and the page reads as a task list.
+- [ ] 5.2 Update the README Docker Mode section (host-driven Playwright runs, shared sidecar, removed gateway recipe, snapshot-suffix migration, Windows note) and align `docs/docker-manual-smoke-test.md` (including replacing the `-linux` proof with the host-suffix reality) and `docs/docker-screenshot-determinism.md`. Verify: `bun run format:check` and no remaining references to `CRVY_RPRTR_DOCKER` / `CRVY_RPRTR_HOST_GATEWAY` outside migration notes.
+- [ ] 5.3 Update `src/cli.ts` help and `ServerOptions` docs for the retired entry-command option and the sidecar-only docker options. Verify: `bun run typecheck && bun run build && cd tests && bun test cli.test.ts package-surface.test.ts`.
+- [ ] 5.4 Run the full gate and browser suite: `bun run check` and `bun run test:playwright`, confirm every task above is checked off and the docs from section 5 are updated. Fix any surfaced issues before declaring the change complete.
