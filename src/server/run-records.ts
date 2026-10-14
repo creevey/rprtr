@@ -32,3 +32,25 @@ export function emitWarn(sinks: RecordSinks, message: string): void {
   if (sinks.warn === undefined) console.warn(message)
   else sinks.warn(message)
 }
+
+/**
+ * Emits the exit record for a settled child: a warning naming the terminating
+ * signal or the non-zero code, or a log line for a clean exit, always with the
+ * elapsed duration. A null code without a signal (spawn error) records nothing.
+ * The wording intentionally keeps the existing `test run exited with code <n>`
+ * phrasing so operator muscle memory keeps matching.
+ */
+export function emitExitRecord(
+  sinks: RecordSinks,
+  code: number | null,
+  signal: string | null | undefined,
+  durationMs: number,
+): void {
+  if (signal !== undefined && signal !== null) {
+    emitWarn(sinks, `[RunController] test run terminated by ${signal} (${durationMs}ms)`)
+    return
+  }
+  if (code === null) return
+  if (code === 0) emitLog(sinks, `[RunController] test run exited with code 0 (${durationMs}ms)`)
+  else emitWarn(sinks, `[RunController] test run exited with code ${code} (${durationMs}ms)`)
+}

@@ -84,6 +84,8 @@ export interface RunControllerDeps extends RecordSinks {
   browserExecutablePaths?: (cwd: string) => Record<PinBrowser, string> | null
   /** Vitest config hook scan; defaults to the textual `CRVY_RPRTR_BROWSER_WS` scan. */
   hasBrowserHook?: (configFile: string) => boolean
+  /** Clock seam for run duration records; defaults to Date.now. */
+  now?: () => number
   /** Injectable seams for the version-gated `--test-list` path (Playwright >= 1.56). */
   getPlaywrightVersion?: (cwd: string) => string | null
   writeTempFile?: (content: string) => string

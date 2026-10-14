@@ -209,6 +209,7 @@ function createFixture(
     log: (message: string): void => {
       logs.push(message)
     },
+    now: (): number => now,
   }
   const controller = new RunController(deps)
   return {
@@ -1000,6 +1001,45 @@ describe('RunController child exit', () => {
     f.child.errorEmitters.forEach((cb) => cb(new Error('ENOENT')))
     f.child.exitEmitters.forEach((cb) => cb(1))
     expect(f.notifyRunSettledCalls.value).toBe(1)
+  })
+})
+
+describe('RunController exit record', () => {
+  test('records a zero exit with the elapsed duration on the log sink', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.advanceTimer(1500)
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect(f.logs).toContain('[RunController] test run exited with code 0 (1500ms)')
+  })
+
+  test('warns on a non-zero exit naming the code and duration with the existing wording', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.advanceTimer(42)
+    f.child.exitEmitters.forEach((cb) => cb(1))
+    expect(f.warnings).toContain('[RunController] test run exited with code 1 (42ms)')
+  })
+
+  test('warns on a signal termination naming the signal and duration instead of a code', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.advanceTimer(5000)
+    f.child.exitEmitters.forEach((cb) => cb(null, 'SIGKILL'))
+    expect(f.warnings).toContain('[RunController] test run terminated by SIGKILL (5000ms)')
+    expect(f.warnings.some((line) => line.includes('exited with code'))).toBe(false)
+  })
+
+  test('measures each run from its own start time', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.advanceTimer(100)
+    f.child.exitEmitters[0]!(0)
+    f.controller.start({})
+    f.advanceTimer(250)
+    f.child.exitEmitters[1]!(0)
+    expect(f.logs).toContain('[RunController] test run exited with code 0 (100ms)')
+    expect(f.logs).toContain('[RunController] test run exited with code 0 (250ms)')
   })
 })
 

@@ -11,6 +11,8 @@ export function createRealSpawn(): SpawnLike {
   return (cmd, args, opts): ChildProcessLike => {
     const cp = spawn(cmd, args, opts)
     return {
+      // Node's own `exit` event carries (code, signal); relaying the typed
+      // listener keeps the terminating signal visible to the controller.
       on: (event, cb) => cp.on(event, cb),
       kill: (signal) => {
         const sig = KNOWN_SIGNALS[signal]

@@ -22,7 +22,7 @@ import type {
 import { type RunLauncher } from './run-launcher.ts'
 import { prepareRunForContext } from './run-preparation.ts'
 import { createRealSpawn, createRealTimers } from './run-process.ts'
-import { emitLog, emitWarn, renderLaunchRecord } from './run-records.ts'
+import { emitExitRecord, emitLog, emitWarn, renderLaunchRecord } from './run-records.ts'
 import { buildVitestArgs, resolveVitestLaunchPlan } from './vitest-backend.ts'
 
 export type {
@@ -130,6 +130,19 @@ export class RunController {
     for (const notice of notices) emitWarn(this.deps, notice)
   }
 
+  /**
+   * Registers the child lifecycle handlers. The spawn time is captured here so
+   * exit records measure the run itself, not controller uptime.
+   */
+  private watchChild(child: ChildProcessLike, startedAt: number): void {
+    child.on('exit', (code, signal) => {
+      this.handleChildExit(code, signal, startedAt)
+    })
+    child.on('error', () => {
+      this.handleChildExit(null, undefined, startedAt)
+    })
+  }
+
   start(filters: RunFilters): StartResult {
     const ctx = this.deps.getRunContext()
     if (ctx === null) return { ok: false, reason: 'no-config' }
@@ -155,6 +168,7 @@ export class RunController {
       }
     }
     emitLog(this.deps, renderLaunchRecord(mode, ctx, filters, spec, tests))
+    const startedAt = (this.deps.now ?? Date.now)()
     let child: ChildProcessLike
     try {
       child = this.deps.spawn(spec.cmd, spec.args, { cwd: ctx.cwd, env: spec.env, stdio: 'inherit' })
@@ -165,12 +179,7 @@ export class RunController {
     this.child = child
     this.childLauncher = launcher
     this.childMode = mode
-    child.on('exit', (code) => {
-      this.handleChildExit(code)
-    })
-    child.on('error', () => {
-      this.handleChildExit(null)
-    })
+    this.watchChild(child, startedAt)
     this.deps.setReportRunning(true)
     this.deps.setRunFiltered?.(filters.tests !== undefined)
     this.warnNotices(this.runNotices)
@@ -220,7 +229,7 @@ export class RunController {
     this.cleanupTempFile()
   }
 
-  private handleChildExit(code: number | null): void {
+  private handleChildExit(code: number | null, signal?: string | null, startedAt?: number): void {
     if (this.child === null) return
     if (this.sigkillTimer !== null) this.deps.timers.clearTimeout(this.sigkillTimer)
     this.sigkillTimer = null
@@ -230,7 +239,8 @@ export class RunController {
     this.childLauncher = null
     this.childMode = null
     this.cleanupTempFile()
-    if (code !== null && code !== 0) console.warn(`[RunController] test run exited with code ${code}`)
+    const endedAt = (this.deps.now ?? Date.now)()
+    emitExitRecord(this.deps, code, signal, endedAt - (startedAt ?? endedAt))
     this.deps.setReportRunning(false)
     this.deps.broadcast({ type: 'run-status', data: { running: false, mode } })
     this.deps.notifyRunSettled?.()

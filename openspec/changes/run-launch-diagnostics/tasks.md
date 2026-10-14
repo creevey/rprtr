@@ -8,8 +8,8 @@
 
 ## 2. Exit record
 
-- [ ] 2.1 Write failing tests in `tests/run-controller.test.ts`: a code-0 exit reaches the `log` sink with the elapsed duration; a non-zero exit reaches `warn` naming the code and duration while preserving the existing `test run exited with code <n>` wording; a signal termination reaches `warn` naming the signal; duration is driven by an injected `now` seam. Verify: `bun run build && cd tests && bun test run-controller.test.ts` (new cases fail).
-- [ ] 2.2 Extend the `ChildProcessLike` `exit` callback to carry an optional signal, forward Node's real signal in `createRealSpawn()` (`src/server/run-process.ts`), add the optional `now` dependency, and implement both exit-record branches in `handleChildExit`. Verify: task 2.1 tests pass; `cd tests && bun test run-controller.test.ts run-process.test.ts` (or the covering suite for `run-process`).
+- [x] 2.1 Write failing tests in `tests/run-controller.test.ts`: a code-0 exit reaches the `log` sink with the elapsed duration; a non-zero exit reaches `warn` naming the code and duration while preserving the existing `test run exited with code <n>` wording; a signal termination reaches `warn` naming the signal; duration is driven by an injected `now` seam. Verify: `bun run build && cd tests && bun test run-controller.test.ts` (new cases fail).
+- [x] 2.2 Extend the `ChildProcessLike` `exit` callback to carry an optional signal, forward Node's real signal in `createRealSpawn()` (`src/server/run-process.ts`), add the optional `now` dependency, and implement both exit-record branches in `handleChildExit`. Verify: task 2.1 tests pass; `cd tests && bun test run-controller.test.ts run-process.test.ts` (or the covering suite for `run-process`).
 
 ## 3. Invariants and gate
 
