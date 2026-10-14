@@ -37,6 +37,11 @@ export interface RunLauncher {
   launch(params: LaunchParams): LaunchSpec
   /** Docker: best-effort removal of the named container on the SIGKILL path. */
   onForceKill?(): void
+  /**
+   * Docker debug retention: called before each spawn so a retained container
+   * whose name this launch reuses is removed first. Absent when retention is off.
+   */
+  beforeLaunch?(): Promise<void>
 }
 
 /**

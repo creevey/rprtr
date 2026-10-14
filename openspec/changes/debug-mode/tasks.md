@@ -32,11 +32,11 @@
 
 ## 5. Retention and sidecar evidence
 
-- [ ] 5.1 Write failing tests: debug container vectors omit `--rm` and carry the debug label; a stale debug container is force-removed before a launch reusing its name; debug-off vectors are byte-identical to today. Verify: `bun run build && cd tests && bun test docker-launcher.test.ts browser-sidecar.test.ts` (new cases fail).
-- [ ] 5.2 Implement debug retention (args, label, stale-removal) at the container-vector builders. Verify: task 5.1 tests pass.
-- [ ] 5.3 Write failing tests in `tests/browser-sidecar.test.ts`: a readiness failure records image, name, inspect state, and a bounded log tail before force-removal; debug retains the container; an already-removed container still fails as `docker-unavailable`. Verify: `cd tests && bun test browser-sidecar.test.ts` (new cases fail).
-- [ ] 5.4 Implement sidecar evidence capture before removal and debug retention. Verify: task 5.3 tests pass.
-- [ ] 5.5 Extend the Docker-gated integration coverage: a debug-mode run records its launch vector, and an induced failure retains a labeled container with recorded inspect commands. Verify: `CRVY_DOCKER_SMOKE=1 cd tests && bun test docker-smoke.test.ts` (skips without a daemon, per the existing convention).
+- [x] 5.1 Write failing tests: debug container vectors omit `--rm` and carry the debug label; a stale debug container is force-removed before a launch reusing its name; debug-off vectors are byte-identical to today. Verify: `bun run build && cd tests && bun test docker-launcher.test.ts browser-sidecar.test.ts` (new cases fail).
+- [x] 5.2 Implement debug retention (args, label, stale-removal) at the container-vector builders. Verify: task 5.1 tests pass.
+- [x] 5.3 Write failing tests in `tests/browser-sidecar.test.ts`: a readiness failure records image, name, inspect state, and a bounded log tail before force-removal; debug retains the container; an already-removed container still fails as `docker-unavailable`. Verify: `cd tests && bun test browser-sidecar.test.ts` (new cases fail).
+- [x] 5.4 Implement sidecar evidence capture before removal and debug retention. Verify: task 5.3 tests pass.
+- [x] 5.5 Extend the Docker-gated integration coverage: a debug-mode run records its launch vector, and an induced failure retains a labeled container with recorded inspect commands. Verify: `CRVY_DOCKER_SMOKE=1 cd tests && bun test docker-smoke.test.ts` (skips without a daemon, per the existing convention).
 
 ## 6. Invariants, docs, and gate
 

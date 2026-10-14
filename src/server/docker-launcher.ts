@@ -215,6 +215,34 @@ function prepareLauncher(
   return state.prepared
 }
 
+/** Resolves one run's docker vector: image, args, host env, and container diagnostics. */
+function buildLaunchSpec(state: LauncherState, deps: LauncherDeps, params: LaunchParams): LaunchSpec {
+  const { ctx, playwrightArgs } = params
+  const image = state.image ?? resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
+  if (image === null) {
+    throw new Error('Could not resolve the docker image; run prepare() first or set docker.image.')
+  }
+  const args = buildDockerRunArgs(ctx, playwrightArgs, {
+    docker: deps.docker,
+    workDir: deps.workDir,
+    containerName: deps.containerName,
+    port: deps.port,
+    env: deps.baseEnv,
+    image,
+    command: state.command,
+    warn: deps.warn,
+    platform: deps.platform,
+    debug: deps.debug,
+    fileExists: deps.fileExists,
+  })
+  return {
+    cmd: 'docker',
+    args,
+    env: stripCi(deps.baseEnv),
+    container: { image, name: deps.containerName },
+  }
+}
+
 function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
   return {
     mode: 'docker',
@@ -231,34 +259,19 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
         probe: deps.probeHostService,
       })
     },
-    launch({ ctx, playwrightArgs }: LaunchParams): LaunchSpec {
-      const image = state.image ?? resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
-      if (image === null) {
-        throw new Error('Could not resolve the docker image; run prepare() first or set docker.image.')
-      }
-      const args = buildDockerRunArgs(ctx, playwrightArgs, {
-        docker: deps.docker,
-        workDir: deps.workDir,
-        containerName: deps.containerName,
-        port: deps.port,
-        env: deps.baseEnv,
-        image,
-        command: state.command,
-        warn: deps.warn,
-        platform: deps.platform,
-        debug: deps.debug,
-        fileExists: deps.fileExists,
-      })
-      return {
-        cmd: 'docker',
-        args,
-        env: stripCi(deps.baseEnv),
-        container: { image, name: deps.containerName },
-      }
+    launch(params: LaunchParams): LaunchSpec {
+      return buildLaunchSpec(state, deps, params)
     },
     onForceKill(): void {
       void forceRemoveContainer(deps.exec, deps.containerName)
     },
+    ...(deps.debug?.enabled === true
+      ? {
+          beforeLaunch(): Promise<void> {
+            return forceRemoveContainer(deps.exec, deps.containerName)
+          },
+        }
+      : {}),
   }
 }
 

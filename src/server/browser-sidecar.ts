@@ -14,6 +14,7 @@ import {
   resolveDockerImage,
   type DockerExec,
 } from './docker-support.ts'
+import { recordSidecarFailure, type SidecarEvidenceDeps } from './sidecar-evidence.ts'
 import { resolvePublishedPort, tcpProbe, waitForEndpoint } from './sidecar-readiness.ts'
 
 /** Env var a project's Vitest config reads to point the playwright provider at a remote browser. */
@@ -101,6 +102,8 @@ export interface BrowserSidecarOptions {
   sleep?: (ms: number) => Promise<void>
   /** Server-side debug channel: preparation phases, container details, and retention. */
   debug?: DebugLogger
+  /** Terminal sink for unconditional failure evidence; defaults to console.error. */
+  log?: (message: string) => void
 }
 
 /** Module-private: resolved seams and configuration shared by one sidecar manager. */
@@ -116,6 +119,7 @@ interface SidecarDeps {
   readinessTimeoutMs: number
   readinessIntervalMs: number
   debug?: DebugLogger
+  log: (message: string) => void
 }
 
 function resolveSidecarDeps(options: BrowserSidecarOptions): SidecarDeps {
@@ -136,6 +140,7 @@ function resolveSidecarDeps(options: BrowserSidecarOptions): SidecarDeps {
     readinessTimeoutMs: options.readinessTimeoutMs ?? READINESS_TIMEOUT_MS,
     readinessIntervalMs: options.readinessIntervalMs ?? READINESS_INTERVAL_MS,
     debug: options.debug,
+    log: options.log ?? console.error,
   }
 }
 
@@ -165,6 +170,16 @@ interface StartedSidecar {
   port: number
 }
 
+/** Binds the sidecar's resolved seams into the evidence recorder's shape. */
+function evidenceDeps(deps: SidecarDeps): SidecarEvidenceDeps {
+  return {
+    exec: deps.exec,
+    containerName: deps.containerName,
+    debug: deps.debug,
+    log: deps.log,
+  }
+}
+
 /** Starts the detached container and resolves its ready loopback endpoint. */
 async function startSidecar(
   deps: SidecarDeps,
@@ -191,7 +206,8 @@ async function startSidecar(
     }
     const publishedPort = await resolvePublishedPort(deps.exec, deps.containerName, deps.containerPort)
     if (publishedPort === null) {
-      await forceRemoveContainer(deps.exec, deps.containerName)
+      await recordSidecarFailure(evidenceDeps(deps), image)
+      if (deps.debug?.enabled !== true) await forceRemoveContainer(deps.exec, deps.containerName)
       throw new DockerUnavailableError()
     }
     return publishedPort
@@ -204,7 +220,8 @@ async function startSidecar(
       sleep: deps.sleep,
     })
     if (!ready) {
-      await forceRemoveContainer(deps.exec, deps.containerName)
+      await recordSidecarFailure(evidenceDeps(deps), image)
+      if (deps.debug?.enabled !== true) await forceRemoveContainer(deps.exec, deps.containerName)
       throw new DockerUnavailableError()
     }
   })

@@ -107,6 +107,23 @@ describe('buildBrowserSidecarRunArgs', () => {
     expect(args).toContain('CRVY_RPRTR_DEBUG=1')
   })
 
+  test('debug mode omits --rm and labels the sidecar container for retention', () => {
+    const args = buildBrowserSidecarRunArgs({
+      ...base,
+      debug: createDebugLogger({ enabled: true, sink: () => {} }),
+    })
+    expect(args).not.toContain('--rm')
+    const labelIndex = args.indexOf('--label')
+    expect(labelIndex).toBeGreaterThan(-1)
+    expect(args[labelIndex + 1]).toBe('crvy-rprtr.debug=1')
+  })
+
+  test('with debug off the sidecar vector keeps --rm and carries no label', () => {
+    const args = buildBrowserSidecarRunArgs(base)
+    expect(args).toContain('--rm')
+    expect(args).not.toContain('--label')
+  })
+
   test('debug mode records the sidecar container details and mount existence', () => {
     const logs: string[] = []
     buildBrowserSidecarRunArgs({
@@ -367,6 +384,102 @@ describe('BrowserSidecar debug preparation records', () => {
     await rejectionOf(sidecar.ensure({ cwd: '/proj' }, noopProgress))
 
     expect(logs.some((line) => line.includes('phase=readiness status=failed'))).toBe(true)
+  })
+})
+
+describe('BrowserSidecar failure evidence', () => {
+  const failedScript = {
+    info: ok,
+    'image inspect': ok,
+    'run -d': ok,
+    'port crvy-rprtr-browser-1': { exitCode: 0, stdout: '127.0.0.1:49153\n', stderr: '' },
+    inspect: { exitCode: 0, stdout: 'exited 3 sidecar crashed\n', stderr: '' },
+    logs: { exitCode: 0, stdout: 'boom: first\nboom: last\n', stderr: '' },
+  }
+
+  function readinessFailureFixture(overrides: Partial<Parameters<typeof createBrowserSidecar>[0]> = {}): {
+    calls: string[][]
+    logs: string[]
+    sidecar: ReturnType<typeof createBrowserSidecar>
+  } {
+    const { exec, calls } = execScript(failedScript)
+    const logs: string[] = []
+    const sidecar = sidecarFixture({
+      exec,
+      probeTcp: () => Promise.resolve(false),
+      readinessTimeoutMs: 0,
+      log: (line): void => void logs.push(line),
+      ...overrides,
+    }).sidecar
+    return { calls, logs, sidecar }
+  }
+
+  test('a readiness failure records image, name, inspect state, and a log tail before removal', async () => {
+    const { calls, logs, sidecar } = readinessFailureFixture()
+
+    const error = await rejectionOf(sidecar.ensure({ cwd: '/proj' }, noopProgress))
+    expect(error).toBeInstanceOf(DockerUnavailableError)
+
+    const record = logs.find((line) => line.includes('event=sidecar-failed'))!
+    expect(record).toContain('image=mcr.microsoft.com/playwright:v1.59.0-noble')
+    expect(record).toContain('container=crvy-rprtr-browser-1')
+    expect(record).toContain('docker inspect crvy-rprtr-browser-1')
+    expect(record).toContain('docker logs --tail 50 crvy-rprtr-browser-1')
+    expect(record).toContain('state=exited')
+    expect(record).toContain('exitCode=3')
+    expect(record).toContain('error="sidecar crashed"')
+    expect(record).toContain('boom: last')
+
+    const runIndex = calls.findIndex((call) => call[0] === 'run')
+    const inspectIndex = calls.findIndex((call, index) => index > runIndex && call[0] === 'inspect')
+    const rmIndex = calls.findIndex((call, index) => index > runIndex && call[0] === 'rm')
+    expect(inspectIndex).toBeGreaterThan(-1)
+    expect(rmIndex).toBeGreaterThan(-1)
+    expect(inspectIndex).toBeLessThan(rmIndex)
+  })
+
+  test('debug mode retains the failed sidecar and records the inspection commands', async () => {
+    const debugLogs: string[] = []
+    const { calls, logs, sidecar } = readinessFailureFixture({
+      debug: createDebugLogger({ enabled: true, sink: (line): void => void debugLogs.push(line) }),
+    })
+
+    await rejectionOf(sidecar.ensure({ cwd: '/proj' }, noopProgress))
+
+    expect(logs).toEqual([])
+    const record = debugLogs.find((line) => line.includes('event=sidecar-failed'))!
+    expect(record).toContain('container=crvy-rprtr-browser-1')
+    expect(record).toContain('docker inspect crvy-rprtr-browser-1')
+    expect(record).toContain('docker logs --tail 50 crvy-rprtr-browser-1')
+    const runIndex = calls.findIndex((call) => call[0] === 'run')
+    expect(calls.findIndex((call, index) => index > runIndex && call[0] === 'rm')).toBe(-1)
+  })
+
+  test('an already-removed container still fails as docker-unavailable', async () => {
+    const { exec, calls } = execScript({
+      info: ok,
+      'image inspect': ok,
+      'run -d': ok,
+      'port crvy-rprtr-browser-1': { exitCode: 0, stdout: '127.0.0.1:49153\n', stderr: '' },
+      inspect: fail,
+      logs: fail,
+    })
+    const logs: string[] = []
+    const { sidecar } = sidecarFixture({
+      exec,
+      probeTcp: () => Promise.resolve(false),
+      readinessTimeoutMs: 0,
+      log: (line): void => void logs.push(line),
+    })
+
+    const error = await rejectionOf(sidecar.ensure({ cwd: '/proj' }, noopProgress))
+    expect(error).toBeInstanceOf(DockerUnavailableError)
+
+    const record = logs.find((line) => line.includes('event=sidecar-failed'))!
+    expect(record).toContain('container=crvy-rprtr-browser-1')
+    expect(record).not.toContain('state=')
+    expect(record).not.toContain('logTail=')
+    expect(calls).toContainEqual(['rm', '-f', 'crvy-rprtr-browser-1'])
   })
 })
 

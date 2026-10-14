@@ -281,6 +281,44 @@ describe('DockerLauncher.launch', () => {
     expect(args).not.toContain('CRVY_RPRTR_DEBUG=1')
   })
 
+  test('debug mode omits --rm and labels the run container for retention', async () => {
+    const { launcher } = makeLauncher({ debug: createDebugLogger({ enabled: true, sink: () => {} }) })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    const args = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] }).args
+
+    expect(args).not.toContain('--rm')
+    const labelIndex = args.indexOf('--label')
+    expect(labelIndex).toBeGreaterThan(-1)
+    expect(args[labelIndex + 1]).toBe('crvy-rprtr.debug=1')
+  })
+
+  test('debug mode removes a stale retained container before a launch reusing its name', async () => {
+    const { exec, calls } = execScript({ info: ok, 'image inspect': ok })
+    const { launcher } = makeLauncher({
+      exec,
+      debug: createDebugLogger({ enabled: true, sink: () => {} }),
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    await launcher.beforeLaunch!()
+
+    expect(calls).toContainEqual(['rm', '-f', 'test-container'])
+  })
+
+  test('with debug off --rm stays, no label appears, and no stale-removal runs', async () => {
+    const { exec, calls } = execScript({ info: ok, 'image inspect': ok })
+    const { launcher } = makeLauncher({ exec })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    const args = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] }).args
+
+    expect(args).toContain('--rm')
+    expect(args).not.toContain('--label')
+    expect('beforeLaunch' in launcher).toBe(false)
+    expect(calls.some((call) => call[0] === 'rm')).toBe(false)
+  })
+
   test('exports the docker-only gateway contract next to the rendering pins', async () => {
     const { launcher } = makeLauncher()
     await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })

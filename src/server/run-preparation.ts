@@ -64,6 +64,7 @@ export async function prepareRunForContext(ctx: RunContext, deps: RunPreparation
         deps.broadcast({ type: 'run-status', data: { running: true, mode: launcher.mode, phase } })
       },
     })
+    await launcher.beforeLaunch?.()
     const notices = await collectNotices(launcher)
     return notices.length > 0 ? { ok: true, notices } : { ok: true }
   } catch (error) {

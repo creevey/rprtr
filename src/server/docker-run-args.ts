@@ -16,6 +16,9 @@ const PLAYWRIGHT_CLI_SEGMENTS = [
   ['node_modules', '@playwright', 'test', 'cli.js'],
 ] as const
 
+/** Label marking containers debug mode retains for inspection instead of auto-removing. */
+export const DEBUG_CONTAINER_LABEL = 'crvy-rprtr.debug=1'
+
 interface MountSummary {
   source: string
   exists: boolean
@@ -47,6 +50,8 @@ function emitContainerRecord(
       container: input.containerName,
       platform: input.platform,
       mounts,
+      inspect: `docker inspect ${input.containerName}`,
+      logs: `docker logs ${input.containerName}`,
     }),
   )
 }
@@ -87,19 +92,13 @@ export interface BrowserSidecarArgsInput {
  * fontconfig/locale pinning as Playwright docker mode.
  */
 export function buildBrowserSidecarRunArgs(input: BrowserSidecarArgsInput): string[] {
+  const retained = input.debug?.enabled === true
   const fileExists = input.fileExists ?? existsSync
   const mounts: MountSummary[] = []
-  const args = [
-    'run',
-    '-d',
-    '--rm',
-    '--init',
-    '--ipc=host',
-    '--name',
-    input.containerName,
-    '-p',
-    `127.0.0.1::${input.port}`,
-  ]
+  const args = ['run', '-d']
+  if (!retained) args.push('--rm')
+  args.push('--init', '--ipc=host', '--name', input.containerName, '-p', `127.0.0.1::${input.port}`)
+  if (retained) args.push('--label', DEBUG_CONTAINER_LABEL)
   if (input.docker?.platform !== undefined) {
     args.push('--platform', input.docker.platform)
   }
@@ -140,18 +139,13 @@ export interface DockerRunArgsDeps {
 
 export function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], deps: DockerRunArgsDeps): string[] {
   const { args: rewrittenArgs, bindMounts } = rewritePlaywrightArgs(playwrightArgs, ctx, deps.workDir, deps.warn)
+  const retained = deps.debug?.enabled === true
   const fileExists = deps.fileExists ?? existsSync
   const mounts: MountSummary[] = [{ source: ctx.cwd, exists: fileExists(ctx.cwd) }]
-  const args = [
-    'run',
-    '--rm',
-    '--init',
-    '--name',
-    deps.containerName,
-    '--add-host',
-    `${DOCKER_HOST_GATEWAY}:host-gateway`,
-    '--ipc=host',
-  ]
+  const args = ['run']
+  if (!retained) args.push('--rm')
+  args.push('--init', '--name', deps.containerName, '--add-host', `${DOCKER_HOST_GATEWAY}:host-gateway`, '--ipc=host')
+  if (retained) args.push('--label', DEBUG_CONTAINER_LABEL)
   if (deps.docker?.platform !== undefined) {
     args.push('--platform', deps.docker.platform)
   }
