@@ -72,7 +72,8 @@ npx crvy-rprtr \
 
 ## Environment Variables
 
-| Variable                | Description                  | Default               |
-| ----------------------- | ---------------------------- | --------------------- |
-| `TEST_WORKER_INDEX`     | Worker index for file naming | `0`                   |
-| `CRVY_RPRTR_SERVER_URL` | WebSocket server URL         | `ws://localhost:3000` |
+| Variable                | Description                                                                                                        | Default               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| `TEST_WORKER_INDEX`     | Worker index for file naming                                                                                       | `0`                   |
+| `CRVY_RPRTR_SERVER_URL` | WebSocket server URL                                                                                               | `ws://localhost:3000` |
+| `CRVY_RPRTR_DEBUG`      | Emit the reporter's debug log lines to the terminal (any non-empty value; `DEBUG` still works as the legacy alias) | unset                 |

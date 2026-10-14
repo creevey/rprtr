@@ -40,6 +40,6 @@
 
 ## 6. Invariants, docs, and gate
 
-- [ ] 6.1 Add sentinel-secret tests spanning activation to record output: no credential-shaped value, token-bearing URL, or non-allowlisted environment value appears in any debug record; the same run request yields identical selection, results, and refusal outcomes with debug on and off. Verify: `cd tests && bun test run-controller.test.ts debug-log.test.ts debug-redact.test.ts`.
-- [ ] 6.2 Update docs: `README.md` (Server CLI Options row for `--debug`; Docker Mode retention and the labeled cleanup one-liner), `docs/offline-mode.md` (environment variable table row for `CRVY_RPRTR_DEBUG`), `docs/docker-manual-smoke-test.md` (troubleshooting row pointing at debug mode). Verify: `bun run format:check`.
-- [ ] 6.3 Full gate: run `bun run check`; run `bun run test:playwright` only if the debug work touched browser-visible behavior. Verify: `bun run check` exits 0 and the docs edits from task 6.2 are present.
+- [x] 6.1 Add sentinel-secret tests spanning activation to record output: no credential-shaped value, token-bearing URL, or non-allowlisted environment value appears in any debug record; the same run request yields identical selection, results, and refusal outcomes with debug on and off. Verify: `cd tests && bun test run-controller.test.ts debug-log.test.ts debug-redact.test.ts`.
+- [x] 6.2 Update docs: `README.md` (Server CLI Options row for `--debug`; Docker Mode retention and the labeled cleanup one-liner), `docs/offline-mode.md` (environment variable table row for `CRVY_RPRTR_DEBUG`), `docs/docker-manual-smoke-test.md` (troubleshooting row pointing at debug mode). Verify: `bun run format:check`.
+- [x] 6.3 Full gate: run `bun run check`; run `bun run test:playwright` only if the debug work touched browser-visible behavior. Verify: `bun run check` exits 0 and the docs edits from task 6.2 are present.

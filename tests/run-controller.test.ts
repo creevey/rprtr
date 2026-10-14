@@ -765,6 +765,78 @@ describe('RunController debug output capture', () => {
   })
 })
 
+describe('RunController debug redaction invariants', () => {
+  const SECRET_VALUES = [
+    'ghp_sentinel_token_value',
+    'npm_sentinel_token_value',
+    'sentinel-secret-value',
+    'sentinel-key-value',
+    'sentinel-password',
+    'sentinel-url-token',
+    'sentinel-env-value',
+  ]
+
+  function debugRunLogs(): string[] {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLaunchEnv({
+      CI: '1',
+      GITHUB_TOKEN: 'ghp_sentinel_token_value',
+      NPM_TOKEN: 'npm_sentinel_token_value',
+      MY_SECRET: 'sentinel-secret-value',
+      API_KEY: 'sentinel-key-value',
+      CRVY_RPRTR_SERVER_URL: 'ws://user:sentinel-password@127.0.0.1:3000/?token=sentinel-url-token',
+      STUB_ENV: 'sentinel-env-value',
+    })
+    f.setDebugEnabled(true)
+    f.controller.start({})
+    f.child.emitStdout('run output\n')
+    f.child.emitStderr('run error\n')
+    f.child.exitEmitters[0]!(0)
+    return f.debugLogs
+  }
+
+  test('no credential-shaped value, token-bearing URL, or non-allowlisted value appears in any record', () => {
+    const records = debugRunLogs()
+    expect(records.length).toBeGreaterThan(0)
+    for (const record of records) {
+      for (const secret of SECRET_VALUES) expect(record).not.toContain(secret)
+    }
+  })
+
+  test('the allowlisted URL keeps its shape with userinfo and token masked', () => {
+    const launch = debugRunLogs().find((line) => line.includes('event=launch'))!
+    expect(launch).toContain('CRVY_RPRTR_SERVER_URL=ws://***@127.0.0.1:3000/?token=***')
+  })
+
+  test('debug on and off yield identical selections, results, and broadcasts', () => {
+    const execute = (debug: boolean): unknown => {
+      const f = createFixture(SAMPLE_CTX)
+      f.setDebugEnabled(debug)
+      const result = f.controller.start({
+        tests: [{ file: 'tests/foo.spec.ts', line: 42, projectName: 'chromium', titlePath: ['suite', 'foo'] }],
+        update: true,
+      })
+      f.child.exitEmitters[0]!(0)
+      return {
+        result,
+        spawn: f.spawnCalls.map(({ cmd, args }) => ({ cmd, args })),
+        broadcasts: f.broadcasts,
+        running: f.runningFlag.value,
+      }
+    }
+    expect(execute(true)).toEqual(execute(false))
+  })
+
+  test('refusals are identical with debug on and off', () => {
+    const refuse = (debug: boolean): unknown => {
+      const f = createFixture(null)
+      f.setDebugEnabled(debug)
+      return f.controller.start({})
+    }
+    expect(refuse(true)).toEqual(refuse(false))
+  })
+})
+
 describe('RunController.start Vitest docker scoping', () => {
   test('explicit docker with the hook spawns local vitest with the sidecar endpoint', async () => {
     const f = createFixture(VITEST_CTX)
