@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Gives Vitest browser-mode runs the same containerized rendering environment Playwright docker mode provides, by managing a warm `playwright run-server` sidecar container that a locally launched vitest connects to.
+Gives docker-mode runs — Playwright and Vitest — a containerized browser environment by managing a warm `playwright run-server` sidecar container that the locally launched runner connects to, so browsers and screenshots come from the pinned Playwright image without containerizing the test process.
 
 ## Requirements
 

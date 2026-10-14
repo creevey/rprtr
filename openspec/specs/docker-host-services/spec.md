@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets Docker-mode Playwright runs reach services that run on the host — dev servers declared by `webServer` and origins tests navigate to via `baseURL` — and makes the cases where the container silently diverges from the host visible to the user instead of masking them.
+Keeps services that run on the host — dev servers declared by `webServer` and origins tests navigate to via `baseURL` — reachable in Docker-mode Playwright runs by running the tests and those services on the host, with the container browser reaching host loopback through the browser sidecar's loopback exposure.
 
 ## Requirements
 
