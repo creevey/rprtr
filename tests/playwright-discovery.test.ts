@@ -413,6 +413,22 @@ describe('readPlaywrightListWithConfig', () => {
     expect(result.report).not.toBeNull()
   })
 
+  test('strips CI so the config resolves as it will inside the container', async () => {
+    const { spawn, calls } = createFakeSpawn({ stdout: JSON.stringify(listReport()), onSpawn: dumpOnSpawn(summary) })
+    const previous = process.env.CI
+    process.env.CI = '1'
+    try {
+      await readPlaywrightListWithConfig('/proj', { spawn })
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(process.env, 'CI')
+      else process.env.CI = previous
+    }
+
+    const env = calls[0]!.opts.env as Record<string, string | undefined>
+    expect('CI' in env).toBe(false)
+    expect(env.CRVY_RPRTR_HOST_GATEWAY).toBe('host.docker.internal')
+  })
+
   test('a missing dump degrades to a null summary without losing the report', async () => {
     const { spawn } = createFakeSpawn({ stdout: JSON.stringify(listReport()) })
 

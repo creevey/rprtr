@@ -194,4 +194,30 @@ describe('config dump integration', () => {
       projects: [{ name: 'chromium', baseURL: 'http://localhost:65111' }],
     })
   }, 30_000)
+
+  test('resolves reuseExistingServer with the container CI, not the host CI', async () => {
+    const fixtureDir = join(import.meta.dir, 'fixtures', 'ci-reuse-webserver')
+    const previous = process.env.CI
+    process.env.CI = '1'
+    try {
+      const { config } = await readPlaywrightListWithConfig(fixtureDir, {
+        configFile: join(fixtureDir, 'playwright.config.ts'),
+      })
+
+      // The container strips CI, so `!process.env.CI` is true there even when the host sets it.
+      expect(config).toEqual({
+        webServers: [
+          {
+            command: 'node -e "setInterval(() => {}, 1000)"',
+            url: 'http://localhost:65113',
+            reuseExistingServer: true,
+          },
+        ],
+        projects: [{ name: '', baseURL: 'http://localhost:65113' }],
+      })
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(process.env, 'CI')
+      else process.env.CI = previous
+    }
+  }, 30_000)
 })

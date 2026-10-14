@@ -7,6 +7,7 @@ import {
   readAndDeleteConfigDump,
   type DockerConfigSummary,
 } from './server/config-dump.ts'
+import { stripCi } from './server/docker-env.ts'
 import { createRealListSpawn, type ListFailure, type ListSpawn } from './server/list-spawn.ts'
 import { resolveLocalCommand } from './server/run-launcher.ts'
 
@@ -40,8 +41,14 @@ export interface ReadPlaywrightListOptions {
   spawn?: ListSpawn
   /** Extra reporter module appended to the JSON reporter (`--reporter=json,<path>`). */
   extraReporter?: string
-  /** Extra environment for the listing process, merged over `process.env`. */
+  /** Extra environment for the listing process, merged over `baseEnv`. */
   env?: Record<string, string | undefined>
+  /**
+   * Base environment for the listing process; defaults to `process.env`. The docker
+   * preflight passes the container's transformation (`stripCi`) so the resolved
+   * config matches the environment the container will load it in.
+   */
+  baseEnv?: Record<string, string | undefined>
 }
 
 export interface PlaywrightListOutcome {
@@ -78,7 +85,9 @@ export function readPlaywrightListOutcome(
   const spawnFn = options.spawn ?? createRealListSpawn()
   const timeoutMs = options.timeoutMs ?? LIST_TIMEOUT_MS
   const spawnOpts: Record<string, unknown> = { cwd, stdio: ['ignore', 'pipe', 'pipe'] }
-  if (options.env !== undefined) spawnOpts.env = { ...process.env, ...options.env }
+  if (options.env !== undefined || options.baseEnv !== undefined) {
+    spawnOpts.env = { ...(options.baseEnv ?? process.env), ...options.env }
+  }
 
   return new Promise((resolve) => {
     let stdout = ''
@@ -138,21 +147,24 @@ export interface PlaywrightListWithConfigResult {
 
 /**
  * One dump-aware listing spawn for the docker preflight. The listing runs with the
- * docker gateway contract exported, so the config resolves as the container will
- * see it (`CRVY_RPRTR_DOCKER` / `CRVY_RPRTR_HOST_GATEWAY` recipes included), and
- * returns the JSON list report plus the resolved config summary, which is only
- * reachable from inside a `v2` reporter (array-form `webServer`, `use.baseURL`).
- * A missing or malformed dump degrades to a null summary and never fails the listing.
+ * docker gateway contract exported and `CI` stripped — the same environment the
+ * container receives — so the config resolves as the container will see it
+ * (`CRVY_RPRTR_DOCKER` / `CRVY_RPRTR_HOST_GATEWAY` recipes and
+ * `reuseExistingServer: !process.env.CI` included), and returns the JSON list
+ * report plus the resolved config summary, which is only reachable from inside a
+ * `v2` reporter (array-form `webServer`, `use.baseURL`). A missing or malformed
+ * dump degrades to a null summary and never fails the listing.
  */
 export async function readPlaywrightListWithConfig(
   cwd: string,
-  options: Omit<ReadPlaywrightListOptions, 'extraReporter' | 'env'> = {},
+  options: Omit<ReadPlaywrightListOptions, 'extraReporter' | 'env' | 'baseEnv'> = {},
 ): Promise<PlaywrightListWithConfigResult> {
   const reporter = ensureConfigDumpReporter()
   const dumpPath = configDumpPath()
   const report = await readPlaywrightListReport(cwd, {
     ...options,
     extraReporter: reporter,
+    baseEnv: stripCi(process.env),
     env: {
       [DOCKER_MODE_ENV]: '1',
       [DOCKER_HOST_GATEWAY_ENV]: DOCKER_HOST_GATEWAY,
