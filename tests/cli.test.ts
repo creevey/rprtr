@@ -107,6 +107,14 @@ describe('resolveCliOptions', () => {
     expect(resolveCliOptions([]).runMode).toBeUndefined()
   })
 
+  test('--debug sets debug: true', () => {
+    expect(resolveCliOptions(['--debug']).debug).toBe(true)
+  })
+
+  test('debug defaults to unset', () => {
+    expect(resolveCliOptions([]).debug).toBeUndefined()
+  })
+
   test('--docker-image and --docker-platform assemble the docker options', () => {
     expect(resolveCliOptions(['--docker-image', 'custom/img:1', '--docker-platform', 'linux/arm64']).docker).toEqual({
       image: 'custom/img:1',
@@ -136,6 +144,10 @@ describe('help', () => {
     for (const token of ['--run-mode', '--docker-image', '--docker-platform', '--font-rendering']) {
       expect(HELP_TEXT).toContain(token)
     }
+  })
+
+  test('HELP_TEXT documents the debug flag', () => {
+    expect(HELP_TEXT).toContain('--debug')
   })
 
   test('wantsHelp is true for --help and -h in any position', () => {

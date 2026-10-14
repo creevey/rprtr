@@ -1,4 +1,5 @@
 import { isCI } from '../ci.ts'
+import type { DebugLogger } from '../debug-log.ts'
 import type { FontRendering } from '../rendering.ts'
 import { createBrowserSidecar, type BrowserSidecar } from './browser-sidecar.ts'
 import { createDockerLauncher, DOCKER_WORK_DIR, type DockerOptions } from './docker-launcher.ts'
@@ -27,6 +28,8 @@ interface ResolveRunBackendOptions {
    * `docker.fontRendering` still wins for the docker backend when both are set.
    */
   fontRendering?: FontRendering
+  /** Resolved server-side debug channel, shared by the launchers and the sidecar. */
+  debug?: DebugLogger
 }
 
 /**
@@ -52,6 +55,7 @@ export async function resolveRunBackend(options: ResolveRunBackendOptions): Prom
           port: options.port,
           docker: { fontRendering: options.fontRendering, ...options.docker },
           exec: dockerExec,
+          debug: options.debug,
         })
       : createLocalLauncher({ port: options.port, fontRendering: options.fontRendering })
   return {
@@ -60,6 +64,7 @@ export async function resolveRunBackend(options: ResolveRunBackendOptions): Prom
     browserSidecar: createBrowserSidecar({
       docker: { fontRendering: options.fontRendering, ...options.docker },
       exec: dockerExec,
+      debug: options.debug,
     }),
     configuredRunMode: options.runMode ?? 'auto',
     routesContextOptions: {

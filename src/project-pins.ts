@@ -1,4 +1,5 @@
 import { resolveProjectPins, type PlaywrightProjectLike, type ResolvedProjectPin } from './browser-pins.ts'
+import { DEBUG_ENV, type DebugLogger } from './debug-log.ts'
 import { DOCKER_HOST_GATEWAY, DOCKER_HOST_GATEWAY_ENV, DOCKER_MODE_ENV } from './docker-contract.ts'
 import {
   configDumpPath,
@@ -49,6 +50,8 @@ export interface ReadPlaywrightListOptions {
    * config matches the environment the container will load it in.
    */
   baseEnv?: Record<string, string | undefined>
+  /** Server-side debug channel: activation propagation and listing-failure records. */
+  debug?: DebugLogger
 }
 
 export interface PlaywrightListOutcome {
@@ -85,8 +88,12 @@ export function readPlaywrightListOutcome(
   const spawnFn = options.spawn ?? createRealListSpawn()
   const timeoutMs = options.timeoutMs ?? LIST_TIMEOUT_MS
   const spawnOpts: Record<string, unknown> = { cwd, stdio: ['ignore', 'pipe', 'pipe'] }
-  if (options.env !== undefined || options.baseEnv !== undefined) {
-    spawnOpts.env = { ...(options.baseEnv ?? process.env), ...options.env }
+  if (options.env !== undefined || options.baseEnv !== undefined || options.debug?.enabled === true) {
+    spawnOpts.env = {
+      ...(options.baseEnv ?? process.env),
+      ...options.env,
+      ...(options.debug?.enabled === true ? { [DEBUG_ENV]: '1' } : {}),
+    }
   }
 
   return new Promise((resolve) => {

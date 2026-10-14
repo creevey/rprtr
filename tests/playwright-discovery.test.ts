@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { existsSync, writeFileSync } from 'fs'
 
+import { createDebugLogger } from '../src/debug-log'
 import { readPlaywrightListWithConfig } from '../src/project-pins'
 import { configDumpReporterPath, DOCKER_CONFIG_DUMP_ENV } from '../src/server/config-dump'
 import {
@@ -348,6 +349,17 @@ describe('runPlaywrightList', () => {
   test('a valid report without tests is a successful empty listing', async () => {
     const { spawn } = createFakeSpawn({ stdout: JSON.stringify({ config: { rootDir: ROOT_DIR }, suites: [] }) })
     expect(await runPlaywrightList({ configFile, cwd: '/proj', spawn })).toEqual({ ok: true, entries: [] })
+  })
+
+  test('debug mode exports CRVY_RPRTR_DEBUG into the listing spawn environment', async () => {
+    const { spawn, calls } = createFakeSpawn({ stdout: JSON.stringify(listReport()) })
+    const debug = createDebugLogger({ enabled: true, sink: () => {} })
+
+    const result = await runPlaywrightList({ configFile, cwd: '/proj', spawn, debug })
+
+    expect(result.ok).toBe(true)
+    const env = calls[0]!.opts.env as Record<string, string | undefined> | undefined
+    expect(env?.CRVY_RPRTR_DEBUG).toBe('1')
   })
 
   test('malformed stdout is a parse failure', async () => {

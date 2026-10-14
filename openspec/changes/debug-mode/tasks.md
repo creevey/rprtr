@@ -6,12 +6,12 @@
 
 ## 2. Activation and propagation
 
-- [ ] 2.1 Write failing tests in a new `tests/debug-log.test.ts`: the reporter gate enables on `CRVY_RPRTR_DEBUG` or non-empty `DEBUG`; `createDebugLogger` emits only when enabled and only through the injected sink. Verify: `bun run build && cd tests && bun test debug-log.test.ts` (new cases fail).
-- [ ] 2.2 Implement the `createDebugLogger` factory and the widened reporter gate in `src/debug-log.ts`; keep existing call sites untouched. Verify: task 2.1 tests pass.
-- [ ] 2.3 Write failing CLI tests in `tests/cli.test.ts`: `--debug` parses to `debug: true`, defaults to unset, and appears in the help text token list. Verify: `cd tests && bun test cli.test.ts` (new cases fail).
-- [ ] 2.4 Implement the `--debug` flag, `ServerOptions.debug`, and the startup `DebugSettings` resolution in `src/cli.ts`, `src/server/app.ts`, and `src/server/server-factories.ts`; `DEBUG` alone must not enable server-side debug. Verify: task 2.3 tests pass; `bun run typecheck`.
-- [ ] 2.5 Write failing tests that a debug-enabled server exports `CRVY_RPRTR_DEBUG` into every spawn: local run env (`run-controller.test.ts`), container vector (`docker-launcher.test.ts` or its post-refactor successor), and listing spawn env (`playwright-discovery.test.ts`). Verify: `bun run build && cd tests && bun test run-controller.test.ts playwright-discovery.test.ts` (new cases fail).
-- [ ] 2.6 Implement explicit `CRVY_RPRTR_DEBUG` injection in the launch env and container arg builder when debug is on; flag-only activation must cover containers too. Verify: task 2.5 tests pass.
+- [x] 2.1 Write failing tests in a new `tests/debug-log.test.ts`: the reporter gate enables on `CRVY_RPRTR_DEBUG` or non-empty `DEBUG`; `createDebugLogger` emits only when enabled and only through the injected sink. Verify: `bun run build && cd tests && bun test debug-log.test.ts` (new cases fail).
+- [x] 2.2 Implement the `createDebugLogger` factory and the widened reporter gate in `src/debug-log.ts`; keep existing call sites untouched. Verify: task 2.1 tests pass.
+- [x] 2.3 Write failing CLI tests in `tests/cli.test.ts`: `--debug` parses to `debug: true`, defaults to unset, and appears in the help text token list. Verify: `cd tests && bun test cli.test.ts` (new cases fail).
+- [x] 2.4 Implement the `--debug` flag, `ServerOptions.debug`, and the startup `DebugSettings` resolution in `src/cli.ts`, `src/server/app.ts`, and `src/server/server-factories.ts`; `DEBUG` alone must not enable server-side debug. Verify: task 2.3 tests pass; `bun run typecheck`.
+- [x] 2.5 Write failing tests that a debug-enabled server exports `CRVY_RPRTR_DEBUG` into every spawn: local run env (`run-controller.test.ts`), container vector (`docker-launcher.test.ts` or its post-refactor successor), and listing spawn env (`playwright-discovery.test.ts`). Verify: `bun run build && cd tests && bun test run-controller.test.ts playwright-discovery.test.ts` (new cases fail).
+- [x] 2.6 Implement explicit `CRVY_RPRTR_DEBUG` injection in the launch env and container arg builder when debug is on; flag-only activation must cover containers too. Verify: task 2.5 tests pass.
 
 ## 3. Debug records
 

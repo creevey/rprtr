@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
+import { createDebugLogger } from '../src/debug-log'
 import { createDockerLauncher, DockerUnavailableError, DOCKER_WORK_DIR } from '../src/server/docker-launcher'
 import type { DockerExec, DockerExecResult } from '../src/server/docker-support'
 import { CONTAINER_FONTCONFIG_PATH, GRAYSCALE_FONTCONFIG_XML, hostFontconfigPath } from '../src/server/fontconfig'
@@ -219,6 +220,20 @@ describe('DockerLauncher.launch', () => {
       image: 'mcr.microsoft.com/playwright:v1.59.0-noble',
       name: 'test-container',
     })
+  })
+
+  test('debug mode exports CRVY_RPRTR_DEBUG into the container environment', async () => {
+    const { launcher } = makeLauncher({ debug: createDebugLogger({ enabled: true, sink: () => {} }) })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const args = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] }).args
+    expect(args).toContain('CRVY_RPRTR_DEBUG=1')
+  })
+
+  test('with debug off the container vector carries no CRVY_RPRTR_DEBUG', async () => {
+    const { launcher } = makeLauncher()
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const args = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] }).args
+    expect(args).not.toContain('CRVY_RPRTR_DEBUG=1')
   })
 
   test('exports the docker-only gateway contract next to the rendering pins', async () => {

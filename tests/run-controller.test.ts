@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
+import { createDebugLogger } from '../src/debug-log'
 import type { ContainerPathMapping } from '../src/server/docker-support'
 import { gteMinor, resolveReporterDefault } from '../src/server/run-command-helpers'
 import {
@@ -70,6 +71,9 @@ interface Fixture {
   notifyRunSettledCalls: { value: number }
   logs: string[]
   setContainerSpec: (spec: { image: string; name: string }) => void
+  debugLogs: string[]
+  setDebugEnabled: (enabled: boolean) => void
+  setLaunchEnv: (env: Record<string, string | undefined>) => void
 }
 
 function createFixture(
@@ -106,6 +110,8 @@ function createFixture(
   const diagnoseCalls = { value: 0 }
   let launcherDiagnose: (() => Promise<string[]>) | null = null
   const notifyRunSettledCalls = { value: 0 }
+  const debugLogs: string[] = []
+  let launchEnv: Record<string, string | undefined> = { STUB_ENV: '1', SENTINEL_ENV: 'sentinel-env-value' }
   const child = createStubChild()
   const deps: RunControllerDeps = {
     getRunContext: (): RunContext | null => runCtx,
@@ -164,7 +170,7 @@ function createFixture(
         return {
           cmd: resolved.cmd,
           args: resolved.args,
-          env: { STUB_ENV: '1', SENTINEL_ENV: 'sentinel-env-value' },
+          env: launchEnv,
           ...(containerSpec === undefined ? {} : { container: containerSpec }),
         }
       },
@@ -270,6 +276,13 @@ function createFixture(
     logs,
     setContainerSpec: (spec): void => {
       containerSpec = spec
+    },
+    debugLogs,
+    setDebugEnabled: (enabled): void => {
+      deps.debug = createDebugLogger({ enabled, sink: (line) => void debugLogs.push(line) })
+    },
+    setLaunchEnv: (env): void => {
+      launchEnv = env
     },
   }
 }
@@ -612,6 +625,23 @@ describe('RunController launch record', () => {
     expect(record).not.toContain('sentinel-env-value')
     expect(record).not.toContain('SENTINEL_ENV')
     expect(record).not.toContain('--sentinel-argument')
+  })
+})
+
+describe('RunController debug propagation', () => {
+  test('debug mode exports CRVY_RPRTR_DEBUG into the run spawn environment', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setDebugEnabled(true)
+    f.controller.start({})
+    const env = f.spawnCalls[0]!.opts.env as Record<string, string | undefined>
+    expect(env.CRVY_RPRTR_DEBUG).toBe('1')
+  })
+
+  test('with debug off the spawn environment carries no CRVY_RPRTR_DEBUG', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    const env = f.spawnCalls[0]!.opts.env as Record<string, string | undefined>
+    expect(env.CRVY_RPRTR_DEBUG).toBeUndefined()
   })
 })
 

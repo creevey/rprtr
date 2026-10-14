@@ -2,6 +2,7 @@ import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdir, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 
+import { createDebugLogger } from '../src/debug-log'
 import { runVitestList, synthesizeDiscoveredTests, type VitestListEntry } from '../src/server/vitest-discovery'
 
 const TMP_ROOT = join(import.meta.dir, 'fixtures', 'vitest-discovery-tmp')
@@ -113,6 +114,14 @@ describe('runVitestList', () => {
     const { spawn } = createFakeSpawn({ stdout: '[]' })
     const result = await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn })
     expect(result).toEqual({ ok: true, entries: [] })
+  })
+
+  test('debug mode exports CRVY_RPRTR_DEBUG into the listing spawn environment', async () => {
+    const { spawn, calls } = createFakeSpawn({ stdout: '[]' })
+    const debug = createDebugLogger({ enabled: true, sink: () => {} })
+    await runVitestList({ configFile: '/proj/vitest.config.ts', cwd: '/proj', spawn, debug })
+    const env = calls[0]!.opts.env as Record<string, string | undefined>
+    expect(env.CRVY_RPRTR_DEBUG).toBe('1')
   })
 
   test('malformed stdout is a parse failure', async () => {

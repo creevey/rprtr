@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
+import { createDebugLogger } from '../src/debug-log'
 import { BROWSER_SIDECAR_PORT, createBrowserSidecar, hasBrowserEndpointHook } from '../src/server/browser-sidecar'
 import { buildBrowserSidecarRunArgs, resolveSidecarCommand } from '../src/server/docker-run-args'
 import { DockerUnavailableError, type DockerExec, type DockerExecResult } from '../src/server/docker-support'
@@ -96,6 +97,14 @@ describe('buildBrowserSidecarRunArgs', () => {
     expect(idx).toBeGreaterThan(-1)
     expect(args[idx + 1]).toBe('linux/amd64')
     expect(idx).toBeLessThan(args.indexOf(base.image))
+  })
+
+  test('debug mode exports CRVY_RPRTR_DEBUG into the sidecar container', () => {
+    const args = buildBrowserSidecarRunArgs({
+      ...base,
+      debug: createDebugLogger({ enabled: true, sink: () => {} }),
+    })
+    expect(args).toContain('CRVY_RPRTR_DEBUG=1')
   })
 })
 

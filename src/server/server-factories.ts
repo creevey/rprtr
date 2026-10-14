@@ -1,3 +1,4 @@
+import type { DebugLogger } from '../debug-log.ts'
 import type { BrowserSidecar } from './browser-sidecar.ts'
 import type { DiscoverySession } from './discovered-tests.ts'
 import type { HandlerContext } from './handlers.ts'
@@ -22,10 +23,12 @@ function createServerRunController(
   localLauncher: RunLauncher,
   browserSidecar: BrowserSidecar,
   configuredRunMode: RunMode,
+  debug: DebugLogger,
 ): RunController {
   return new RunController({
     getRunContext: (): RunContext | null => routesContext.runContext ?? null,
     port,
+    debug,
     broadcast: (message): void => {
       broadcastToBrowsers(wsClients, message)
     },
@@ -70,6 +73,7 @@ export function createRunControllerAndHandlers(
   localLauncher: RunLauncher,
   browserSidecar: BrowserSidecar,
   configuredRunMode: RunMode,
+  debug: DebugLogger,
 ): { runController: RunController; getHandlerContext: () => HandlerContext } {
   let isFilteredRun = false
   const runController = createServerRunController(
@@ -85,6 +89,7 @@ export function createRunControllerAndHandlers(
     localLauncher,
     browserSidecar,
     configuredRunMode,
+    debug,
   )
   const getHandlerContext = (): HandlerContext => ({
     reportData,

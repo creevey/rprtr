@@ -2,6 +2,7 @@ import { relative } from 'path'
 
 import { z } from 'zod'
 
+import { DEBUG_ENV, type DebugLogger } from '../debug-log.ts'
 import { safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
 import { browserLabelFromProjectName, relativeFileTokens } from '../vitest-helpers.ts'
@@ -52,6 +53,8 @@ export interface RunVitestListOptions {
   /** Kill the listing after this long; a hung `vitest list` yields an empty result. */
   timeoutMs?: number
   spawn?: ListSpawn
+  /** Server-side debug channel: activation propagation and listing-failure records. */
+  debug?: DebugLogger
 }
 
 /**
@@ -81,7 +84,11 @@ export function runVitestList(options: RunVitestListOptions): Promise<ListResult
 
     const child = spawnFn(cmd, args, {
       cwd,
-      env: { ...process.env, CI: 'true' },
+      env: {
+        ...process.env,
+        CI: 'true',
+        ...(options.debug?.enabled === true ? { [DEBUG_ENV]: '1' } : {}),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     child.stdout.on('data', (chunk: string | Buffer) => {

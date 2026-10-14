@@ -2,6 +2,7 @@ import { relative, resolve } from 'path'
 
 import { z } from 'zod'
 
+import type { DebugLogger } from '../debug-log.ts'
 import { readPlaywrightListOutcome } from '../project-pins.ts'
 import { safeParse } from '../schemas.ts'
 import type { TestData } from '../types.ts'
@@ -145,6 +146,8 @@ export interface RunPlaywrightListOptions {
   /** Kill the listing after this long; a hung listing yields an empty result. */
   timeoutMs?: number
   spawn?: ListSpawn
+  /** Server-side debug channel: activation propagation and listing-failure records. */
+  debug?: DebugLogger
 }
 
 /**
@@ -161,6 +164,7 @@ export async function runPlaywrightList(options: RunPlaywrightListOptions): Prom
     configFile: options.configFile,
     timeoutMs: options.timeoutMs,
     spawn: options.spawn,
+    debug: options.debug,
   })
   if (outcome.failure !== null) return { ok: false, reason: outcome.failure }
   return { ok: true, entries: outcome.report === null ? [] : parsePlaywrightListReport(outcome.report) }

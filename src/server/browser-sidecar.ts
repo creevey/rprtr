@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { connect } from 'node:net'
 
+import type { DebugLogger } from '../debug-log.ts'
 import { resolvePlaywrightVersion } from '../playwright-install.ts'
 import { type DockerOptions } from './docker-launcher.ts'
 import { buildBrowserSidecarRunArgs, resolveSidecarCommand } from './docker-run-args.ts'
@@ -121,6 +122,8 @@ export interface BrowserSidecarOptions {
   /** Injectable readiness seam; defaults to a TCP connect on the published port. */
   probeTcp?: (host: string, port: number) => Promise<boolean>
   sleep?: (ms: number) => Promise<void>
+  /** Server-side debug channel: preparation phases, container details, and retention. */
+  debug?: DebugLogger
 }
 
 /** Module-private: resolved seams and configuration shared by one sidecar manager. */
@@ -135,6 +138,7 @@ interface SidecarDeps {
   sleep: (ms: number) => Promise<void>
   readinessTimeoutMs: number
   readinessIntervalMs: number
+  debug?: DebugLogger
 }
 
 function resolveSidecarDeps(options: BrowserSidecarOptions): SidecarDeps {
@@ -154,6 +158,7 @@ function resolveSidecarDeps(options: BrowserSidecarOptions): SidecarDeps {
         })),
     readinessTimeoutMs: options.readinessTimeoutMs ?? READINESS_TIMEOUT_MS,
     readinessIntervalMs: options.readinessIntervalMs ?? READINESS_INTERVAL_MS,
+    debug: options.debug,
   }
 }
 
@@ -198,6 +203,7 @@ async function startSidecar(
       command,
       port: deps.containerPort,
       docker: deps.docker,
+      debug: deps.debug,
     }),
   )
   if (result.exitCode !== 0) {

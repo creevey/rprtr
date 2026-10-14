@@ -1,8 +1,6 @@
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
-
 import type { z } from 'zod'
 
+import { resolveDebugSettings, type DebugLogger } from '../debug-log.ts'
 import { loadOfflineReports } from '../offline-reports.ts'
 import type { FontRendering } from '../rendering.ts'
 import {
@@ -18,7 +16,6 @@ import {
 import { type BrowserSidecar } from './browser-sidecar.ts'
 import { startDiscoverySession, withoutDiscoveredTests, type DiscoverySession } from './discovered-tests.ts'
 import { type DockerOptions } from './docker-launcher.ts'
-import { fileExists } from './file-utils.ts'
 import {
   handleTestBegin,
   handleTestEnd,
@@ -37,6 +34,7 @@ import { handleHttpRequest, type RoutesContext } from './routes.ts'
 import { type RunLauncher } from './run-launcher.ts'
 import { type RunMode } from './run-mode.ts'
 import { createCloseHandler, createRunControllerAndHandlers } from './server-factories.ts'
+import { resolveStaticDir } from './static-dir.ts'
 import { broadcastToBrowsers } from './utils.ts'
 import { resolveSeedRunContext } from './vitest-seeding.ts'
 import type { RuntimeWebSocket } from './ws.ts'
@@ -76,6 +74,14 @@ export interface ServerOptions {
    * desktop text matters more than determinism.
    */
   fontRendering?: FontRendering
+  /**
+   * Records the full launch surface — spawn vectors, redacted environment
+   * names, container mounts, preparation phases, listing failures — mirrors
+   * child output, and retains failed containers for inspection. Terminal-only;
+   * `CRVY_RPRTR_DEBUG` enables the same mode without the flag, while
+   * Playwright's `DEBUG` never does.
+   */
+  debug?: boolean
 }
 
 export interface ServerApp {
@@ -149,35 +155,6 @@ function createWebSocketMessageHandler(getHandlerContext: () => HandlerContext):
   }
 }
 
-async function resolveStaticDir(staticDir?: string): Promise<string> {
-  const currentDir = dirname(fileURLToPath(import.meta.url))
-  const candidates =
-    staticDir === undefined
-      ? [
-          currentDir,
-          join(currentDir, 'dist'),
-          join(currentDir, '..', 'dist'),
-          join(currentDir, '..', '..', 'dist'),
-          join(currentDir, '..'),
-          join(currentDir, '..', '..'),
-        ]
-      : [staticDir, join(staticDir, 'dist')]
-
-  const resolvedCandidates = await Promise.all(
-    candidates.map(async (candidate) => ({
-      candidate,
-      exists: await fileExists(join(candidate, 'index.html')),
-    })),
-  )
-
-  const resolved = resolvedCandidates.find(({ exists }) => exists)
-  if (resolved !== undefined) {
-    return resolved.candidate
-  }
-
-  return candidates[0]!
-}
-
 async function seedRunContext(routesContext: RoutesContext, options: ServerOptions): Promise<void> {
   if (routesContext.runContext !== undefined) {
     return
@@ -195,6 +172,7 @@ async function setupRoutesContext(
   staticDir: string,
   saveReport: () => Promise<void>,
   port: number,
+  debug: DebugLogger,
 ): Promise<{
   routesContext: RoutesContext
   launcher: RunLauncher
@@ -207,6 +185,7 @@ async function setupRoutesContext(
     docker: options.docker,
     fontRendering: options.fontRendering,
     port,
+    debug,
   })
   const routesContext = createRoutesContext(reportData, staticDir, saveReport, {
     ...options,
@@ -230,6 +209,7 @@ function startDiscovery(
   wsClients: Set<RuntimeWebSocket>,
   options: ServerOptions,
   reportFile: string,
+  debug: DebugLogger,
 ): DiscoverySession | null {
   const runContext = routesContext.runContext
   if (runContext === undefined) return null
@@ -240,6 +220,7 @@ function startDiscovery(
       broadcastToBrowsers(wsClients, message)
     },
     ignore: discoveryIgnorePaths(options, reportData, reportFile),
+    debug,
   })
   routesContext.notifyRunSettled = (): void => {
     session.notifyRunSettled()
@@ -255,6 +236,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const staticDir = await resolveStaticDir(options.staticDir)
   const wsClients = new Set<RuntimeWebSocket>()
   const currentRunIds = new Set<string>()
+  const debug = resolveDebugSettings({ flag: options.debug })
   const persistence = createReportPersistence(reportFile, () => withoutDiscoveredTests(reportData))
   const { routesContext, launcher, localLauncher, browserSidecar, configuredRunMode } = await setupRoutesContext(
     options,
@@ -262,6 +244,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
     staticDir,
     persistence.saveReport,
     port,
+    debug,
   )
   const { runController, getHandlerContext } = createRunControllerAndHandlers(
     routesContext,
@@ -274,6 +257,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
     localLauncher,
     browserSidecar,
     configuredRunMode,
+    debug,
   )
   const handleRequest = (req: Request): Promise<Response> => handleHttpRequest(routesContext, req, runController)
   const handleWebSocketMessage = createWebSocketMessageHandler(getHandlerContext)
@@ -281,7 +265,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   await loadReport(reportFile, reportData)
   await loadOfflineReports(reportData, offlineReportDir)
 
-  const discovery = startDiscovery(routesContext, reportData, wsClients, options, reportFile)
+  const discovery = startDiscovery(routesContext, reportData, wsClients, options, reportFile, debug)
 
   return {
     port,

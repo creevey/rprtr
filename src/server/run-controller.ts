@@ -1,4 +1,5 @@
 import { resolvePlaywrightVersion } from '../browser-pins.ts'
+import { DEBUG_ENV } from '../debug-log.ts'
 import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import { BROWSER_WS_ENV } from './browser-sidecar.ts'
@@ -169,9 +170,10 @@ export class RunController {
     }
     emitLog(this.deps, renderLaunchRecord(mode, ctx, filters, spec, tests))
     const startedAt = (this.deps.now ?? Date.now)()
+    const spawnEnv = this.deps.debug?.enabled === true ? { ...spec.env, [DEBUG_ENV]: '1' } : spec.env
     let child: ChildProcessLike
     try {
-      child = this.deps.spawn(spec.cmd, spec.args, { cwd: ctx.cwd, env: spec.env, stdio: 'inherit' })
+      child = this.deps.spawn(spec.cmd, spec.args, { cwd: ctx.cwd, env: spawnEnv, stdio: 'inherit' })
     } catch (err) {
       this.cleanupTempFile()
       throw err

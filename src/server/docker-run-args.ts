@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { DEBUG_ENV, type DebugLogger } from '../debug-log.ts'
 import { DOCKER_HOST_GATEWAY, DOCKER_HOST_GATEWAY_ENV, DOCKER_MODE_ENV } from '../docker-contract.ts'
 import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import { collectForwardedEnvNames } from './docker-env.ts'
@@ -39,6 +40,8 @@ export interface BrowserSidecarArgsInput {
   command: readonly string[]
   port: number
   docker?: DockerOptions
+  /** Server-side debug channel: container env, mount records, and retention. */
+  debug?: DebugLogger
 }
 
 /**
@@ -66,6 +69,7 @@ export function buildBrowserSidecarRunArgs(input: BrowserSidecarArgsInput): stri
   }
   args.push('-v', `${input.cwd}:${DOCKER_WORK_DIR}:ro`)
   args.push('-e', 'TZ=UTC', '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8')
+  if (input.debug?.enabled === true) args.push('-e', `${DEBUG_ENV}=1`)
   args.push(input.image, ...input.command, 'run-server', '--port', String(input.port), '--host', '0.0.0.0')
   return args
 }
@@ -80,6 +84,8 @@ export interface DockerRunArgsDeps {
   command: readonly string[]
   warn: Warn
   platform: NodeJS.Platform
+  /** Server-side debug channel: container env, mount records, and retention. */
+  debug?: DebugLogger
 }
 
 export function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], deps: DockerRunArgsDeps): string[] {
@@ -107,6 +113,7 @@ export function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], de
   args.push('-e', `${DOCKER_MODE_ENV}=1`, '-e', `${DOCKER_HOST_GATEWAY_ENV}=${DOCKER_HOST_GATEWAY}`)
   args.push('-e', 'TZ=UTC', '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8')
   args.push('-e', 'PLAYWRIGHT_HTML_OPEN=never')
+  if (deps.debug?.enabled === true) args.push('-e', `${DEBUG_ENV}=1`)
   if (deps.docker?.fontRendering !== 'inherit') {
     args.push('-v', `${ensureGrayscaleFontconfig()}:${CONTAINER_FONTCONFIG_PATH}:ro`)
   }

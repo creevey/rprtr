@@ -1,6 +1,8 @@
 import { dirname } from 'path'
 
+import type { DebugLogger } from '../debug-log.ts'
 import type { ClientWebSocketMessage, TestData } from '../types.ts'
+import { mergeDiscoveredTests, reconcileDiscoveredTests } from './discovered-merge.ts'
 import type { ListResult } from './list-spawn.ts'
 import { runPlaywrightList, synthesizePlaywrightDiscoveredTests } from './playwright-discovery.ts'
 import type { ReportData } from './report-bootstrap.ts'
@@ -8,94 +10,13 @@ import type { RunContext } from './run-controller.ts'
 import { createTestFileWatcher, type TestFileWatcher, type WatchFn } from './test-file-watcher.ts'
 import { runVitestList, synthesizeDiscoveredTests } from './vitest-discovery.ts'
 
-/** Prefix marking test ids synthesized from discovery rather than a real run. */
-export const DISCOVERED_ID_PREFIX = 'discovered:'
-
-/**
- * Stable identity of a discovered test: (file, full title path). Survives across
- * runs, unlike runtime task ids, so discovered entries can be matched against
- * tests a loaded report already knows.
- */
-export function discoveredTestIdentity(file: string, fullName: string): string {
-  return `${file}\u0000${fullName}`
-}
-
-/**
- * Identity of a test as its (absolute file, full title path) tuple — the same
- * tuple whether the test came from a listing or a loaded report. Null when the
- * test carries no file to identify it by.
- */
-function testIdentity(test: TestData): string | null {
-  const file = test.location?.file
-  if (file === undefined) return null
-  return discoveredTestIdentity(file, [...test.titlePath, test.title].join(' > '))
-}
-
-/**
- * Merges discovered entries into the report state, filling only identities the
- * report does not already know — loaded results are never downgraded to pending.
- * Returns true when anything was added.
- */
-export function mergeDiscoveredTests(reportData: { tests: Record<string, TestData> }, discovered: TestData[]): boolean {
-  const knownIdentities = new Set<string>()
-  for (const test of Object.values(reportData.tests)) {
-    const identity = testIdentity(test)
-    if (identity !== null) knownIdentities.add(identity)
-  }
-
-  let changed = false
-  for (const test of discovered) {
-    const identity = testIdentity(test)
-    if (identity !== null && knownIdentities.has(identity)) continue
-    if (reportData.tests[test.id] !== undefined) continue
-    reportData.tests[test.id] = test
-    changed = true
-  }
-  return changed
-}
-
-/**
- * Replaces the discovered layer with the latest listing against the loaded
- * report state: placeholders for identities the listing no longer names
- * disappear, newly listed tests are merged in as `pending`, and recorded
- * results, approvals, and run state of known tests are never downgraded or
- * duplicated. Still-listed placeholders are kept as they are, so an unchanged
- * listing reports no change. Returns true when the tree changed; a successful
- * listing with no entries clears the whole discovered layer.
- */
-export function reconcileDiscoveredTests(
-  reportData: { tests: Record<string, TestData> },
-  discovered: TestData[],
-): boolean {
-  const listedIds = new Set(discovered.map((test) => test.id))
-  const kept: Record<string, TestData> = {}
-  let removed = false
-  for (const [id, test] of Object.entries(reportData.tests)) {
-    if (isDiscoveredId(id) && !listedIds.has(id)) {
-      removed = true
-      continue
-    }
-    kept[id] = test
-  }
-  if (removed) reportData.tests = kept
-  const added = mergeDiscoveredTests(reportData, discovered)
-  return added || removed
-}
-
-/**
- * The persisted view of the report state: discovered-but-never-run entries are
- * filtered out so report.json — and through it offline JSON review and the
- * static HTML artifact — stays derived from actual run events only.
- */
-export function withoutDiscoveredTests<T extends { tests: Record<string, TestData> }>(data: T): T {
-  const entries = Object.entries(data.tests)
-  if (!entries.some(([id]) => isDiscoveredId(id))) return data
-  return { ...data, tests: Object.fromEntries(entries.filter(([id]) => !isDiscoveredId(id))) }
-}
-
-function isDiscoveredId(id: string): boolean {
-  return id.startsWith(DISCOVERED_ID_PREFIX)
-}
+export {
+  DISCOVERED_ID_PREFIX,
+  discoveredTestIdentity,
+  mergeDiscoveredTests,
+  reconcileDiscoveredTests,
+  withoutDiscoveredTests,
+} from './discovered-merge.ts'
 
 /** The report fields the discovery pipeline reads and mutates. */
 export type DiscoveryReportData = Pick<ReportData, 'isRunning' | 'tests' | 'isUpdateMode'>
@@ -115,16 +36,21 @@ function discoveryRunner(runContext: RunContext): DiscoveryRunner {
 /** Runner-specific listing that returns discovered tests, or why listing failed. */
 export type DiscoveryListing = (runContext: RunContext) => Promise<ListResult<TestData>>
 
+/** Binds the debug channel into the default runner-specific listing. */
+function defaultListing(debug: DebugLogger | undefined): DiscoveryListing {
+  return (runContext) => listDiscoveredTests(runContext, debug)
+}
+
 /**
  * Runs the runner's collection-only listing and maps successful entries onto
  * discovered tests. An absent runner means Playwright, as elsewhere.
  */
-async function listDiscoveredTests(runContext: RunContext): Promise<ListResult<TestData>> {
+async function listDiscoveredTests(runContext: RunContext, debug?: DebugLogger): Promise<ListResult<TestData>> {
   if (runContext.runner === 'vitest') {
-    const result = await runVitestList({ configFile: runContext.configFile, cwd: runContext.cwd })
+    const result = await runVitestList({ configFile: runContext.configFile, cwd: runContext.cwd, debug })
     return result.ok ? { ok: true, entries: synthesizeDiscoveredTests(result.entries, runContext.cwd) } : result
   }
-  const result = await runPlaywrightList({ configFile: runContext.configFile, cwd: runContext.cwd })
+  const result = await runPlaywrightList({ configFile: runContext.configFile, cwd: runContext.cwd, debug })
   // The reporter groups by config-dir-relative file tokens, so discovery does too.
   return result.ok
     ? { ok: true, entries: synthesizePlaywrightDiscoveredTests(result.entries, dirname(runContext.configFile)) }
@@ -157,6 +83,8 @@ export interface SeedDiscoveredTestsDeps {
   list?: DiscoveryListing
   /** Log sink for failures and empty listings; defaults to console.error. */
   log?: (message: string) => void
+  /** Server-side debug channel for listing records and activation propagation. */
+  debug?: DebugLogger
 }
 
 /**
@@ -171,7 +99,7 @@ export async function seedDiscoveredTests(deps: SeedDiscoveredTestsDeps): Promis
   if (runContext === undefined) return null
   const log = deps.log ?? console.error
 
-  const result = await (deps.list ?? listDiscoveredTests)(runContext)
+  const result = await (deps.list ?? defaultListing(deps.debug))(runContext)
   // A run that started while the listing was in flight replaces the whole tree;
   // discovered state must never be injected into an active run.
   if (deps.reportData.isRunning) return null
@@ -201,6 +129,8 @@ export interface DiscoverySessionDeps {
   debounceMs?: number
   /** Log sink for failures and watcher degradation; defaults to console.error. */
   log?: (message: string) => void
+  /** Server-side debug channel for listing records and activation propagation. */
+  debug?: DebugLogger
 }
 
 export interface DiscoverySession {
@@ -268,15 +198,15 @@ class DiscoverySessionState implements DiscoverySession {
   }
 
   private async runInitialListing(): Promise<void> {
-    const { runContext, reportData, broadcast, list } = this.deps
-    const result = await seedDiscoveredTests({ runContext, reportData, broadcast, list, log: this.log })
+    const { runContext, reportData, broadcast, list, debug } = this.deps
+    const result = await seedDiscoveredTests({ runContext, reportData, broadcast, list, log: this.log, debug })
     if (this.disposed || result === null || !result.ok) return
     this.watcher.updateListedFiles(listedFiles(result.entries))
   }
 
   private async runRefresh(): Promise<void> {
     const { deps } = this
-    const result = await (deps.list ?? listDiscoveredTests)(deps.runContext)
+    const result = await (deps.list ?? defaultListing(deps.debug))(deps.runContext)
     if (this.disposed) return
     if (!result.ok) {
       const { label } = discoveryRunner(deps.runContext)

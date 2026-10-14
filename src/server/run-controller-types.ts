@@ -1,4 +1,5 @@
 import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
+import type { DebugLogger } from '../debug-log.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
 import type { BrowserSidecar } from './browser-sidecar.ts'
@@ -57,6 +58,8 @@ export interface RunControllerDeps extends RecordSinks {
   port: number
   broadcast(message: ClientWebSocketMessage): void
   setReportRunning(running: boolean): void
+  /** Server-side debug channel: launch vectors, capture records, and injection into spawns. */
+  debug?: DebugLogger
   /** Records whether the in-progress run is filtered, so run-end can preserve unrelated tests. */
   setRunFiltered?(filtered: boolean): void
   /** Invoked when the child exits, so a discovery refresh queued during the run can apply. */

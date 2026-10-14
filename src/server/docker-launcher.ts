@@ -1,4 +1,5 @@
 import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
+import type { DebugLogger } from '../debug-log.ts'
 import type { DockerConfigSummary } from './config-dump.ts'
 import { stripCi } from './docker-env.ts'
 import { diagnoseDockerHostServices, type HostServiceProbe } from './docker-host-services.ts'
@@ -63,6 +64,8 @@ export interface DockerLauncherOptions {
   probeHostService?: Partial<HostServiceProbe>
   /** Injectable executable-path seam for tests; defaults to the installed browser types. */
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
+  /** Server-side debug channel: container env, diagnostics records, and retention. */
+  debug?: DebugLogger
 }
 
 export { DockerUnavailableError }
@@ -161,6 +164,7 @@ interface LauncherDeps {
   readConfigSummary?: (cwd: string) => Promise<DockerConfigSummary | null>
   probeHostService?: Partial<HostServiceProbe>
   browserExecutablePaths?: Partial<Record<PinBrowser, string>>
+  debug?: DebugLogger
 }
 
 function createState(docker?: DockerOptions): LauncherState {
@@ -236,6 +240,7 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
         command: state.command,
         warn: deps.warn,
         platform: deps.platform,
+        debug: deps.debug,
       })
       return {
         cmd: 'docker',
@@ -266,5 +271,6 @@ export function createDockerLauncher(options: DockerLauncherOptions): RunLaunche
     readConfigSummary: options.readConfigSummary,
     probeHostService: options.probeHostService,
     browserExecutablePaths: options.browserExecutablePaths,
+    debug: options.debug,
   })
 }

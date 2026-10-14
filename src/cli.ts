@@ -43,6 +43,7 @@ Options:
   --docker-image <image>        Docker image for docker mode (default: official Playwright image matching the installed @playwright/test version)
   --docker-platform <platform>  Container platform: linux/amd64 or linux/arm64 (default: host architecture)
   --font-rendering <mode>       Text antialiasing for runs: grayscale (default, deterministic) or inherit (the environment's own rendering)
+  --debug                       Record the launch surface (commands, environment, container mounts) and retain failed containers for inspection
   -h, --help                    Show this help message
 `
 
@@ -107,6 +108,7 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
       'docker-image': { type: 'string' },
       'docker-platform': { type: 'string' },
       'font-rendering': { type: 'string' },
+      debug: { type: 'boolean' },
     },
   })
 
@@ -136,6 +138,7 @@ export function resolveCliOptions(args: string[]): ResolvedCliOptions {
     playwrightConfig: values.config,
     ...(runMode === undefined ? {} : { runMode }),
     ...(fontRendering === undefined ? {} : { fontRendering }),
+    ...(values.debug === true ? { debug: true } : {}),
     ...(hasDockerOptions ? { docker } : {}),
   }
 }
