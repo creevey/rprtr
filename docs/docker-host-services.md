@@ -72,6 +72,49 @@ Inside the container the run reuses the host services through `host.docker.inter
 it, nothing changes. rprtr never rewrites `webServer` or `baseURL` for you — the contract is
 opt-in in the project config.
 
+## Storybook's own host check: `403 Invalid host`
+
+With the recipe above the container addresses the service as `http://host.docker.internal:6006`,
+and reaching the server is not enough: the dev server validates the `Host` header itself — the
+core server before the Vite preview. `host.docker.internal` is neither `localhost` nor an IP
+address, so the container gets a plain-text `403 Invalid host`; when only the preview layer
+rejects it, the message is Vite's `403 Blocked request. This host (…) is not allowed.` rprtr's
+probe cannot see either: the container reaches the server, and the server refuses the name.
+
+Allow the gateway hostname in the Storybook config:
+
+```ts
+// .storybook/main.ts
+export default {
+  // ...
+  core: { allowedHosts: ['host.docker.internal'] }, // bare hostname — the port is stripped
+}
+```
+
+`true` disables the check entirely (insecure); a leading dot matches as a suffix wildcard
+(`'.docker.internal'`).
+
+On Linux you need the `0.0.0.0` bind anyway, and `storybook dev --host 0.0.0.0` covers both:
+Storybook binds all interfaces and auto-sets `allowedHosts: true` (it logs "Allowing all
+hosts"). Binding all interfaces exposes Storybook to the local network, so prefer the explicit
+`core.allowedHosts` when the host check is the only obstacle. Two dead ends:
+
+- `viteFinal` → `server.allowedHosts` (or `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`) only covers
+  the Vite preview; where the core-server check exists it fires first and the 403 stays.
+- An entry with a port (`'host.docker.internal:6006'`) never matches: the check compares the
+  bare hostname.
+
+The check is HTTP-level, so it reproduces on the host without a container:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: host.docker.internal:6006' http://127.0.0.1:6006/
+# 403 before the config change, 200 after
+```
+
+Verified 2026-09-28 on Storybook 8.6.18, 9.1.20, and 10.3.4. On older patch levels of those
+lines `core.allowedHosts` can be absent or wired only to the core server; upgrade Storybook or
+fall back to `--host 0.0.0.0`.
+
 ## What rprtr warns about
 
 Before a docker-mode run starts, rprtr resolves the project config through Playwright's own
@@ -90,7 +133,8 @@ Warnings appear in the live UI sidebar for the run and in the server console. Th
 written into `report.json` or the static HTML artifact. Places with no warning are places with
 no divergence: a loopback address where nothing answers, a gateway address the container can
 reach on its host platform (see the matrix below), and hosts that are neither loopback nor the
-gateway.
+gateway. The probes judge networking only — they cannot see a host check refusing the gateway
+hostname (see the section above).
 
 The config summary is cached per server process, like the browser pins: after editing
 `webServer` or `baseURL`, restart the server to re-read it. Host services are probed fresh on
