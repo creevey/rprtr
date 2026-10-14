@@ -13,5 +13,5 @@
 
 ## 3. Invariants and gate
 
-- [ ] 3.1 Assert the artifact and live-UI invariants at unit level: records never contain environment values or arguments, and `RunController.start`/`handleChildExit` emit no additional WebSocket broadcasts beyond the existing `run-status` messages. Verify: `cd tests && bun test run-controller.test.ts server-routes.test.ts vitest-discovery-app.test.ts`.
-- [ ] 3.2 Full gate: run `bun run check` and confirm no docs page documents server terminal records, so no `README.md` or `docs/*.md` update is required by this change. Verify: `bun run check` exits 0.
+- [x] 3.1 Assert the artifact and live-UI invariants at unit level: records never contain environment values or arguments, and `RunController.start`/`handleChildExit` emit no additional WebSocket broadcasts beyond the existing `run-status` messages. Verify: `cd tests && bun test run-controller.test.ts server-routes.test.ts vitest-discovery-app.test.ts`.
+- [x] 3.2 Full gate: run `bun run check` and confirm no docs page documents server terminal records, so no `README.md` or `docs/*.md` update is required by this change. Verify: `bun run check` exits 0.

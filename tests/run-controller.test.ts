@@ -1043,6 +1043,41 @@ describe('RunController exit record', () => {
   })
 })
 
+describe('RunController lifecycle records stay terminal-only', () => {
+  test('no record contains environment values or command arguments', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setResolveLaunch((_cwd, args) => ({ cmd: 'npx', args: ['playwright', ...args, '--sentinel-argument'] }))
+    f.controller.start({})
+    f.advanceTimer(7)
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect([...f.logs, ...f.warnings]).toHaveLength(2)
+    const records = [...f.logs, ...f.warnings].join('\n')
+    expect(records).not.toContain('sentinel-env-value')
+    expect(records).not.toContain('SENTINEL_ENV')
+    expect(records).not.toContain('--sentinel-argument')
+  })
+
+  test('emits no WebSocket broadcasts beyond the existing run-status messages', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect(f.broadcasts).toEqual([
+      { type: 'run-status', data: { running: true, mode: 'local' } },
+      { type: 'run-status', data: { running: false, mode: 'local' } },
+    ])
+    expect(JSON.stringify(f.broadcasts)).not.toContain('[RunController]')
+  })
+
+  test('report persistence only sees the running flag and run scope', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({ tests: [{ file: 'a.spec.ts', line: 1, titlePath: ['t'] }] })
+    f.child.exitEmitters.forEach((cb) => cb(0))
+    expect(f.runningFlag.value).toBe(false)
+    expect(f.filteredCalls).toEqual([true])
+    expect(f.saveReportCalls.value).toBe(1)
+  })
+})
+
 describe('RunController.stop', () => {
   test('refuses when not running', () => {
     const f = createFixture(SAMPLE_CTX)
