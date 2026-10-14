@@ -2,7 +2,7 @@
 
 ## 1. Prerequisite check
 
-- [ ] 1.1 Confirm the base landed: `run-launch-diagnostics` provides the controller `log` sink and `LaunchSpec.container`, and `playwright-docker-browser` provides the shared sidecar-backed docker path. Verify: `cd tests && bun test run-controller.test.ts browser-sidecar.test.ts` passes against the current tree; if not, stop and implement those changes first.
+- [x] 1.1 Confirm the base landed: `run-launch-diagnostics` provides the controller `log` sink and `LaunchSpec.container`, and `playwright-docker-browser` provides the shared sidecar-backed docker path. Verify: `cd tests && bun test run-controller.test.ts browser-sidecar.test.ts` passes against the current tree; if not, stop and implement those changes first.
 
 ## 2. Activation and propagation
 
