@@ -47,6 +47,13 @@ export interface ChildProcessLike {
   on(event: 'exit', cb: (code: number | null, signal?: string | null) => void): void
   on(event: 'error', cb: (err: Error) => void): void
   kill(signal: string): void
+  /** Optional piped-output handles; present when the spawn piped the stream. */
+  stdout?: {
+    on(event: 'data', cb: (chunk: string | Buffer) => void): void
+  }
+  stderr?: {
+    on(event: 'data', cb: (chunk: string | Buffer) => void): void
+  }
 }
 
 export interface SpawnLike {

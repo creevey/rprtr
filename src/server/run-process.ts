@@ -14,6 +14,12 @@ export function createRealSpawn(): SpawnLike {
       // Node's own `exit` event carries (code, signal); relaying the typed
       // listener keeps the terminating signal visible to the controller.
       on: (event, cb) => cp.on(event, cb),
+      stdout: {
+        on: (event, cb) => cp.stdout?.on(event, cb),
+      },
+      stderr: {
+        on: (event, cb) => cp.stderr?.on(event, cb),
+      },
       kill: (signal) => {
         const sig = KNOWN_SIGNALS[signal]
         if (sig !== undefined) cp.kill(sig)

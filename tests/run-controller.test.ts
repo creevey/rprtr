@@ -17,16 +17,38 @@ interface StubChild {
   killed: string[]
   exitEmitters: Array<(code: number | null, signal?: string | null) => void>
   errorEmitters: Array<(err: Error) => void>
+  stdout: { on(event: 'data', cb: (chunk: string | Buffer) => void): void }
+  stderr: { on(event: 'data', cb: (chunk: string | Buffer) => void): void }
+  emitStdout: (chunk: string) => void
+  emitStderr: (chunk: string) => void
 }
 
 function createStubChild(): StubChild & ChildProcessLike {
   const exitEmitters: Array<(code: number | null, signal?: string | null) => void> = []
   const errorEmitters: Array<(err: Error) => void> = []
   const killed: string[] = []
+  const stdoutHandlers: Array<(chunk: string | Buffer) => void> = []
+  const stderrHandlers: Array<(chunk: string | Buffer) => void> = []
   return {
     killed,
     exitEmitters,
     errorEmitters,
+    stdout: {
+      on: (_event, cb): void => {
+        stdoutHandlers.push(cb)
+      },
+    },
+    stderr: {
+      on: (_event, cb): void => {
+        stderrHandlers.push(cb)
+      },
+    },
+    emitStdout: (chunk): void => {
+      for (const cb of stdoutHandlers) cb(chunk)
+    },
+    emitStderr: (chunk): void => {
+      for (const cb of stderrHandlers) cb(chunk)
+    },
     on(
       event: 'exit' | 'error',
       cb: ((code: number | null, signal?: string | null) => void) | ((err: Error) => void),
@@ -688,6 +710,57 @@ describe('RunController debug launch record', () => {
   test('emits no launch record with debug off', () => {
     const f = createFixture(SAMPLE_CTX)
     f.controller.start({})
+    expect(f.debugLogs).toEqual([])
+  })
+})
+
+describe('RunController debug output capture', () => {
+  test('debug mode spawns with piped stdio and mirrors stdout/stderr lines with prefixes', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setDebugEnabled(true)
+
+    f.controller.start({})
+
+    expect(f.spawnCalls[0]!.opts.stdio).toEqual(['ignore', 'pipe', 'pipe'])
+    f.child.emitStdout('first line\nsecond ')
+    f.child.emitStderr('error line\n')
+    expect(f.debugLogs).toContain('[run>] first line')
+    expect(f.debugLogs).toContain('[run!] error line')
+    expect(f.debugLogs).not.toContain('[run>] second ')
+    f.child.emitStdout('line\n')
+    expect(f.debugLogs).toContain('[run>] second line')
+  })
+
+  test('the trailing partial line is flushed at exit with a byte summary', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setDebugEnabled(true)
+    f.controller.start({})
+    f.child.emitStdout('no trailing newline')
+
+    f.child.exitEmitters[0]!(0)
+
+    expect(f.debugLogs).toContain('[run>] no trailing newline')
+    const summary = f.debugLogs.find((line) => line.includes('event=output-summary'))!
+    expect(summary).toContain(`stdoutBytes=${'no trailing newline'.length}`)
+  })
+
+  test('a child that writes nothing is recorded as writing nothing', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setDebugEnabled(true)
+    f.controller.start({})
+
+    f.child.exitEmitters[0]!(0)
+
+    const summary = f.debugLogs.find((line) => line.includes('event=output-summary'))!
+    expect(summary).toContain('stdoutBytes=0')
+    expect(summary).toContain('stderrBytes=0')
+    expect(summary).toContain('wroteNothing=true')
+  })
+
+  test('without debug the spawn keeps stdio inherit and records nothing', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.controller.start({})
+    expect(f.spawnCalls[0]!.opts.stdio).toBe('inherit')
     expect(f.debugLogs).toEqual([])
   })
 })

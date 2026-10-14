@@ -27,8 +27,8 @@
 
 ## 4. Child output capture
 
-- [ ] 4.1 Write failing tests in `tests/run-controller.test.ts`: with debug on, the spawn call uses piped stdio and mirrors stdout/stderr lines with stream prefixes; a child writing nothing is recorded as writing nothing; without debug, `stdio: 'inherit'` is unchanged. Verify: `bun run build && cd tests && bun test run-controller.test.ts` (new cases fail).
-- [ ] 4.2 Extend `ChildProcessLike` with optional stdout/stderr handles, attach them in `createRealSpawn`, and implement line-buffered mirrored capture in debug mode only. Verify: task 4.1 tests pass; `bun run typecheck`.
+- [x] 4.1 Write failing tests in `tests/run-controller.test.ts`: with debug on, the spawn call uses piped stdio and mirrors stdout/stderr lines with stream prefixes; a child writing nothing is recorded as writing nothing; without debug, `stdio: 'inherit'` is unchanged. Verify: `bun run build && cd tests && bun test run-controller.test.ts` (new cases fail).
+- [x] 4.2 Extend `ChildProcessLike` with optional stdout/stderr handles, attach them in `createRealSpawn`, and implement line-buffered mirrored capture in debug mode only. Verify: task 4.1 tests pass; `bun run typecheck`.
 
 ## 5. Retention and sidecar evidence
 

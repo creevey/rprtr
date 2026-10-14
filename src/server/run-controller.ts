@@ -4,6 +4,7 @@ import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import { BROWSER_WS_ENV } from './browser-sidecar.ts'
 import { rewriteContainerTestDescriptors } from './docker-support.ts'
+import { attachRunCapture, type RunCapture } from './run-capture.ts'
 import {
   buildPlaywrightRunArgs,
   defaultDeleteTempFile,
@@ -50,6 +51,8 @@ export class RunController {
   private childMode: 'local' | 'docker' | null = null
   private sigkillTimer: unknown = null
   private testListPath: string | null = null
+  /** Debug-only mirrored stdout/stderr capture of the running child. */
+  private capture: RunCapture | null = null
   /** Ready sidecar endpoint from the last successful prepareRun, reused across runs. */
   private browserWs: string | null = null
   /** Image of the sidecar backing the current Vitest run, exported for offline pin resolution. */
@@ -145,6 +148,25 @@ export class RunController {
   }
 
   /**
+   * Adopts a freshly spawned child: records it as the running child, attaches
+   * the debug capture (only when stdio was piped), and registers lifecycle
+   * handlers.
+   */
+  private adoptChild(
+    child: ChildProcessLike,
+    launcher: RunLauncher,
+    mode: 'local' | 'docker',
+    startedAt: number,
+  ): void {
+    this.child = child
+    this.childLauncher = launcher
+    this.childMode = mode
+    const debug = this.deps.debug?.enabled === true ? this.deps.debug : null
+    if (debug !== null) this.capture = attachRunCapture(child, debug)
+    this.watchChild(child, startedAt)
+  }
+
+  /**
    * Debug-only launch-vector record: the exact command and arguments and the
    * child's environment names, with values only from the redaction allowlist.
    * Emitted before the spawn so a synchronous spawn failure stays attributable.
@@ -188,19 +210,21 @@ export class RunController {
     }
     emitLog(this.deps, renderLaunchRecord(mode, ctx, filters, spec, tests))
     const startedAt = (this.deps.now ?? Date.now)()
-    const spawnEnv = this.deps.debug?.enabled === true ? { ...spec.env, [DEBUG_ENV]: '1' } : spec.env
+    const debug = this.deps.debug?.enabled === true ? this.deps.debug : null
+    const spawnEnv = debug === null ? spec.env : { ...spec.env, [DEBUG_ENV]: '1' }
     this.emitDebugLaunch(spec, spawnEnv)
     let child: ChildProcessLike
     try {
-      child = this.deps.spawn(spec.cmd, spec.args, { cwd: ctx.cwd, env: spawnEnv, stdio: 'inherit' })
+      child = this.deps.spawn(spec.cmd, spec.args, {
+        cwd: ctx.cwd,
+        env: spawnEnv,
+        stdio: debug === null ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+      })
     } catch (err) {
       this.cleanupTempFile()
       throw err
     }
-    this.child = child
-    this.childLauncher = launcher
-    this.childMode = mode
-    this.watchChild(child, startedAt)
+    this.adoptChild(child, launcher, mode, startedAt)
     this.deps.setReportRunning(true)
     this.deps.setRunFiltered?.(filters.tests !== undefined)
     this.warnNotices(this.runNotices)
@@ -255,6 +279,8 @@ export class RunController {
     if (this.sigkillTimer !== null) this.deps.timers.clearTimeout(this.sigkillTimer)
     this.sigkillTimer = null
     this.child = null
+    this.capture?.settle()
+    this.capture = null
     const launcher = this.childLauncher ?? this.deps.launcher
     const mode = this.childMode ?? launcher.mode
     this.childLauncher = null
