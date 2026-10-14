@@ -1,9 +1,8 @@
-import { resolvePlaywrightVersion, type PinBrowser, type ResolvedProjectPin } from '../browser-pins.ts'
+import { resolvePlaywrightVersion } from '../browser-pins.ts'
 import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
-import type { ClientWebSocketMessage } from '../types.ts'
-import { BROWSER_WS_ENV, type BrowserSidecar } from './browser-sidecar.ts'
-import { rewriteContainerTestDescriptors, type ContainerPathMapping } from './docker-support.ts'
+import { BROWSER_WS_ENV } from './browser-sidecar.ts'
+import { rewriteContainerTestDescriptors } from './docker-support.ts'
 import {
   buildPlaywrightRunArgs,
   defaultDeleteTempFile,
@@ -11,91 +10,36 @@ import {
   gteMinor,
   resolveReporterDefault,
 } from './run-command-helpers.ts'
+import type {
+  ChildProcessLike,
+  RunContext,
+  RunControllerDeps,
+  RunFilters,
+  SpawnLike,
+  StartResult,
+  StopResult,
+} from './run-controller-types.ts'
 import { type RunLauncher } from './run-launcher.ts'
-import type { RunMode } from './run-mode.ts'
 import { prepareRunForContext } from './run-preparation.ts'
 import { createRealSpawn, createRealTimers } from './run-process.ts'
+import { emitLog, emitWarn, renderLaunchRecord } from './run-records.ts'
 import { buildVitestArgs, resolveVitestLaunchPlan } from './vitest-backend.ts'
 
+export type {
+  ChildProcessLike,
+  RecordSinks,
+  RunContext,
+  RunControllerDeps,
+  RunFilters,
+  RunnerKind,
+  SpawnLike,
+  StartResult,
+  StopResult,
+} from './run-controller-types.ts'
 export { resolvePlaywrightLaunch } from './run-launcher.ts'
 export { buildTestListEntries } from './docker-support.ts'
 export { resolvePlaywrightVersion } from '../browser-pins.ts'
 export { createRealSpawn, createRealTimers } from './run-process.ts'
-
-export type RunnerKind = 'playwright' | 'vitest'
-
-export interface RunContext {
-  configFile: string
-  cwd: string
-  /** Playwright's rootDir — the base --test-list entries are matched against. */
-  rootDir?: string
-  /** Which runner kind this context launches. Absent means Playwright (old registers, seeded contexts). */
-  runner?: RunnerKind
-}
-
-export interface RunFilters {
-  tests?: RunTestDescriptor[]
-  update?: boolean
-}
-
-export type StartResult =
-  | { ok: true }
-  | {
-      ok: false
-      reason: 'no-config' | 'already-running' | 'no-tests' | 'docker-unavailable' | 'docker-missing-browser-hook'
-    }
-
-export type StopResult = { ok: true } | { ok: false; reason: 'not-running' }
-
-export interface ChildProcessLike {
-  on(event: 'exit', cb: (code: number | null) => void): void
-  on(event: 'error', cb: (err: Error) => void): void
-  kill(signal: string): void
-}
-
-export interface SpawnLike {
-  (cmd: string, args: string[], opts: Record<string, unknown>): ChildProcessLike
-}
-
-export interface RunControllerDeps {
-  getRunContext(): RunContext | null
-  port: number
-  broadcast(message: ClientWebSocketMessage): void
-  setReportRunning(running: boolean): void
-  /** Records whether the in-progress run is filtered, so run-end can preserve unrelated tests. */
-  setRunFiltered?(filtered: boolean): void
-  /** Invoked when the child exits, so a discovery refresh queued during the run can apply. */
-  notifyRunSettled?: () => void
-  containerPathMapping?: ContainerPathMapping
-  /** Flushes pending report writes on child exit so an interrupted run still persists. */
-  saveReport?: () => Promise<void>
-  spawn: SpawnLike
-  timers: {
-    setTimeout: (fn: () => void, ms?: number) => unknown
-    clearTimeout: (handle: unknown) => void
-  }
-  resolveReporter?: (cwd: string) => string | null
-  /** Builds the launch command and environment for a run. */
-  launcher: RunLauncher
-  /** Configured run mode; Vitest runs compose with the browser sidecar in docker/auto modes. */
-  getRunMode?: () => RunMode | undefined
-  /** Always-local launcher used when a Vitest run must skip the docker backend. */
-  localLauncher?: RunLauncher
-  /** Warm browser sidecar backing docker-mode Vitest runs. */
-  browserSidecar?: BrowserSidecar
-  /** Reads declared Vitest pins for the sidecar preflight; defaults to the project's Vitest config. */
-  readVitestPins?: (cwd: string) => Promise<readonly ResolvedProjectPin[]>
-  /** Installed browser executable paths for the Vitest pin preflight; defaults to the project's Playwright. */
-  browserExecutablePaths?: (cwd: string) => Record<PinBrowser, string> | null
-  /** Vitest config hook scan; defaults to the textual `CRVY_RPRTR_BROWSER_WS` scan. */
-  hasBrowserHook?: (configFile: string) => boolean
-  /** Warning sink for run-mode fallbacks; defaults to console.warn. */
-  warn?: (message: string) => void
-  /** Injectable seams for the version-gated `--test-list` path (Playwright >= 1.56). */
-  getPlaywrightVersion?: (cwd: string) => string | null
-  writeTempFile?: (content: string) => string
-  deleteTempFile?: (path: string) => void
-}
 
 const STOP_GRACE_MS = 5000
 
@@ -183,10 +127,7 @@ export class RunController {
    * never persisted: they only decorate the running broadcast for the live UI.
    */
   private warnNotices(notices: readonly string[]): void {
-    for (const notice of notices) {
-      if (this.deps.warn === undefined) console.warn(notice)
-      else this.deps.warn(notice)
-    }
+    for (const notice of notices) emitWarn(this.deps, notice)
   }
 
   start(filters: RunFilters): StartResult {
@@ -213,6 +154,7 @@ export class RunController {
         ...(this.browserImage === null ? {} : { [DOCKER_IMAGE_ENV]: this.browserImage }),
       }
     }
+    emitLog(this.deps, renderLaunchRecord(mode, ctx, filters, spec, tests))
     let child: ChildProcessLike
     try {
       child = this.deps.spawn(spec.cmd, spec.args, { cwd: ctx.cwd, env: spec.env, stdio: 'inherit' })

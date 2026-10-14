@@ -10,6 +10,12 @@ export interface LaunchSpec {
   cmd: string
   args: string[]
   env: Record<string, string | undefined>
+  /**
+   * Container launches: the resolved image and container name, kept as first-class
+   * launch data so the run's terminal record can name them without parsing `args`.
+   * Absent for local launches.
+   */
+  container?: { image: string; name: string }
 }
 
 export interface LaunchParams {

@@ -117,12 +117,3 @@ export function buildDockerRunArgs(ctx: RunContext, playwrightArgs: string[], de
   args.push(deps.image, ...deps.command, 'playwright', ...rewrittenArgs)
   return args
 }
-
-export function stripCi(env: Record<string, string | undefined>): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = {}
-  for (const [key, value] of Object.entries(env)) {
-    if (key === 'CI') continue
-    out[key] = value
-  }
-  return out
-}

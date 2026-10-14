@@ -82,6 +82,12 @@ describe('createLocalLauncher', () => {
     expect(spec.env.CI).toBeUndefined()
   })
 
+  test('local launches carry no container diagnostics', () => {
+    const launcher = createLocalLauncher({ port: 3000, env: {} })
+    const spec = launcher.launch(params(['test']))
+    expect(spec.container).toBeUndefined()
+  })
+
   test('launch defaults to the package-manager-aware resolver', () => {
     const saved = process.env.npm_config_user_agent
     try {

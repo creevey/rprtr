@@ -210,6 +210,17 @@ describe('DockerLauncher.launch', () => {
     expect(spec.env.CI).toBeUndefined()
   })
 
+  test('reports the resolved image and container name as launch diagnostics', async () => {
+    const { launcher } = makeLauncher()
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+    const spec = launcher.launch({ ctx: CTX, playwrightArgs: ['test'] })
+
+    expect(spec.container).toEqual({
+      image: 'mcr.microsoft.com/playwright:v1.59.0-noble',
+      name: 'test-container',
+    })
+  })
+
   test('exports the docker-only gateway contract next to the rendering pins', async () => {
     const { launcher } = makeLauncher()
     await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })

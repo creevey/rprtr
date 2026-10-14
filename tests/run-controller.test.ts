@@ -14,20 +14,23 @@ import type { ClientWebSocketMessage } from '../src/types'
 
 interface StubChild {
   killed: string[]
-  exitEmitters: Array<(code: number | null) => void>
+  exitEmitters: Array<(code: number | null, signal?: string | null) => void>
   errorEmitters: Array<(err: Error) => void>
 }
 
 function createStubChild(): StubChild & ChildProcessLike {
-  const exitEmitters: Array<(code: number | null) => void> = []
+  const exitEmitters: Array<(code: number | null, signal?: string | null) => void> = []
   const errorEmitters: Array<(err: Error) => void> = []
   const killed: string[] = []
   return {
     killed,
     exitEmitters,
     errorEmitters,
-    on(event: 'exit' | 'error', cb: ((code: number | null) => void) | ((err: Error) => void)): void {
-      if (event === 'exit') exitEmitters.push(cb as (code: number | null) => void)
+    on(
+      event: 'exit' | 'error',
+      cb: ((code: number | null, signal?: string | null) => void) | ((err: Error) => void),
+    ): void {
+      if (event === 'exit') exitEmitters.push(cb as (code: number | null, signal?: string | null) => void)
       if (event === 'error') errorEmitters.push(cb as (err: Error) => void)
     },
     kill(sig: string): void {
@@ -65,6 +68,8 @@ interface Fixture {
   diagnoseCalls: { value: number }
   setLauncherDiagnose: (fn: (() => Promise<string[]>) | null) => void
   notifyRunSettledCalls: { value: number }
+  logs: string[]
+  setContainerSpec: (spec: { image: string; name: string }) => void
 }
 
 function createFixture(
@@ -89,8 +94,10 @@ function createFixture(
   const saveReportCalls = { value: 0 }
   const probeCalls = { value: 0 }
   const warnings: string[] = []
+  const logs: string[] = []
   const prepareCalls = { value: 0 }
   let launcherMode: 'local' | 'docker' = 'local'
+  let containerSpec: { image: string; name: string } | undefined
   let hasBrowserHook = false
   let sidecarEnsureFails = false
   const sidecarEnsureCalls = { value: 0 }
@@ -154,7 +161,12 @@ function createFixture(
           cmd: 'npx',
           args: [name, ...playwrightArgs],
         }
-        return { cmd: resolved.cmd, args: resolved.args, env: { STUB_ENV: '1' } }
+        return {
+          cmd: resolved.cmd,
+          args: resolved.args,
+          env: { STUB_ENV: '1', SENTINEL_ENV: 'sentinel-env-value' },
+          ...(containerSpec === undefined ? {} : { container: containerSpec }),
+        }
       },
     },
     browserSidecar: {
@@ -193,6 +205,9 @@ function createFixture(
     getRunMode: (): 'local' | 'docker' | 'auto' | undefined => runMode,
     warn: (message: string): void => {
       warnings.push(message)
+    },
+    log: (message: string): void => {
+      logs.push(message)
     },
   }
   const controller = new RunController(deps)
@@ -251,6 +266,10 @@ function createFixture(
       launcherDiagnose = fn
     },
     notifyRunSettledCalls,
+    logs,
+    setContainerSpec: (spec): void => {
+      containerSpec = spec
+    },
   }
 }
 
@@ -546,6 +565,52 @@ describe('RunController.start', () => {
     const result = f.controller.start({})
     expect(result).toEqual({ ok: false, reason: 'docker-unavailable' })
     expect(f.spawnCalls).toHaveLength(0)
+  })
+})
+
+describe('RunController launch record', () => {
+  test('logs one launch record naming mode, runner, cwd, config, selection, and update for Playwright', () => {
+    const f = createFixture(SAMPLE_CTX)
+    const result = f.controller.start({
+      tests: [
+        { file: 'a.spec.ts', line: 1, projectName: 'chromium', titlePath: ['t1'] },
+        { file: 'b.spec.ts', line: 2, projectName: 'chromium', titlePath: ['t2'] },
+      ],
+      update: true,
+    })
+    expect(result).toEqual({ ok: true })
+    expect(f.logs).toEqual([
+      '[RunController] run start mode=local runner=playwright cwd=/proj config=/proj/playwright.config.ts tests=2 update=true',
+    ])
+  })
+
+  test('names the Vitest runner kind and an unfiltered selection', () => {
+    const f = createFixture(VITEST_CTX)
+    f.controller.start({})
+    expect(f.logs).toEqual([
+      '[RunController] run start mode=local runner=vitest cwd=/proj config=/proj/vitest.config.ts tests=all update=false',
+    ])
+  })
+
+  test('docker specs additionally render the image and container name', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setLauncherMode('docker')
+    f.setContainerSpec({ image: 'mcr.microsoft.com/playwright:v1.59.0-noble', name: 'crvy-rprtr-run-4242' })
+    f.controller.start({})
+    expect(f.logs).toEqual([
+      '[RunController] run start mode=docker runner=playwright cwd=/proj config=/proj/playwright.config.ts tests=all update=false image=mcr.microsoft.com/playwright:v1.59.0-noble container=crvy-rprtr-run-4242',
+    ])
+  })
+
+  test('never carries environment values or command arguments', () => {
+    const f = createFixture(SAMPLE_CTX)
+    f.setResolveLaunch((_cwd, args) => ({ cmd: 'npx', args: ['playwright', ...args, '--sentinel-argument'] }))
+    f.controller.start({})
+    expect(f.logs).toHaveLength(1)
+    const record = f.logs[0]!
+    expect(record).not.toContain('sentinel-env-value')
+    expect(record).not.toContain('SENTINEL_ENV')
+    expect(record).not.toContain('--sentinel-argument')
   })
 })
 

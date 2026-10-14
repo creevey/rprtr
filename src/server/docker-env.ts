@@ -61,3 +61,19 @@ export function collectForwardedEnvNames(env: Record<string, string | undefined>
   }
   return names
 }
+
+/**
+ * Removes `CI` from a host environment before it reaches the container: the
+ * container runs with its own pinned environment, and `CI` alone flips
+ * Playwright behavior (`reuseExistingServer: !process.env.CI`, `forbidOnly`,
+ * retries). The docker preflight listing applies the same transformation so the
+ * resolved config summary matches the one the container will load.
+ */
+export function stripCi(env: Record<string, string | undefined>): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (key === 'CI') continue
+    out[key] = value
+  }
+  return out
+}

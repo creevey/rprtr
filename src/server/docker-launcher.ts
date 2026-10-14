@@ -1,8 +1,9 @@
 import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
 import type { DockerConfigSummary } from './config-dump.ts'
+import { stripCi } from './docker-env.ts'
 import { diagnoseDockerHostServices, type HostServiceProbe } from './docker-host-services.ts'
 import { assertDockerPinsSatisfied } from './docker-preflight.ts'
-import { buildDockerRunArgs, stripCi } from './docker-run-args.ts'
+import { buildDockerRunArgs } from './docker-run-args.ts'
 import {
   createDockerExec,
   detectProjectAgent,
@@ -236,7 +237,12 @@ function buildLauncher(state: LauncherState, deps: LauncherDeps): RunLauncher {
         warn: deps.warn,
         platform: deps.platform,
       })
-      return { cmd: 'docker', args, env: stripCi(deps.baseEnv) }
+      return {
+        cmd: 'docker',
+        args,
+        env: stripCi(deps.baseEnv),
+        container: { image, name: deps.containerName },
+      }
     },
     onForceKill(): void {
       void forceRemoveContainer(deps.exec, deps.containerName)
