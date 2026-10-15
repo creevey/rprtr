@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-10-15
+
+### Added
+
+- **docker:** Judge gateway reachability per host platform
+- **reporter:** Forward runner errors and process output to the terminal
+- **server:** Record the launch of UI-launched runs
+- **server:** Record UI-launched run exits with duration and signal
+- **server:** Activate and propagate debug mode
+- **server:** Record debug launch, container, phase, and listing diagnostics
+- **server:** Capture and mirror child output in debug mode
+- **server:** Retain failed debug containers and capture sidecar evidence
+
+### Documentation
+
+- Point the development section at the release runbook
+- **docker:** Document platform-aware gateway reachability
+- **docker:** Document Storybook's host check rejecting the gateway name
+- **openspec:** Realign capability purposes with the sidecar architecture
+
+### Fixed
+
+- **docker:** Resolve the preflight listing with the container environment
+
+### Miscellaneous
+
+- **scripts:** Add the fail-closed release preflight
+- **skills:** Add the agent-executable release runbook
+
+### Testing
+
+- **server:** Pin launch and exit records as terminal-only
+- **server:** Pin debug redaction invariants; document debug mode
 ## [0.4.1] - 2026-09-22
 
 ### Added
