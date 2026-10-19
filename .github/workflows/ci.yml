@@ -71,6 +71,11 @@ jobs:
         with:
           node-version: 22
 
+      # npm 10.x has an Arborist peer-resolution crash (npm/cli#9787) that
+      # breaks fixture installs in package-surface.test.ts.
+      - name: Use npm 11
+        run: npm install --global npm@11
+
       - name: Install dependencies
         run: bun install
 
@@ -141,6 +146,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      # npm 10.x has an Arborist peer-resolution crash (npm/cli#9787) that
+      # breaks the fixture install below.
+      - name: Use npm 11
+        run: npm install --global npm@11
 
       - name: Install dependencies
         run: bun install
