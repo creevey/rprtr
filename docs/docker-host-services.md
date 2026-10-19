@@ -78,8 +78,9 @@ With the recipe above the container addresses the service as `http://host.docker
 and reaching the server is not enough: the dev server validates the `Host` header itself — the
 core server before the Vite preview. `host.docker.internal` is neither `localhost` nor an IP
 address, so the container gets a plain-text `403 Invalid host`; when only the preview layer
-rejects it, the message is Vite's `403 Blocked request. This host (…) is not allowed.` rprtr's
-probe cannot see either: the container reaches the server, and the server refuses the name.
+rejects it, the message is Vite's `403 Blocked request. This host (…) is not allowed.` rprtr
+reproduces the check before the run (see below) and warns when the service refuses the gateway
+hostname but still answers the loopback name.
 
 Allow the gateway hostname in the Storybook config:
 
@@ -122,19 +123,20 @@ listing — with the contract exported, so the recipe above resolves the way it 
 container — and probes the host side of every distinct `webServer` / `baseURL` address. It
 warns, without blocking the run, when the container will diverge from the host:
 
-| Case                                                                                      | What it means                                                                                                                                                                     |
-| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Loopback `webServer` with `reuseExistingServer` intent, and a service answers on the host | Playwright will not reuse the host service; it runs `command` inside the container. Add the recipe above.                                                                         |
-| Loopback `baseURL` not served by a `webServer` entry, and a service answers on the host   | Tests address the container's own loopback instead of the host service. Add the recipe above.                                                                                     |
-| Gateway address where nothing answers on the host                                         | That address can only be served from the host, so the run will fail or time out. Start the service (or fix `webServer`).                                                          |
-| Gateway address answering only on the host's loopback, on Linux                           | A Linux container cannot reach host loopback through `host.docker.internal`. Bind the service to `0.0.0.0` (or a non-loopback interface) and allow the port through the firewall. |
+| Case                                                                                      | What it means                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loopback `webServer` with `reuseExistingServer` intent, and a service answers on the host | Playwright will not reuse the host service; it runs `command` inside the container. Add the recipe above.                                                                                                                                                  |
+| Loopback `baseURL` not served by a `webServer` entry, and a service answers on the host   | Tests address the container's own loopback instead of the host service. Add the recipe above.                                                                                                                                                              |
+| Gateway address where nothing answers on the host                                         | That address can only be served from the host, so the run will fail or time out. Start the service (or fix `webServer`).                                                                                                                                   |
+| Gateway address answering only on the host's loopback, on Linux                           | A Linux container cannot reach host loopback through `host.docker.internal`. Bind the service to `0.0.0.0` (or a non-loopback interface) and allow the port through the firewall.                                                                          |
+| Gateway address that answers but rejects the gateway hostname                             | The service's own host check (Storybook `core.allowedHosts`, Vite `server.allowedHosts`) refuses `host.docker.internal`. Playwright counts the `403` as available, so every test loads the refusal page. Allow the hostname or bind with `--host 0.0.0.0`. |
 
 Warnings appear in the live UI sidebar for the run and in the server console. They are never
 written into `report.json` or the static HTML artifact. Places with no warning are places with
 no divergence: a loopback address where nothing answers, a gateway address the container can
-reach on its host platform (see the matrix below), and hosts that are neither loopback nor the
-gateway. The probes judge networking only — they cannot see a host check refusing the gateway
-hostname (see the section above).
+reach on its host platform and that accepts the gateway hostname (see the matrix below), and
+hosts that are neither loopback nor the gateway. A service that refuses both the gateway hostname
+and the loopback name is treated as an auth or ACL refusal, not a host check, and stays silent.
 
 The config summary is cached per server process, like the browser pins: after editing
 `webServer` or `baseURL`, restart the server to re-read it. Host services are probed fresh on
@@ -168,6 +170,10 @@ The preflight mirrors Playwright's own readiness check:
 - a gateway address is probed at the gateway hostname, then at the host's non-loopback IPv4
   addresses, then at the loopback alias — the loopback answer counts as reachable only on
   Docker Desktop hosts;
+- a reachable gateway address is requested twice more with explicit `Host` headers, against the
+  address that answered: once as `host.docker.internal:<port>` and once as `localhost:<port>`.
+  The refusal warning fires only when the first is `403` and the second is a non-403 response,
+  which separates a host check from an auth or ACL refusal;
 - probes use a short timeout, and any network failure counts as "no service".
 
 ## Related

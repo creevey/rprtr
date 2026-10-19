@@ -1,29 +1,15 @@
-import { connect } from 'node:net'
 import { networkInterfaces } from 'node:os'
 
 import pLimit from 'p-limit'
 
 import { DOCKER_HOST_GATEWAY } from '../docker-contract.ts'
 import type { DockerConfigSummary, DockerWebServer } from './config-dump.ts'
-
-/** Short by design: a probe must not delay run preparation. */
-const PROBE_TIMEOUT_MS = 2500
+import { createDefaultProbe, PROBE_TIMEOUT_MS, type HostServiceProbe } from './host-service-probe.ts'
 
 /** Bounded probing: distinct addresses, never a burst against the host. */
 const HOST_PROBE_CONCURRENCY = 4
 
 const DOCS_PATH = 'docs/docker-host-services.md'
-
-/**
- * Injectable network seams for tests; the defaults use short-timeout HTTP and TCP
- * checks mirroring Playwright's own readiness semantics.
- */
-export interface HostServiceProbe {
-  /** HTTP status code for the address; null when unreachable. Below 404 counts as available. */
-  http: (url: string) => Promise<number | null>
-  /** TCP connect check, used for `port`-only webServer entries. */
-  tcp: (host: string, port: number) => Promise<boolean>
-}
 
 export interface DockerHostDiagnosticDeps {
   /** Resolved Playwright config summary; null when the preflight listing could not produce one. */
@@ -120,16 +106,23 @@ type ResolveOptions = { desktop: boolean; hostAddresses: readonly string[] }
  * the host's interfaces, so the recursion stays shallow; probing sequentially keeps
  * the short-circuit (and never exceeds the candidate's own concurrency slot).
  */
-async function anyHostAddressAvailable(
+async function firstAnsweringHost(
   probe: HostServiceProbe,
   address: HostAddress,
   hosts: readonly string[],
   index = 0,
-): Promise<boolean> {
+): Promise<string | null> {
   const host = hosts[index]
-  if (host === undefined) return false
-  if (!isLoopbackHost(host) && (await isHttpAvailable(probe, probeUrl(address, host)))) return true
-  return anyHostAddressAvailable(probe, address, hosts, index + 1)
+  if (host === undefined) return null
+  if (!isLoopbackHost(host) && (await isHttpAvailable(probe, probeUrl(address, host)))) return host
+  return firstAnsweringHost(probe, address, hosts, index + 1)
+}
+
+/** What the container can reach at a candidate address, and how the host reached it. */
+interface Reachability {
+  availability: Availability
+  /** Host on which the address answered; null when nothing answered. */
+  targetHost: string | null
 }
 
 /**
@@ -141,13 +134,21 @@ async function resolveAvailability(
   probe: HostServiceProbe,
   address: HostAddress,
   options: ResolveOptions,
-): Promise<Availability> {
-  if (address.portOnly) return (await probe.tcp(address.host, address.port)) ? 'reachable' : 'unreachable'
-  if (await isHttpAvailable(probe, probeUrl(address, address.host))) return 'reachable'
-  if (!address.gateway) return 'unreachable'
-  if (await anyHostAddressAvailable(probe, address, options.hostAddresses)) return 'reachable'
-  if (!(await isHttpAvailable(probe, probeUrl(address, 'localhost')))) return 'unreachable'
-  return options.desktop ? 'reachable' : 'loopback-only'
+): Promise<Reachability> {
+  if (address.portOnly) {
+    const reachable = await probe.tcp(address.host, address.port)
+    return { availability: reachable ? 'reachable' : 'unreachable', targetHost: reachable ? address.host : null }
+  }
+  if (await isHttpAvailable(probe, probeUrl(address, address.host))) {
+    return { availability: 'reachable', targetHost: address.host }
+  }
+  if (!address.gateway) return { availability: 'unreachable', targetHost: null }
+  const host = await firstAnsweringHost(probe, address, options.hostAddresses)
+  if (host !== null) return { availability: 'reachable', targetHost: host }
+  if (!(await isHttpAvailable(probe, probeUrl(address, 'localhost')))) {
+    return { availability: 'unreachable', targetHost: null }
+  }
+  return { availability: options.desktop ? 'reachable' : 'loopback-only', targetHost: 'localhost' }
 }
 
 /** The host's non-internal IPv4 addresses: the interfaces the gateway can route to. */
@@ -161,34 +162,13 @@ function hostNonLoopbackAddresses(): readonly string[] {
   return [...addresses]
 }
 
-function createDefaultProbe(timeoutMs: number): HostServiceProbe {
-  return {
-    http: async (url: string): Promise<number | null> => {
-      try {
-        const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) })
-        return response.status
-      } catch {
-        return null
-      }
-    },
-    tcp: (host: string, port: number): Promise<boolean> =>
-      new Promise<boolean>((resolve) => {
-        const socket = connect({ host, port })
-        const finish = (value: boolean): void => {
-          socket.destroy()
-          resolve(value)
-        }
-        socket.setTimeout(timeoutMs, () => {
-          finish(false)
-        })
-        socket.once('connect', () => {
-          finish(true)
-        })
-        socket.once('error', () => {
-          finish(false)
-        })
-      }),
-  }
+/** Status a dev server's own host check returns for a hostname it does not allow. */
+const HOST_CHECK_STATUS = 403
+
+/** The `Host` header a browser sends for `host` at the address's protocol and port. */
+function authority(address: HostAddress, host: string): string {
+  const defaultPort = address.protocol === 'https' ? 443 : 80
+  return address.port === defaultPort ? host : `${host}:${address.port}`
 }
 
 function resolveProbe(deps: DockerHostDiagnosticDeps): HostServiceProbe {
@@ -196,6 +176,7 @@ function resolveProbe(deps: DockerHostDiagnosticDeps): HostServiceProbe {
   return {
     http: deps.probe?.http ?? defaults.http,
     tcp: deps.probe?.tcp ?? defaults.tcp,
+    hostHeader: deps.probe?.hostHeader ?? defaults.hostHeader,
   }
 }
 
@@ -221,6 +202,29 @@ function loopbackOnlyNotice(address: HostAddress): string {
 function gatewayDivergence(address: HostAddress, availability: Availability): string | null {
   if (!address.gateway || availability === 'reachable') return null
   return availability === 'loopback-only' ? loopbackOnlyNotice(address) : gatewayNotice(address)
+}
+
+function hostCheckNotice(address: HostAddress): string {
+  return `Docker mode: the host service at ${address.origin} rejects the gateway hostname with HTTP 403 while answering as localhost, so tests will see its error page instead of the app. Allow ${DOCKER_HOST_GATEWAY} in the dev server's host check (Storybook: core.allowedHosts; Vite: server.allowedHosts) or start it with --host 0.0.0.0 (see ${DOCS_PATH}).`
+}
+
+/**
+ * A reachable gateway address is refused when the service answers 403 to the
+ * hostname the container sends but not to the host's loopback name. Storybook's
+ * core server and Vite's preview layer both implement such a check; a service
+ * that refuses both names (auth, ACL) stays silent.
+ */
+async function hostHeaderDivergence(
+  probe: HostServiceProbe,
+  address: HostAddress,
+  targetHost: string,
+): Promise<string | null> {
+  if (!address.gateway) return null
+  const url = probeUrl(address, targetHost)
+  if ((await probe.hostHeader(url, authority(address, DOCKER_HOST_GATEWAY))) !== HOST_CHECK_STATUS) return null
+  const loopback = await probe.hostHeader(url, authority(address, 'localhost'))
+  if (loopback === null || loopback === HOST_CHECK_STATUS) return null
+  return hostCheckNotice(address)
 }
 
 /** Addresses are deduplicated and a baseURL served by a webServer entry is judged by that entry. */
@@ -249,15 +253,18 @@ async function diagnoseCandidate(
   options: ResolveOptions,
 ): Promise<string | null> {
   const { address } = candidate
-  const availability = await resolveAvailability(probe, address, options)
+  const { availability, targetHost } = await resolveAvailability(probe, address, options)
   if (candidate.kind === 'webserver') {
     if (address.loopback && candidate.entry.reuseExistingServer === true && availability === 'reachable') {
       return maskedNotice(address, candidate.entry)
     }
-    return gatewayDivergence(address, availability)
+  } else if (address.loopback && availability === 'reachable') {
+    return uncoveredNotice(address)
   }
-  if (address.loopback && availability === 'reachable') return uncoveredNotice(address)
-  return gatewayDivergence(address, availability)
+  const divergence = gatewayDivergence(address, availability)
+  if (divergence !== null) return divergence
+  if (availability !== 'reachable' || targetHost === null) return null
+  return hostHeaderDivergence(probe, address, targetHost)
 }
 
 /** Docker Desktop forwards host loopback into containers; every other platform follows the Linux rule. */

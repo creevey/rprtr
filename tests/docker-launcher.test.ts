@@ -676,6 +676,7 @@ describe('DockerLauncher.diagnose', () => {
     }
     const loopbackAnswering = {
       http: (url: string): Promise<number | null> => Promise.resolve(url.includes('localhost') ? 200 : null),
+      hostHeader: (): Promise<number | null> => Promise.resolve(200),
     }
 
     const linux = makeLauncher({
@@ -699,6 +700,28 @@ describe('DockerLauncher.diagnose', () => {
     await darwin.launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
 
     expect(await darwin.launcher.diagnose!()).toEqual([])
+  })
+
+  test('surfaces a host-header refusal through the injected probe seam', async () => {
+    const gatewaySummary = {
+      webServers: [],
+      projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }],
+    }
+    const { launcher } = makeLauncher({
+      platform: 'darwin',
+      readProjectPins: () => Promise.resolve([]),
+      readConfigSummary: () => Promise.resolve(gatewaySummary),
+      probeHostService: {
+        http: () => Promise.resolve(200),
+        hostHeader: (_url, host) => Promise.resolve(host.startsWith('host.docker.internal') ? 403 : 200),
+      },
+    })
+    await launcher.prepare!({ ctx: CTX, onProgress: noopProgress })
+
+    const notices = await launcher.diagnose!()
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('allowedHosts')
   })
 })
 

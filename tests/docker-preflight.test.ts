@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
+import { createServer } from 'http'
+import { createServer as createTcpServer, type Socket } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 import type { PinBrowser, ResolvedProjectPin } from '../src/browser-pins'
-import { diagnoseDockerHostServices, type HostServiceProbe } from '../src/server/docker-host-services'
+import { diagnoseDockerHostServices } from '../src/server/docker-host-services'
 import { createDockerLauncher } from '../src/server/docker-launcher'
 import { assertDockerPinsSatisfied } from '../src/server/docker-preflight'
 import type { DockerExec, DockerExecResult } from '../src/server/docker-support'
+import { createDefaultProbe, type HostServiceProbe } from '../src/server/host-service-probe'
 import {
   RunController,
   type ChildProcessLike,
@@ -23,6 +26,45 @@ const FIREFOX_1511 = '/caches/ms-playwright/firefox-1511/firefox/firefox'
 const WEBKIT_2272 = '/caches/ms-playwright/webkit-2272/pw_run.sh'
 
 const tempDirs: string[] = []
+
+function listenOn(server: ReturnType<typeof createServer>): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (address === null || typeof address === 'string') {
+        reject(new Error('Failed to read the server port'))
+        return
+      }
+      resolve(address.port)
+    })
+  })
+}
+
+function closeServer(server: ReturnType<typeof createServer>): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => (error === undefined ? resolve() : reject(error)))
+  })
+}
+
+async function reserveClosedPort(): Promise<number> {
+  const server = createTcpServer()
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (address === null || typeof address === 'string') {
+        reject(new Error('Failed to read the reserved port'))
+        return
+      }
+      resolve(address.port)
+    })
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error === undefined ? resolve() : reject(error)))
+  })
+  return port
+}
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
@@ -221,10 +263,56 @@ describe('docker config preflight', () => {
   })
 })
 
+describe('host-header probe', () => {
+  test('sends the supplied Host header and returns the response status', async () => {
+    const seen: string[] = []
+    const server = createServer((request, response) => {
+      seen.push(request.headers.host ?? '')
+      response.writeHead(request.headers.host?.startsWith('host.docker.internal') === true ? 403 : 200)
+      response.end('probe')
+    })
+    const port = await listenOn(server)
+    try {
+      const probe = createDefaultProbe(2000)
+
+      expect(await probe.hostHeader(`http://127.0.0.1:${port}/`, `host.docker.internal:${port}`)).toBe(403)
+      expect(await probe.hostHeader(`http://127.0.0.1:${port}/`, `localhost:${port}`)).toBe(200)
+      expect(seen).toEqual([`host.docker.internal:${port}`, `localhost:${port}`])
+    } finally {
+      await closeServer(server)
+    }
+  })
+
+  test('returns null when the target is unreachable', async () => {
+    const port = await reserveClosedPort()
+
+    expect(await createDefaultProbe(500).hostHeader(`http://127.0.0.1:${port}/`, 'localhost')).toBeNull()
+  })
+
+  test('gives up after the timeout', async () => {
+    const sockets = new Set<Socket>()
+    const server = createServer(() => {
+      // Deliberately never respond.
+    })
+    server.on('connection', (socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+    })
+    const port = await listenOn(server)
+    try {
+      expect(await createDefaultProbe(50).hostHeader(`http://127.0.0.1:${port}/`, 'localhost')).toBeNull()
+    } finally {
+      for (const socket of sockets) socket.destroy()
+      await closeServer(server)
+    }
+  })
+})
+
 describe('host service diagnostic', () => {
   const unreachable: HostServiceProbe = {
     http: () => Promise.resolve(null),
     tcp: () => Promise.resolve(false),
+    hostHeader: () => Promise.resolve(null),
   }
 
   test('warns when a loopback webServer with reuse intent is masked inside the container', async () => {
@@ -314,7 +402,7 @@ describe('host service diagnostic', () => {
         webServers: [{ command: 'npm run dev', url: 'http://host.docker.internal:6006', reuseExistingServer: true }],
         projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }],
       },
-      probe: { http: () => Promise.resolve(200) },
+      probe: { http: () => Promise.resolve(200), hostHeader: () => Promise.resolve(200) },
     })
 
     expect(withoutIntent).toEqual([])
@@ -356,6 +444,7 @@ describe('host service diagnostic', () => {
           probed.push(url)
           return Promise.resolve(url.endsWith('/index.html') ? 200 : 404)
         },
+        hostHeader: () => Promise.resolve(200),
       },
     })
 
@@ -374,6 +463,7 @@ describe('host service diagnostic', () => {
           probed.push(url)
           return Promise.resolve(url.includes('localhost') ? 200 : null)
         },
+        hostHeader: () => Promise.resolve(200),
       },
     })
 
@@ -407,6 +497,7 @@ describe('host service diagnostic', () => {
           probed.push(url)
           return Promise.resolve(url.includes('192.168.1.10') ? 200 : null)
         },
+        hostHeader: () => Promise.resolve(200),
       },
     })
 
@@ -421,7 +512,10 @@ describe('host service diagnostic', () => {
         config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
         platform,
         hostAddresses: () => ['192.168.1.10'],
-        probe: { http: (url) => Promise.resolve(url.includes('localhost') ? 200 : null) },
+        probe: {
+          http: (url) => Promise.resolve(url.includes('localhost') ? 200 : null),
+          hostHeader: () => Promise.resolve(200),
+        },
       })
 
       expect(notices).toEqual([])
@@ -460,6 +554,116 @@ describe('host service diagnostic', () => {
     expect(notices[0]).toContain('http://localhost:6006')
     expect(notices[0]).not.toContain('secret')
     expect(notices[0]).not.toContain('token')
+  })
+
+  test('warns when a reachable gateway service refuses the gateway hostname', async () => {
+    const calls: Array<{ url: string; host: string }> = []
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      platform: 'darwin',
+      hostAddresses: () => [],
+      probe: {
+        http: (url) => Promise.resolve(url.includes('localhost') ? 200 : null),
+        hostHeader: (url, host) => {
+          calls.push({ url, host })
+          return Promise.resolve(host.startsWith('host.docker.internal') ? 403 : 200)
+        },
+      },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('http://host.docker.internal:6006')
+    expect(notices[0]).toContain('403')
+    expect(notices[0]).toContain('host.docker.internal')
+    expect(notices[0]).toContain('allowedHosts')
+    expect(notices[0]).toContain('docs/docker-host-services.md')
+    expect(calls).toEqual([
+      { url: 'http://localhost:6006/', host: 'host.docker.internal:6006' },
+      { url: 'http://localhost:6006/', host: 'localhost:6006' },
+    ])
+  })
+
+  test('does not warn when the host service accepts the gateway hostname', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      probe: {
+        http: () => Promise.resolve(200),
+        hostHeader: () => Promise.resolve(200),
+      },
+    })
+
+    expect(notices).toEqual([])
+  })
+
+  test('does not warn when the host service refuses both hostnames', async () => {
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      probe: {
+        http: () => Promise.resolve(200),
+        hostHeader: () => Promise.resolve(403),
+      },
+    })
+
+    expect(notices).toEqual([])
+  })
+
+  test('does not probe host headers when the gateway service is unreachable', async () => {
+    const hosts: string[] = []
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      platform: 'linux',
+      hostAddresses: () => ['192.168.1.10'],
+      probe: {
+        ...unreachable,
+        hostHeader: (_url, host) => {
+          hosts.push(host)
+          return Promise.resolve(403)
+        },
+      },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toContain('fail or time out')
+    expect(hosts).toEqual([])
+  })
+
+  test('never probes host headers for loopback addresses', async () => {
+    const hosts: string[] = []
+    const notices = await diagnoseDockerHostServices({
+      config: {
+        webServers: [{ command: 'npm run dev', url: 'http://localhost:6006', reuseExistingServer: true }],
+        projects: [{ name: 'chromium', baseURL: 'http://127.0.0.1:5173' }],
+      },
+      probe: {
+        http: () => Promise.resolve(200),
+        hostHeader: (_url, host) => {
+          hosts.push(host)
+          return Promise.resolve(403)
+        },
+      },
+    })
+
+    expect(notices).toHaveLength(2)
+    expect(hosts).toEqual([])
+  })
+
+  test('probes the interface that answered for the host-header check', async () => {
+    const calls: Array<{ url: string; host: string }> = []
+    const notices = await diagnoseDockerHostServices({
+      config: { webServers: [], projects: [{ name: 'chromium', baseURL: 'http://host.docker.internal:6006' }] },
+      platform: 'linux',
+      hostAddresses: () => ['192.168.1.10'],
+      probe: {
+        http: (url) => Promise.resolve(url.includes('192.168.1.10') ? 200 : null),
+        hostHeader: (url, host) => {
+          calls.push({ url, host })
+          return Promise.resolve(host.startsWith('host.docker.internal') ? 403 : 200)
+        },
+      },
+    })
+
+    expect(notices).toHaveLength(1)
+    expect(calls[0]?.url).toBe('http://192.168.1.10:6006/')
   })
 })
 

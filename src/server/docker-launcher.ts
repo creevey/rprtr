@@ -2,7 +2,7 @@ import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
 import type { DebugLogger } from '../debug-log.ts'
 import type { DockerConfigSummary } from './config-dump.ts'
 import { stripCi } from './docker-env.ts'
-import { diagnoseDockerHostServices, type HostServiceProbe } from './docker-host-services.ts'
+import { diagnoseDockerHostServices } from './docker-host-services.ts'
 import { assertDockerPinsSatisfied } from './docker-preflight.ts'
 import { buildDockerRunArgs } from './docker-run-args.ts'
 import {
@@ -20,6 +20,7 @@ import {
   type DockerExec,
   type Warn,
 } from './docker-support.ts'
+import type { HostServiceProbe } from './host-service-probe.ts'
 import type { RunContext } from './run-controller.ts'
 import { resolvePlaywrightVersion } from './run-controller.ts'
 import type { LaunchParams, LaunchSpec, RunLauncher } from './run-launcher.ts'
