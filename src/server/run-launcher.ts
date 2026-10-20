@@ -1,3 +1,4 @@
+import type { Agent } from 'package-manager-detector'
 import { resolveCommand } from 'package-manager-detector/commands'
 import { getUserAgent } from 'package-manager-detector/detect'
 
@@ -45,6 +46,24 @@ export interface RunLauncher {
 }
 
 /**
+ * Version-aware wrapper around `getUserAgent()`.
+ *
+ * `getUserAgent()` (package-manager-detector 1.x) discards the version in
+ * `npm_config_user_agent`, so Yarn 2+ reports classic `yarn` and would resolve
+ * classic-only command shapes (e.g. the literal `--` in `yarn exec <bin> -- …`).
+ * The version is recovered from the raw user agent until the dependency range
+ * allows using the version-aware `resolveAgent` export (added in 1.9.0).
+ */
+function resolveVersionAwareAgent(): Agent | null {
+  const agent = getUserAgent()
+  if (agent !== 'yarn' && agent !== 'pnpm') return agent
+  const version = process.env.npm_config_user_agent?.split(' ')[0]?.split('/')[1]
+  if (agent === 'yarn' && version !== undefined && Number.parseInt(version, 10) > 1) return 'yarn@berry'
+  if (agent === 'pnpm' && version !== undefined && Number.parseInt(version, 10) < 7) return 'pnpm@6'
+  return agent
+}
+
+/**
  * Resolves the launch command for a local runner binary (`playwright`,
  * `vitest`, …) through the project's package manager.
  * `cwd` is reserved for future cwd-based detection (`package-manager-detector`'s
@@ -53,7 +72,7 @@ export interface RunLauncher {
  * spawn pattern. Falls back to `npx` when no agent is detectable.
  */
 export function resolveLocalCommand(name: string, args: string[]): { cmd: string; args: string[] } {
-  const agent = getUserAgent()
+  const agent = resolveVersionAwareAgent()
   const resolved = agent === null ? null : resolveCommand(agent, 'execute-local', [name, ...args])
   if (resolved !== null) return { cmd: resolved.command, args: resolved.args }
   return { cmd: 'npx', args: [name, ...args] }

@@ -48,17 +48,45 @@ describe('buildSpawnEnv', () => {
   })
 })
 
+function withUserAgent(userAgent: string | undefined, run: () => void): void {
+  const saved = process.env.npm_config_user_agent
+  try {
+    if (userAgent === undefined) delete process.env.npm_config_user_agent
+    else process.env.npm_config_user_agent = userAgent
+    run()
+  } finally {
+    if (saved === undefined) delete process.env.npm_config_user_agent
+    else process.env.npm_config_user_agent = saved
+  }
+}
+
 describe('resolvePlaywrightLaunch', () => {
   test('falls back to npx when no package manager is detectable', () => {
-    const saved = process.env.npm_config_user_agent
-    try {
-      delete process.env.npm_config_user_agent
+    withUserAgent(undefined, () => {
       const result = resolvePlaywrightLaunch('/any/cwd', ['test', '--config', 'x.ts'])
       expect(result.cmd).toBe('npx')
       expect(result.args).toEqual(['playwright', 'test', '--config', 'x.ts'])
-    } finally {
-      if (saved !== undefined) process.env.npm_config_user_agent = saved
-    }
+    })
+  })
+
+  test('resolves berry exec args for a Yarn 4 user agent (no stray --)', () => {
+    withUserAgent('yarn/4.13.0 npm/? node/v24.13.0 darwin arm64', () => {
+      const result = resolvePlaywrightLaunch('/any/cwd', ['test', '--list', '--reporter=json'])
+      expect(result.cmd).toBe('yarn')
+      expect(result.args).toEqual(['exec', 'playwright', 'test', '--list', '--reporter=json'])
+    })
+  })
+
+  test.each([
+    ['yarn/1.22.22 npm/? node/v14.17.6 darwin x64', 'yarn', ['exec', 'playwright', '--', 'test', '--config', 'x.ts']],
+    ['pnpm/9.12.1 npm/? node/v20.17.0 linux x64', 'pnpm', ['exec', 'playwright', 'test', '--config', 'x.ts']],
+    ['pnpm/6.32.9 npm/? node/v14.17.6 darwin x64', 'pnpm', ['exec', 'playwright', 'test', '--config', 'x.ts']],
+  ])('keeps existing resolution for %s', (userAgent, cmd, args) => {
+    withUserAgent(userAgent, () => {
+      const result = resolvePlaywrightLaunch('/any/cwd', ['test', '--config', 'x.ts'])
+      expect(result.cmd).toBe(cmd)
+      expect(result.args).toEqual(args)
+    })
   })
 })
 
