@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-10-22
+
+### Added
+
+- **pins:** Verify custom Docker image browsers offline
+- **report-tree:** Add shared authored-path tree builder
+- **report-tree:** Build and sync the sidebar from authored paths
+- **report-tree:** Warn about colliding authored paths once
+- **client:** Match sidebar status filters exactly except failed reruns
+
+### Documentation
+
+- **report-tree:** Document the authored-path sidebar hierarchy
+- Document failure-first sidebar group status
+- Document exact sidebar status filtering
+
+### Fixed
+
+- **client:** Roll up sidebar group status by failure-first precedence
+
+### Testing
+
+- **report-tree:** Cover selection path parity with authored hierarchy
+- **client:** Cover failure-first rollup in tree sync and restore
+- **client:** Cover filter hierarchy, view-only, and text behavior
 ## [0.4.4] - 2026-10-20
 
 ### Fixed
