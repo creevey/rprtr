@@ -1,35 +1,11 @@
-import {
-  type CrvyRprtrSuite,
-  type CrvyRprtrTest,
-  type TestData,
-  isTest,
-  isDefined,
-  getChildrenEntries,
-} from '../../types'
+import { DEFAULT_BROWSER_KEY, browserKeyFor, testTreePath } from '../../report-tree'
+import { type CrvyRprtrSuite, type CrvyRprtrTest, type TestData, isTest, getChildrenEntries } from '../../types'
 import { isTestStatus, calcStatus } from './status'
 
-/**
- * Fallback leaf key used when a test's `browser` field is empty. This only
- * happens for data produced by older reporters (before browser-label
- * resolution), where Playwright's implicit default project produced an empty
- * project name. Keeping `treeifyTests` and `syncTreeState`/`pathTokensFor`
- * aligned on this sentinel ensures live updates reach tests that would
- * otherwise be dropped by empty-browser guards.
- */
-export const DEFAULT_BROWSER_KEY = 'default'
-
-/**
- * Returns the leaf key for a test in the tree, substituting a sentinel for
- * empty browser strings (only possible for data from older reporters) so the
- * key is always non-empty and structural updates via `syncTreeState` can find
- * the same node.
- */
-export function browserKeyFor(browser: string): string {
-  return browser === '' ? DEFAULT_BROWSER_KEY : browser
-}
+export { DEFAULT_BROWSER_KEY, browserKeyFor }
 
 export function getTestPath(test: Pick<TestData, 'browser' | 'title' | 'titlePath' | 'fileTokens'>): string[] {
-  return [...(test.fileTokens ?? []), ...test.titlePath, test.title, test.browser].filter(isDefined)
+  return testTreePath(test)
 }
 
 export function getSuiteByPath(suite: CrvyRprtrSuite, path: string[]): CrvyRprtrSuite | CrvyRprtrTest | undefined {
