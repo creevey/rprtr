@@ -92,7 +92,8 @@ export function filterTests(suite: CrvyRprtrSuite, filter: CrvyRprtrViewFilter):
       filteredSuite.children = filteredSuite.children ?? {}
       filteredSuite.children[title] = suiteOrTest
     } else if (isTest(suiteOrTest)) {
-      if (status && suiteOrTest.status && ['pending', 'running', status].includes(suiteOrTest.status)) {
+      const isRunningFailedRetry = status === 'failed' && suiteOrTest.status === 'running'
+      if (status && suiteOrTest.status && (suiteOrTest.status === status || isRunningFailedRetry)) {
         filteredSuite.children = filteredSuite.children ?? {}
         filteredSuite.children[title] = suiteOrTest
       }

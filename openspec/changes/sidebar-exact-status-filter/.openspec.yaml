@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-22
+goal: Make status filters in the report sidebar match test statuses exactly so
+  skipped tests no longer appear under status:failed.
