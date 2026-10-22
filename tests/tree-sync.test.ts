@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { collectTestsById, getSuiteByPath, markTestsPending, syncTreeState, treeifyTests } from '../src/client/helpers'
-import type { CrvyRprtrSuite, TestData } from '../src/types'
+import type { CrvyRprtrSuite, CrvyRprtrTest, TestData } from '../src/types'
 
 function makeTest(overrides: Partial<TestData> = {}): TestData {
   return {
@@ -31,6 +31,11 @@ function findTest(
     }
   }
   return null
+}
+
+function asSuite(node: CrvyRprtrSuite | CrvyRprtrTest | undefined): CrvyRprtrSuite {
+  if (node === undefined || 'id' in node) throw new Error('expected a suite node')
+  return node
 }
 
 describe('authored-path tree grouping', () => {
@@ -344,6 +349,67 @@ describe('syncTreeState', () => {
 
     expect(originalTest?.checked).toBe(false)
     expect(originalTest?.status).toBe('failed')
+  })
+})
+
+describe('suite status rollup', () => {
+  test('a group with a failed and a skipped test is failed regardless of insertion order', () => {
+    const tree = treeifyTests({
+      skipped: makeTest({ id: 'skipped', titlePath: ['Group'], title: 'Skipped', status: 'pending' }),
+      failed: makeTest({
+        id: 'failed',
+        titlePath: ['Group'],
+        title: 'Failed',
+        browser: 'firefox',
+        status: 'failed',
+      }),
+    })
+
+    expect(asSuite(tree.children?.['Group']).status).toBe('failed')
+  })
+
+  test('a nested failure propagates to every ancestor', () => {
+    const tree = treeifyTests({
+      skipped: makeTest({ id: 'skipped', titlePath: ['Outer', 'Inner'], title: 'Skipped', status: 'pending' }),
+      failed: makeTest({
+        id: 'failed',
+        titlePath: ['Outer', 'Inner'],
+        title: 'Failed',
+        browser: 'firefox',
+        status: 'failed',
+      }),
+    })
+
+    const outer = asSuite(tree.children?.['Outer'])
+    const inner = asSuite(outer.children?.['Inner'])
+    expect(inner.status).toBe('failed')
+    expect(outer.status).toBe('failed')
+    expect(tree.status).toBe('failed')
+  })
+
+  test('a live update from pending to failed turns the group and ancestors failed', () => {
+    const initial: Record<string, TestData> = {
+      'test-1': makeTest({ id: 'test-1', titlePath: ['Outer', 'Inner'], title: 'One', status: 'pending' }),
+      'test-2': makeTest({
+        id: 'test-2',
+        titlePath: ['Outer', 'Inner'],
+        title: 'Two',
+        browser: 'firefox',
+        status: 'pending',
+      }),
+    }
+    const tree = treeifyTests(initial)
+
+    syncTreeState(tree, {
+      ...initial,
+      'test-1': makeTest({ id: 'test-1', titlePath: ['Outer', 'Inner'], title: 'One', status: 'failed' }),
+    })
+
+    const outer = asSuite(tree.children?.['Outer'])
+    const inner = asSuite(outer.children?.['Inner'])
+    expect(inner.status).toBe('failed')
+    expect(outer.status).toBe('failed')
+    expect(tree.status).toBe('failed')
   })
 })
 

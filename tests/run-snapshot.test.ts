@@ -79,6 +79,20 @@ describe('restoreTestStatuses', () => {
     expect(group.status).toBe('failed')
   })
 
+  test('restore then recalcAllSuiteStatuses rolls failed up past an untouched pending sibling', () => {
+    const testA = makeTest('a', 'pending')
+    const testB = makeTest('b', 'pending')
+    const group = makeSuite({ a: testA, b: testB })
+    const tree = makeSuite({ group })
+    const snapshot = new Map<string, TestStatus | undefined>([['a', 'failed']])
+    restoreTestStatuses(tree, snapshot, new Set(['b']))
+    recalcAllSuiteStatuses(tree)
+    // 'a' reverted to failed, 'b' untouched (pending); failed outranks pending
+    expect(testB.status).toBe('pending')
+    expect(group.status).toBe('failed')
+    expect(tree.status).toBe('failed')
+  })
+
   test('restores undefined status when snapshot maps id -> undefined', () => {
     const t = makeTest('a', 'failed')
     const tree = makeSuite({ a: t })

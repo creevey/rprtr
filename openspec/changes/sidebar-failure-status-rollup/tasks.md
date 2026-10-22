@@ -7,9 +7,9 @@
 
 ## 2. Tree and lifecycle rollups
 
-- [ ] 2.1 Add failing tests in `tests/tree-sync.test.ts` proving `treeifyTests` marks a group `failed` when it contains a failed and a skipped/pending test, a nested ancestor inherits the failure, and a live `syncTreeState` update from skipped/pending to failed turns the group and its ancestors red. Verify: `cd tests && bun test tree-sync.test.ts` (the mixed-status cases fail before task 1.2).
-- [ ] 2.2 Add a failing test in `tests/run-snapshot.test.ts` proving `restoreTestStatuses` followed by `recalcAllSuiteStatuses` rolls a restored failed test plus an untouched skipped/pending sibling up to `failed`. Verify: `cd tests && bun test run-snapshot.test.ts` (the mixed-status case fails before task 1.2).
-- [ ] 2.3 Confirm every tree recalculation path uses `rollupStatus` and that no suite status is persisted to `report.json`, offline JSON, or WebSocket payloads. Verify: `cd tests && bun test tree-sync.test.ts run-snapshot.test.ts report-state.test.ts` and `bun run typecheck`.
+- [x] 2.1 Add failing tests in `tests/tree-sync.test.ts` proving `treeifyTests` marks a group `failed` when it contains a failed and a skipped/pending test, a nested ancestor inherits the failure, and a live `syncTreeState` update from skipped/pending to failed turns the group and its ancestors red. Verify: `cd tests && bun test tree-sync.test.ts` (the mixed-status cases fail before task 1.2).
+- [x] 2.2 Add a failing test in `tests/run-snapshot.test.ts` proving `restoreTestStatuses` followed by `recalcAllSuiteStatuses` rolls a restored failed test plus an untouched skipped/pending sibling up to `failed`. Verify: `cd tests && bun test run-snapshot.test.ts` (the mixed-status case fails before task 1.2).
+- [x] 2.3 Confirm every tree recalculation path uses `rollupStatus` and that no suite status is persisted to `report.json`, offline JSON, or WebSocket payloads. Verify: `cd tests && bun test tree-sync.test.ts run-snapshot.test.ts report-state.test.ts` and `bun run typecheck`.
 
 ## 3. Documentation and full gate
 
