@@ -1,7 +1,7 @@
 export {
   testStatuses,
   isTestStatus,
-  calcStatus,
+  rollupStatus,
   countTestsStatus,
   getFailedTests,
   getCheckedTests,

@@ -13,18 +13,25 @@ export function isTestStatus(value: string): value is TestStatus {
   return testStatuses.some((s) => s === value)
 }
 
-const statusUpdatesMap = new Map<TestStatus | undefined, RegExp>([
-  [undefined, /(unknown|success|approved|failed|pending|running)/],
-  ['unknown', /(success|approved|failed|pending|running)/],
-  ['success', /(approved|failed|pending|running)/],
-  ['approved', /(failed|pending|running)/],
-  ['failed', /(pending|running)/],
-  ['pending', /running/],
-  ['running', /(success|approved|failed|pending)/],
-])
+const statusPrecedence: Record<TestStatus, number> = {
+  failed: 6,
+  running: 5,
+  retrying: 4,
+  pending: 3,
+  approved: 2,
+  success: 1,
+  unknown: 0,
+}
 
-export function calcStatus(oldStatus?: TestStatus, newStatus?: TestStatus): TestStatus | undefined {
-  return newStatus !== undefined && statusUpdatesMap.get(oldStatus)?.test(newStatus) === true ? newStatus : oldStatus
+/**
+ * Merges two statuses by severity: the higher-ranked status wins, and an absent
+ * status loses to any present one. The order is total, so repeated application
+ * is commutative and associative for any child order.
+ */
+export function rollupStatus(a?: TestStatus, b?: TestStatus): TestStatus | undefined {
+  if (a === undefined) return b
+  if (b === undefined) return a
+  return statusPrecedence[a] >= statusPrecedence[b] ? a : b
 }
 
 export function countTestsStatus(suite: CrvyRprtrSuite): {

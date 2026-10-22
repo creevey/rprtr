@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 
-import { countTestsStatus, describeResultDisplay, hasScreenshots, isNonVisual } from '../src/client/helpers'
+import {
+  countTestsStatus,
+  describeResultDisplay,
+  hasScreenshots,
+  isNonVisual,
+  rollupStatus,
+} from '../src/client/helpers'
 import type { CrvyRprtrSuite, CrvyRprtrTest, TestResult } from '../src/types'
 
 function testWith(overrides: Partial<CrvyRprtrTest>): CrvyRprtrTest {
@@ -114,6 +120,47 @@ describe('status helpers', () => {
       failedCount: 0,
       pendingCount: 1,
     })
+  })
+})
+
+describe('rollupStatus', () => {
+  test('a failed status outranks skipped/pending in either order', () => {
+    expect(rollupStatus('failed', 'pending')).toBe('failed')
+    expect(rollupStatus('pending', 'failed')).toBe('failed')
+  })
+
+  test('a failed status outranks a running status in either order', () => {
+    expect(rollupStatus('failed', 'running')).toBe('failed')
+    expect(rollupStatus('running', 'failed')).toBe('failed')
+  })
+
+  test('running outranks pending', () => {
+    expect(rollupStatus('running', 'pending')).toBe('running')
+    expect(rollupStatus('pending', 'running')).toBe('running')
+  })
+
+  test('pending outranks success', () => {
+    expect(rollupStatus('pending', 'success')).toBe('pending')
+    expect(rollupStatus('success', 'pending')).toBe('pending')
+  })
+
+  test('approved outranks success', () => {
+    expect(rollupStatus('approved', 'success')).toBe('approved')
+    expect(rollupStatus('success', 'approved')).toBe('approved')
+  })
+
+  test('success outranks unknown', () => {
+    expect(rollupStatus('success', 'unknown')).toBe('success')
+    expect(rollupStatus('unknown', 'success')).toBe('success')
+  })
+
+  test('two absent statuses stay absent', () => {
+    expect(rollupStatus(undefined, undefined)).toBeUndefined()
+  })
+
+  test('a single status is returned even when the other is absent', () => {
+    expect(rollupStatus('failed', undefined)).toBe('failed')
+    expect(rollupStatus(undefined, 'pending')).toBe('pending')
   })
 })
 

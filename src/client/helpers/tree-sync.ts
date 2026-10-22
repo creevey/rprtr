@@ -9,7 +9,7 @@ import {
   getChildrenKeys,
 } from '../../types'
 import { getSuiteByPath } from './path'
-import { calcStatus } from './status'
+import { rollupStatus } from './status'
 import { isTestDataEqual, copyMutableFields } from './test-equality'
 
 type OldTestEntry = {
@@ -98,10 +98,10 @@ function recalcAncestorStatuses(root: CrvyRprtrSuite, parentSuitePath: string[])
     const ancestor = getSuiteByPath(root, ancestorPath)
     if (ancestor === undefined || isTest(ancestor)) continue
     const childStatuses = getChildrenArray(ancestor.children).map(({ status }) => status)
-    ancestor.status = childStatuses.length === 0 ? undefined : childStatuses.reduce(calcStatus)
+    ancestor.status = childStatuses.length === 0 ? undefined : childStatuses.reduce(rollupStatus)
   }
   const rootChildStatuses = getChildrenArray(root.children).map(({ status }) => status)
-  root.status = rootChildStatuses.length === 0 ? undefined : rootChildStatuses.reduce(calcStatus)
+  root.status = rootChildStatuses.length === 0 ? undefined : rootChildStatuses.reduce(rollupStatus)
 }
 
 function pruneRemovedTests(

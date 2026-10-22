@@ -1,6 +1,6 @@
 import { DEFAULT_BROWSER_KEY, browserKeyFor, testTreePath } from '../../report-tree'
 import { type CrvyRprtrSuite, type CrvyRprtrTest, type TestData, isTest, getChildrenEntries } from '../../types'
-import { isTestStatus, calcStatus } from './status'
+import { isTestStatus, rollupStatus } from './status'
 
 export { DEFAULT_BROWSER_KEY, browserKeyFor }
 
@@ -81,8 +81,8 @@ function appendTestToTree(rootSuite: CrvyRprtrSuite, test: TestData): void {
     }
     const subSuite = suite.children[token]
     if (subSuite === undefined || isTest(subSuite)) return suite
-    subSuite.status = calcStatus(subSuite.status, test.status)
-    suite.status = calcStatus(suite.status, subSuite.status)
+    subSuite.status = rollupStatus(subSuite.status, test.status)
+    suite.status = rollupStatus(suite.status, subSuite.status)
     if (test.skip === false) subSuite.skip = false
     return subSuite
   }, rootSuite)
