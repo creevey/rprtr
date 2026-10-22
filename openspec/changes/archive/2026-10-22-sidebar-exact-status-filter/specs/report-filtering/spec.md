@@ -87,7 +87,7 @@ The live server UI, offline replay, and the static `crvy-rprtr.html` artifact SH
 #### Scenario: Static artifact matches the live UI
 
 - **WHEN** the same report containing failed, skipped/pending, and running tests is filtered by `status:failed` in the live UI and in the static artifact
-- **THEN** both surfaces show only the failed tests and the suites needed to reach them
+- **THEN** both surfaces show the failed tests and the running tests, plus the suites needed to reach them, and no skipped/pending tests
 
 #### Scenario: Offline replay matches the live UI
 
