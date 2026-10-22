@@ -12,12 +12,23 @@ export interface ReporterTransportOptions {
   ci?: boolean
 }
 
+function normalizeWorkerCount(count: number | undefined): number {
+  if (count === undefined || !Number.isFinite(count)) return 1
+  return Math.max(1, Math.trunc(count))
+}
+
+function normalizeWorkerIndex(index: number | undefined): number {
+  if (index === undefined || !Number.isFinite(index) || index < 0) return 0
+  return Math.trunc(index)
+}
+
 export class ReporterTransport {
   private ws: WebSocket | null = null
   readonly serverUrl: string
   readonly screenshotDir: string
   private queue: string[] = []
   private workerIndex: number
+  private workers = 1
   private offlineReportPath: string
   private reportHtmlPath: string
   private isOfflineMode = false
@@ -27,11 +38,16 @@ export class ReporterTransport {
   constructor(options: ReporterTransportOptions = {}) {
     this.serverUrl = options.serverUrl ?? process.env.CRVY_RPRTR_SERVER_URL ?? 'ws://localhost:3000'
     this.screenshotDir = options.screenshotDir ?? './screenshots'
-    this.workerIndex = options.workerIndex ?? (parseInt(process.env.TEST_WORKER_INDEX ?? '0', 10) || 0)
-    this.offlineReportPath = options.offlineReportPath ?? `./crvy-rprtr-${this.workerIndex}.json`
+    this.workerIndex = normalizeWorkerIndex(options.workerIndex ?? parseInt(process.env.TEST_WORKER_INDEX ?? '0', 10))
+    this.offlineReportPath = options.offlineReportPath ?? './crvy-rprtr-0.json'
     this.reportHtmlPath = options.reportHtmlPath ?? './crvy-rprtr.html'
     this.ci = options.ci ?? isCI()
     if (this.ci) this.isOfflineMode = true
+  }
+
+  /** Provider-resolved worker capacity for the run-level `workers` field. */
+  setWorkers(count: number | undefined): void {
+    this.workers = normalizeWorkerCount(count)
   }
 
   start(): void {
@@ -73,10 +89,15 @@ export class ReporterTransport {
     log('[CrvyRprtr] Offline mode enabled - events will be queued to file')
   }
 
-  send(message: object): void {
+  send(message: object, workerIndex?: number): void {
     const event = message as { type?: string; data?: unknown }
-    if (event.type === 'test-begin' || event.type === 'test-end' || event.type === 'run-end')
-      this.runEvents.push({ type: event.type, data: event.data })
+    if (event.type === 'test-begin' || event.type === 'test-end' || event.type === 'run-end') {
+      this.runEvents.push({
+        type: event.type,
+        data: event.data,
+        workerIndex: workerIndex === undefined ? this.workerIndex : normalizeWorkerIndex(workerIndex),
+      })
+    }
     const payload = JSON.stringify(message)
     if (!this.isOfflineMode) {
       if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(payload)
@@ -92,7 +113,7 @@ export class ReporterTransport {
     if (this.ci) {
       await flushPendingArtifacts?.()
       await writeStaticArtifact(this.runEvents, this.screenshotDir, this.reportHtmlPath)
-      await writeOfflineReport(this.runEvents, this.offlineReportPath, this.workerIndex)
+      await writeOfflineReport(this.runEvents, this.offlineReportPath, this.workers)
     }
 
     await new Promise<void>((resolve) => {

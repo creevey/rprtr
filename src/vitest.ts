@@ -115,6 +115,7 @@ export class CrvyRprtrVitestReporter implements Reporter {
   onInit(vitest: Vitest): void {
     this.projectRoot = vitest.config.root
     this.configFile = resolveVitestConfigFile(vitest)
+    this.transport.setWorkers(vitest.config.maxWorkers)
     // Before any browser starts: invalid pins and policy failures must abort the run here.
     this.environments = resolveVitestRunEnvironments({
       projects: Array.isArray(vitest.projects) ? vitest.projects : [],
@@ -137,6 +138,8 @@ export class CrvyRprtrVitestReporter implements Reporter {
   }
 
   onTestCaseReady(testCase: TestCase): void {
+    // Vitest's public reporter API exposes no executing worker id, so test events keep
+    // the transport fallback. The report-level count still comes from resolved maxWorkers.
     this.send({
       type: 'test-begin',
       data: {

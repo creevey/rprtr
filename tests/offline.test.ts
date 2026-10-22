@@ -7,8 +7,7 @@ import { join } from 'path'
 import { OfflineReportSchema, safeParse } from '../src/schemas'
 import type { OfflineReport } from '../src/schemas'
 
-const TEST_WORKER_INDEX = '99'
-const TEST_REPORT_PATH = `./crvy-rprtr-${TEST_WORKER_INDEX}.json`
+const TEST_REPORT_PATH = './crvy-rprtr-0.json'
 const TEST_ARTIFACT_PATH = './test-crvy-rprtr.html'
 const TEST_SCREENSHOT_DIR = './test-offline-screenshots'
 const TEST_DIR = join(process.cwd(), 'tests')
@@ -44,10 +43,7 @@ async function readOfflineReport(): Promise<OfflineReport> {
 }
 
 describe('Offline Mode', () => {
-  const originalWorkerIndex = process.env.TEST_WORKER_INDEX
-
   beforeEach(() => {
-    process.env.TEST_WORKER_INDEX = TEST_WORKER_INDEX
     try {
       if (existsSync(TEST_REPORT_PATH)) {
         unlinkSync(TEST_REPORT_PATH)
@@ -69,7 +65,6 @@ describe('Offline Mode', () => {
         await rm(TEST_ARTIFACT_PATH)
       }
     } catch {}
-    process.env.TEST_WORKER_INDEX = originalWorkerIndex
   })
 
   // Reframed: originally tested offline mode via WS failure; now tests that CI mode writes
@@ -88,28 +83,36 @@ describe('Offline Mode', () => {
     // Cast to access private methods for testing
     type TestReporter = {
       connect: () => void
-      onTestBegin: (test: object) => void
+      onBegin: (config: object, suite: object) => void
+      onTestBegin: (test: object, result?: object) => void
       onTestEnd: (test: object, result: object) => Promise<void>
       onEnd: (result: { status: string }) => Promise<void>
     }
     const reporterAny = reporter as unknown as TestReporter
 
+    reporterAny.onBegin(
+      { configFile: undefined, rootDir: process.cwd(), workers: 2, metadata: {}, projects: [] },
+      { allTests: () => [] },
+    )
     reporterAny.connect()
 
     await Bun.sleep(100)
 
     // Simulate test events via the public API
-    reporterAny.onTestBegin({
-      id: 'test-1',
-      title: 'Test 1',
-      location: { file: 'test.spec.ts', line: 10 },
-      parent: {
-        title: 'Suite',
-        type: 'describe',
-        project: () => ({ name: 'chromium' }),
-        parent: undefined,
+    reporterAny.onTestBegin(
+      {
+        id: 'test-1',
+        title: 'Test 1',
+        location: { file: 'test.spec.ts', line: 10 },
+        parent: {
+          title: 'Suite',
+          type: 'describe',
+          project: () => ({ name: 'chromium' }),
+          parent: undefined,
+        },
       },
-    })
+      { workerIndex: 0 },
+    )
 
     await reporterAny.onTestEnd(
       {
@@ -123,7 +126,7 @@ describe('Offline Mode', () => {
           parent: undefined,
         },
       },
-      { status: 'passed', errors: [], duration: 100, attachments: [], steps: [] },
+      { status: 'passed', errors: [], duration: 100, attachments: [], steps: [], workerIndex: 0 },
     )
 
     await reporterAny.onEnd({ status: 'passed' })
@@ -136,10 +139,12 @@ describe('Offline Mode', () => {
     const report = assertValidOfflineReport(parsed)
 
     expect(report.version).toBe(1)
-    expect(report.workers).toBe(100)
+    expect(report.workers).toBe(2)
     expect(report.events).toHaveLength(3)
     expect(report.events[0]?.type).toBe('test-begin')
+    expect(report.events[0]?.workerIndex).toBe(0)
     expect(report.events[1]?.type).toBe('test-end')
+    expect(report.events[1]?.workerIndex).toBe(0)
     expect(report.events[2]?.type).toBe('run-end')
   })
 

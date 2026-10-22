@@ -103,5 +103,5 @@ Static HTML artifacts and offline JSON reports SHALL continue to replay a single
 
 #### Scenario: Offline JSON reports unchanged
 
-- **WHEN** a CI run writes its per-worker offline JSON reports
-- **THEN** their event payloads replay into the same report state as before this capability
+- **WHEN** a CI run writes its offline JSON report
+- **THEN** its event payloads replay into the same report state as before this capability

@@ -11,7 +11,7 @@ type SentMessage = { type: string; data?: unknown }
 /** The reporter hooks this suite drives; `onError`/`onStdOut`/`onStdErr` are optional on `Reporter`. */
 interface ReporterHooks {
   onBegin: (config: object, suite: object) => void
-  onTestBegin: (test: object) => void
+  onTestBegin: (test: object, result?: object) => void
   onTestEnd: (test: object, result: object) => Promise<void>
   onEnd: (result: { status: string }) => Promise<void>
   onError?: (error: { message: string; stack?: string }) => void
@@ -74,7 +74,14 @@ function makeTest(id: string, title: string): object {
 }
 
 function makeResult(): object {
-  return { status: 'failed', errors: [{ message: 'visual mismatch' }], duration: 5, steps: [], attachments: [] }
+  return {
+    status: 'failed',
+    errors: [{ message: 'visual mismatch' }],
+    duration: 5,
+    steps: [],
+    attachments: [],
+    workerIndex: 0,
+  }
 }
 
 describe('CrvyRprtr runner output passthrough', () => {
@@ -162,7 +169,7 @@ async function runToArtifacts(root: string, forward: boolean): Promise<Artifacts
   }
 
   harness.reporter.onBegin(CONFIG, SUITE)
-  harness.reporter.onTestBegin(testCase)
+  harness.reporter.onTestBegin(testCase, makeResult())
   await harness.reporter.onTestEnd(testCase, makeResult())
   await harness.reporter.onEnd({ status: 'failed' })
 

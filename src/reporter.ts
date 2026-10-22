@@ -28,6 +28,7 @@ import {
   collectNativeImageAttachments,
   type CrvyRprtrOptions,
   type PendingPortableArtifact,
+  testBeginEvent,
 } from './reporter-helpers.ts'
 import {
   type RunnerOutputSeams,
@@ -38,7 +39,6 @@ import {
 import {
   type AttachmentData,
   type ScreenshotDeclaration,
-  describeTitlePath,
   extractScreenshotDeclarations,
   reporterTitlePath,
 } from './reporter-utils.ts'
@@ -102,6 +102,7 @@ export class CrvyRprtr implements Reporter {
       policy: this.browserPinPolicy,
       browserTypes: this.browserTypes,
     })
+    this.transport.setWorkers(config.workers)
     this.transport.start()
     if (!this.ci) {
       this.sendRegister(config)
@@ -113,8 +114,8 @@ export class CrvyRprtr implements Reporter {
     this.transport.connect()
   }
 
-  private send(message: object): void {
-    this.transport.send(message)
+  private send(message: object, workerIndex?: number): void {
+    this.transport.send(message, workerIndex)
   }
 
   private sendRegister(config: FullConfig): void {
@@ -162,23 +163,15 @@ export class CrvyRprtr implements Reporter {
     return relative(this.configDir, test.location.file).split(/[/\\]/)
   }
 
-  onTestBegin(test: TestCase): void {
+  onTestBegin(test: TestCase, result?: TestResult): void {
     const project = test.parent.project()
     this.testMetadata.set(test.id, {
       reporterTitlePath: reporterTitlePath(test),
     })
-    this.send({
-      type: 'test-begin',
-      data: {
-        id: test.id,
-        title: test.title,
-        titlePath: describeTitlePath(test),
-        fileTokens: this.fileTokens(test),
-        browser: this.resolveBrowserLabel(project),
-        projectName: project?.name ?? '',
-        location: { file: test.location.file, line: test.location.line, column: test.location.column },
-      },
-    })
+    this.send(
+      testBeginEvent(test, project, this.fileTokens(test), this.resolveBrowserLabel(project)),
+      result?.workerIndex,
+    )
   }
 
   async onTestEnd(test: TestCase, result: TestResult): Promise<void> {
@@ -210,7 +203,7 @@ export class CrvyRprtr implements Reporter {
         await mkdir(this.screenshotDir, { recursive: true })
         data.attachments = await saveAttachments(this.screenshotDir, test.id, { attachments: nativeAttachments })
       }
-      this.send({ type: 'test-end', data })
+      this.send({ type: 'test-end', data }, result.workerIndex)
     } finally {
       this.testMetadata.delete(test.id)
     }

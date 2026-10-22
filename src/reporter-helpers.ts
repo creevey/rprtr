@@ -1,7 +1,7 @@
-import type { TestResult } from '@playwright/test/reporter'
+import type { FullProject, TestCase, TestResult } from '@playwright/test/reporter'
 
 import type { FontRendering } from './rendering.ts'
-import type { AttachmentData } from './reporter-utils.ts'
+import { type AttachmentData, describeTitlePath } from './reporter-utils.ts'
 import type { ResolvedBaselineTarget } from './snapshot-path-resolver.ts'
 
 export interface CrvyRprtrOptions {
@@ -33,6 +33,39 @@ export interface PendingPortableArtifact {
   resolvedTargets: ResolvedBaselineTarget[]
   nativeAttachments: AttachmentData[]
   eventData: { attachments: AttachmentData[] }
+}
+
+export interface TestBeginEvent {
+  type: 'test-begin'
+  data: {
+    id: string
+    title: string
+    titlePath: string[]
+    fileTokens: string[]
+    browser: string
+    projectName: string
+    location: { file: string; line: number; column: number | undefined }
+  }
+}
+
+export function testBeginEvent(
+  test: TestCase,
+  project: FullProject | undefined,
+  fileTokens: string[],
+  browser: string,
+): TestBeginEvent {
+  return {
+    type: 'test-begin',
+    data: {
+      id: test.id,
+      title: test.title,
+      titlePath: describeTitlePath(test),
+      fileTokens,
+      browser,
+      projectName: project?.name ?? '',
+      location: { file: test.location.file, line: test.location.line, column: test.location.column },
+    },
+  }
 }
 
 export function collectNativeImageAttachments(result: TestResult): AttachmentData[] {

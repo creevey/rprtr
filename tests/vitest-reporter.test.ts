@@ -239,13 +239,22 @@ function createBrowserInitProject(paths: ReporterFixturePaths): unknown {
 }
 
 interface MockVitestInit {
-  readonly config: { readonly root: string; readonly configFile?: string }
+  readonly config: { readonly root: string; readonly configFile?: string; readonly maxWorkers?: number }
   readonly vite: { readonly config: { readonly configFile?: string } }
 }
 
-function createMockVitest(root: string, configFile?: string, viteConfigFile?: string): MockVitestInit {
+function createMockVitest(
+  root: string,
+  configFile?: string,
+  viteConfigFile?: string,
+  maxWorkers?: number,
+): MockVitestInit {
   return {
-    config: configFile === undefined ? { root } : { root, configFile },
+    config: {
+      root,
+      ...(configFile === undefined ? {} : { configFile }),
+      ...(maxWorkers === undefined ? {} : { maxWorkers }),
+    },
     vite: { config: { configFile: viteConfigFile ?? configFile } },
   }
 }
@@ -676,7 +685,7 @@ describe('CrvyRprtrVitestReporter', () => {
       screenshotDir: fixture.screenshotDir,
       serverUrl: 'ws://127.0.0.1:9',
     })
-    reporter.onInit(createMockVitest(fixture.paths.root) as never)
+    reporter.onInit(createMockVitest(fixture.paths.root, undefined, undefined, 4) as never)
     reporter.onBrowserInit?.(createBrowserInitProject(fixture.paths) as never)
 
     const testCase = createTestCase({
@@ -717,6 +726,8 @@ describe('CrvyRprtrVitestReporter', () => {
     const parsed: unknown = JSON.parse(await readFile(offlineReportPath, 'utf-8'))
     const report = OfflineReportSchema.parse(parsed)
     expect(report.version).toBe(1)
+    expect(report.workers).toBe(4)
+    expect(report.events.map((event) => event.workerIndex)).toEqual([0, 0, 0])
     expect(report.events.map((event) => event.type)).toEqual(['test-begin', 'test-end', 'run-end'])
 
     const beginData = TestBeginDataSchema.safeParse(report.events[0]?.data)
@@ -747,6 +758,34 @@ describe('CrvyRprtrVitestReporter', () => {
     expect(
       await Bun.file(join(fixture.screenshotDir, image?.actual?.replace('/screenshots/', '') ?? '')).exists(),
     ).toBe(true)
+  })
+
+  test('CI mode falls back to one worker when maxWorkers is unavailable', async () => {
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const offlineReportPath = join(fixture.paths.root, 'crvy-rprtr-0.json')
+
+    const reporter = new CrvyRprtrVitestReporter({
+      ci: true,
+      offlineReportPath,
+      reportHtmlPath: join(fixture.paths.root, 'crvy-rprtr.html'),
+      screenshotDir: fixture.screenshotDir,
+      serverUrl: 'ws://127.0.0.1:9',
+    })
+    reporter.onInit(createMockVitest(fixture.paths.root) as never)
+
+    const testCase = createTestCase({
+      id: 'vitest-fallback-1',
+      name: 'fallback',
+      file: fixture.paths.testFile,
+      state: 'failed',
+    })
+    reporter.onTestCaseReady?.(testCase as never)
+    await reporter.onTestRunEnd?.([], [], 'passed')
+
+    const report = OfflineReportSchema.parse(JSON.parse(await readFile(offlineReportPath, 'utf-8')))
+    expect(report.workers).toBe(1)
+    expect(report.events.map((event) => event.workerIndex)).toEqual([0, 0])
   })
 })
 

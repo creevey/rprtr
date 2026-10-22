@@ -11,7 +11,11 @@ import type { ResolvedBaselineTarget } from './snapshot-path-resolver.ts'
 
 const MAX_CONCURRENT_FILE_OPS = 5
 
-export type RunEvent = { type: 'test-begin' | 'test-end' | 'run-end'; data: unknown }
+export type RunEvent = {
+  type: 'test-begin' | 'test-end' | 'run-end'
+  data: unknown
+  workerIndex: number
+}
 
 export function sanitizeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9-_]/g, '_')
@@ -84,7 +88,7 @@ export async function saveAttachments(
 export async function writeOfflineReport(
   runEvents: RunEvent[],
   offlineReportPath: string,
-  workerIndex: number,
+  workers: number,
 ): Promise<void> {
   if (runEvents.length === 0) {
     log('[CrvyRprtr] No offline events to write')
@@ -94,8 +98,8 @@ export async function writeOfflineReport(
     const report = {
       version: 1,
       generatedAt: new Date().toISOString(),
-      workers: workerIndex + 1,
-      events: runEvents.map((event) => ({ ...event, timestamp: Date.now(), workerIndex })),
+      workers,
+      events: runEvents.map((event) => ({ ...event, timestamp: Date.now() })),
     }
     await writeFile(offlineReportPath, JSON.stringify(report, null, 2))
     log(`[CrvyRprtr] Wrote offline report: ${offlineReportPath}`)

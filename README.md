@@ -59,16 +59,16 @@ npx crvy-rprtr ./artifacts
 
 ## Reporter Options
 
-| Option                                   | Type               | Default                        | Description                                                                                            |
-| ---------------------------------------- | ------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `serverUrl`                              | `string`           | `"ws://localhost:3000"`        | WebSocket URL of the Crvy Rprtr server                                                                 |
-| `screenshotDir`                          | `string`           | `"./screenshots"`              | Directory for saving screenshot artifacts                                                              |
-| `offlineReportPath`                      | `string`           | `"./crvy-rprtr-{worker}.json"` | Path for offline report when server is unavailable                                                     |
-| `reportHtmlPath`                         | `string`           | `"./crvy-rprtr.html"`          | Path for the browser-openable static report HTML                                                       |
-| `playwrightSnapshotDir`                  | `string`           | `undefined`                    | Override the Playwright snapshot directory used for passed-baseline display lookup                     |
-| `playwrightSnapshotPathTemplate`         | `string`           | `undefined`                    | Mirror Playwright `snapshotPathTemplate` for passed-baseline display resolution                        |
-| `playwrightToHaveScreenshotPathTemplate` | `string`           | `undefined`                    | Mirror Playwright `expect.toHaveScreenshot.pathTemplate` for passed-baseline display; takes precedence |
-| `browserPinPolicy`                       | `"warn" \| "fail"` | `"warn"`                       | What a drifted browser pin does: `warn` annotates the run, `fail` fails it at reporter init            |
+| Option                                   | Type               | Default                 | Description                                                                                            |
+| ---------------------------------------- | ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `serverUrl`                              | `string`           | `"ws://localhost:3000"` | WebSocket URL of the Crvy Rprtr server                                                                 |
+| `screenshotDir`                          | `string`           | `"./screenshots"`       | Directory for saving screenshot artifacts                                                              |
+| `offlineReportPath`                      | `string`           | `"./crvy-rprtr-0.json"` | Path for the run's offline report when the server is unavailable                                       |
+| `reportHtmlPath`                         | `string`           | `"./crvy-rprtr.html"`   | Path for the browser-openable static report HTML                                                       |
+| `playwrightSnapshotDir`                  | `string`           | `undefined`             | Override the Playwright snapshot directory used for passed-baseline display lookup                     |
+| `playwrightSnapshotPathTemplate`         | `string`           | `undefined`             | Mirror Playwright `snapshotPathTemplate` for passed-baseline display resolution                        |
+| `playwrightToHaveScreenshotPathTemplate` | `string`           | `undefined`             | Mirror Playwright `expect.toHaveScreenshot.pathTemplate` for passed-baseline display; takes precedence |
+| `browserPinPolicy`                       | `"warn" \| "fail"` | `"warn"`                | What a drifted browser pin does: `warn` annotates the run, `fail` fails it at reporter init            |
 
 ## Browser Pinning
 
@@ -268,18 +268,18 @@ The extraction that powers passing tests reads literal string arguments: `toMatc
 
 ### Vitest Reporter Options
 
-| Option              | Type                                   | Default                        | Description                                                                                 |
-| ------------------- | -------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------- |
-| `serverUrl`         | `string`                               | `"ws://localhost:3000"`        | WebSocket URL of the Crvy Rprtr server                                                      |
-| `screenshotDir`     | `string`                               | `"./screenshots"`              | Directory for saving screenshot artifacts in offline/CI runs                                |
-| `offlineReportPath` | `string`                               | `"./crvy-rprtr-{worker}.json"` | Path for offline report when server is unavailable                                          |
-| `reportHtmlPath`    | `string`                               | `"./crvy-rprtr.html"`          | Path for the browser-openable static report HTML                                            |
-| `ci`                | `boolean`                              | auto-detected                  | Force offline/CI mode (content-addressed copies, portable artifacts)                        |
-| `referenceDir`      | `string`                               | `"__screenshots__"`            | Overrides Vitest's default reference directory for location resolution                      |
-| `attachmentsDir`    | `string`                               | `".vitest-attachments"`        | Overrides Vitest's default attachments directory for artifact lookup                        |
-| `browserPin`        | `{ browser, version }`                 | `undefined`                    | Fallback browser pin for every browser project the reporter reports on                      |
-| `browserPins`       | `Record<string, { browser, version }>` | `undefined`                    | Browser pins keyed by Vitest project name; overrides `browserPin`                           |
-| `browserPinPolicy`  | `"warn" \| "fail"`                     | `"warn"`                       | What a drifted browser pin does: `warn` annotates the run, `fail` fails it at reporter init |
+| Option              | Type                                   | Default                 | Description                                                                                 |
+| ------------------- | -------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
+| `serverUrl`         | `string`                               | `"ws://localhost:3000"` | WebSocket URL of the Crvy Rprtr server                                                      |
+| `screenshotDir`     | `string`                               | `"./screenshots"`       | Directory for saving screenshot artifacts in offline/CI runs                                |
+| `offlineReportPath` | `string`                               | `"./crvy-rprtr-0.json"` | Path for the run's offline report when the server is unavailable                            |
+| `reportHtmlPath`    | `string`                               | `"./crvy-rprtr.html"`   | Path for the browser-openable static report HTML                                            |
+| `ci`                | `boolean`                              | auto-detected           | Force offline/CI mode (content-addressed copies, portable artifacts)                        |
+| `referenceDir`      | `string`                               | `"__screenshots__"`     | Overrides Vitest's default reference directory for location resolution                      |
+| `attachmentsDir`    | `string`                               | `".vitest-attachments"` | Overrides Vitest's default attachments directory for artifact lookup                        |
+| `browserPin`        | `{ browser, version }`                 | `undefined`             | Fallback browser pin for every browser project the reporter reports on                      |
+| `browserPins`       | `Record<string, { browser, version }>` | `undefined`             | Browser pins keyed by Vitest project name; overrides `browserPin`                           |
+| `browserPinPolicy`  | `"warn" \| "fail"`                     | `"warn"`                | What a drifted browser pin does: `warn` annotates the run, `fail` fails it at reporter init |
 
 ### Supported Layouts and Limitations
 
@@ -294,9 +294,9 @@ The extraction that powers passing tests reads literal string arguments: `toMatc
 When the server isn't running during tests, the reporter automatically falls back to offline mode:
 
 - Test events are queued in memory
-- On test completion, events are written to `crvy-rprtr-{index}.json`
+- On test completion, all events are written to one `crvy-rprtr-0.json` file for the run
 - On test completion, a self-contained `crvy-rprtr.html` is written for direct browser review
-- When the server starts, it loads and merges all `crvy-rprtr-*.json` files from the offline report directory
+- When the server starts, it loads offline reports named `crvy-rprtr.json` or `crvy-rprtr-<digits>.json` from the offline report directory
 
 ## Passed Screenshot Modes
 
