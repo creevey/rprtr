@@ -33,4 +33,4 @@
 
 ## 6. Full gate
 
-- [ ] 6.1 Run the complete gate from the repository root: `bun run check`, plus `bun run example:ct` to confirm the component-testing example still reports and approves. Verify all commands exit 0.
+- [x] 6.1 Run the complete gate from the repository root: `bun run check`, plus `bun run example:ct` to confirm the component-testing example still reports and approves. Verify all commands exit 0.
