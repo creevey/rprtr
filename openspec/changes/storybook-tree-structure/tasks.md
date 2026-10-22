@@ -21,11 +21,11 @@
 
 ## 4. Collision diagnostics
 
-- [ ] 4.1 Add failing tests for `findTreePathCollisions` in a focused test: two tests with the same authored path and project collide, tests with different project leaves do not, normal `Primary` → `opens menu` manual tests do not, and discovered ids are excluded. Verify the tests fail before the detector exists.
-- [ ] 4.2 Implement `findTreePathCollisions` in `src/report-tree.ts` and verify the focused test plus `bun run typecheck` pass.
-- [ ] 4.3 Wire the detector into the server: run it after report/offline loading and after `test-end`, dedupe distinct collisions in the handler context, and log a console warning naming the shared path and colliding ids/titles. Verify with a server unit test that the warning is emitted once for a colliding pair and not for a manual-test-under-story pair.
-- [ ] 4.4 Wire the detector into `src/index.ts` for both embedded bootstrap data and `/api/report`, logging each distinct collision once in the browser console. Verify with a focused unit test for the warning function and `bun run typecheck`.
-- [ ] 4.5 Confirm a collision warning does not change status, grouping, approval, or run completion; verify the existing server-routes and report-state suites still pass.
+- [x] 4.1 Add failing tests for `findTreePathCollisions` in a focused test: two tests with the same authored path and project collide, tests with different project leaves do not, normal `Primary` → `opens menu` manual tests do not, and discovered ids are excluded. Verify the tests fail before the detector exists.
+- [x] 4.2 Implement `findTreePathCollisions` in `src/report-tree.ts` and verify the focused test plus `bun run typecheck` pass.
+- [x] 4.3 Wire the detector into the server: run it after report/offline loading and after `test-end`, dedupe distinct collisions in the handler context, and log a console warning naming the shared path and colliding ids/titles. Verify with a server unit test that the warning is emitted once for a colliding pair and not for a manual-test-under-story pair.
+- [x] 4.4 Wire the detector into `src/index.ts` for both embedded bootstrap data and `/api/report`, logging each distinct collision once in the browser console. Verify with a focused unit test for the warning function and `bun run typecheck`.
+- [x] 4.5 Confirm a collision warning does not change status, grouping, approval, or run completion; verify the existing server-routes and report-state suites still pass.
 
 ## 5. Documentation
 

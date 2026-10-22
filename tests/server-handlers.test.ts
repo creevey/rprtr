@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
 
 import { createMutableReportState, applyTestBeginEvent } from '../src/report-state'
 import { WebSocketMessageSchema } from '../src/schemas'
@@ -34,6 +34,7 @@ function createContext(): {
     reportData: state.reportData,
     wsClients: clients as unknown as Set<RuntimeWebSocket>,
     currentRunIds: state.currentRunIds,
+    reportedTreePathCollisions: new Set(),
     isFilteredRun: false,
     saveReport: (): Promise<void> => {
       flushCalls.value++
@@ -504,5 +505,56 @@ describe('handleRegister runner kinds', () => {
       rootDir: '/proj/tests',
       runner: 'playwright',
     })
+  })
+})
+
+describe('tree path collision warnings', () => {
+  const begin = (ctx: HandlerContext, id: string, titlePath: string[], title: string): void => {
+    handleTestBegin(ctx, {
+      id,
+      title,
+      titlePath,
+      browser: 'chromium',
+      location: { file: 'tests/button.spec.ts', line: 1 },
+    })
+  }
+
+  const end = (ctx: HandlerContext, id: string): void => {
+    handleTestEnd(ctx, { id, status: 'passed', attachments: [], visualNames: [] })
+  }
+
+  test('warns once for a colliding pair even when both test-end events repeat the collision', () => {
+    const { ctx } = createContext()
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      begin(ctx, 'first', ['Components/Button'], 'Primary')
+      begin(ctx, 'second', ['Components/Button'], 'Primary')
+      end(ctx, 'first')
+      end(ctx, 'second')
+
+      const collisionWarnings = warnSpy.mock.calls.filter((call) => String(call[0]).includes('Tree path collision'))
+      expect(collisionWarnings).toHaveLength(1)
+      const warning = String(collisionWarnings[0]?.[0])
+      expect(warning).toContain('Components/Button/Primary/chromium')
+      expect(warning).toContain('first')
+      expect(warning).toContain('second')
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  test('does not warn for a manual interaction test beneath a story', () => {
+    const { ctx } = createContext()
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      begin(ctx, 'visual', ['Components/Button'], 'Primary')
+      begin(ctx, 'manual', ['Components/Button', 'Primary'], 'opens menu')
+      end(ctx, 'visual')
+      end(ctx, 'manual')
+
+      expect(warnSpy).not.toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })

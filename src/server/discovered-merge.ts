@@ -1,7 +1,7 @@
+import { DISCOVERED_ID_PREFIX } from '../report-tree.ts'
 import type { TestData } from '../types.ts'
 
-/** Prefix marking test ids synthesized from discovery rather than a real run. */
-export const DISCOVERED_ID_PREFIX = 'discovered:'
+export { DISCOVERED_ID_PREFIX } from '../report-tree.ts'
 
 /**
  * Stable identity of a discovered test: (file, full title path). Survives across

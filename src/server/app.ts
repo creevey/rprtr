@@ -35,7 +35,7 @@ import { type RunLauncher } from './run-launcher.ts'
 import { type RunMode } from './run-mode.ts'
 import { createCloseHandler, createRunControllerAndHandlers } from './server-factories.ts'
 import { resolveStaticDir } from './static-dir.ts'
-import { broadcastToBrowsers } from './utils.ts'
+import { broadcastToBrowsers, warnReportTreePathCollisions } from './utils.ts'
 import { resolveSeedRunContext } from './vitest-seeding.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
@@ -236,6 +236,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
   const staticDir = await resolveStaticDir(options.staticDir)
   const wsClients = new Set<RuntimeWebSocket>()
   const currentRunIds = new Set<string>()
+  const reportedTreePathCollisions = new Set<string>()
   const debug = resolveDebugSettings({ flag: options.debug })
   const persistence = createReportPersistence(reportFile, () => withoutDiscoveredTests(reportData))
   const { routesContext, launcher, localLauncher, browserSidecar, configuredRunMode } = await setupRoutesContext(
@@ -251,6 +252,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
     wsClients,
     reportData,
     currentRunIds,
+    reportedTreePathCollisions,
     port,
     persistence,
     launcher,
@@ -264,6 +266,7 @@ export async function createServerApp(options: ServerOptions = {}): Promise<Serv
 
   await loadReport(reportFile, reportData)
   await loadOfflineReports(reportData, offlineReportDir)
+  warnReportTreePathCollisions(reportData.tests, reportedTreePathCollisions)
 
   const discovery = startDiscovery(routesContext, reportData, wsClients, options, reportFile, debug)
 

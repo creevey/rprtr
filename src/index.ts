@@ -4,9 +4,18 @@ import type { ApprovalResult, BulkApprovalResult } from './approval-api'
 import { readApproveAllResult, readApproveResult } from './approval-api'
 import App from './client/App.svelte'
 import { treeifyTests } from './client/helpers'
+import { warnTreePathCollisions } from './report-tree'
 import type { RunEnvironments } from './schemas'
 import { ClientBootstrapDataSchema, ReportApiResponseSchema, safeParse } from './schemas'
-import type { CrvyRprtrSuite } from './types'
+import type { CrvyRprtrSuite, TestData } from './types'
+
+const reportedTreePathCollisions = new Set<string>()
+
+function reportTreePathCollisions(tests: Record<string, TestData>): void {
+  warnTreePathCollisions(tests, reportedTreePathCollisions, (message) => {
+    console.warn(`[rprtr] ${message}`)
+  })
+}
 
 interface InitialState {
   tests: CrvyRprtrSuite
@@ -38,6 +47,8 @@ function loadBootstrapData(): InitialState | null {
     throw new Error('Invalid embedded report bootstrap data')
   }
 
+  reportTreePathCollisions(parsed.report.tests)
+
   return {
     tests: treeifyTests(parsed.report.tests),
     isReport: true,
@@ -59,6 +70,8 @@ async function loadReportData(): Promise<InitialState> {
   if (parsed === null) {
     throw new Error('Invalid API response format')
   }
+
+  reportTreePathCollisions(parsed.tests)
 
   return {
     tests: treeifyTests(parsed.tests),

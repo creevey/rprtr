@@ -1,8 +1,17 @@
 import { isAbsolute, relative, resolve, sep } from 'path'
 
+import { warnTreePathCollisions } from '../report-tree.ts'
+import type { TestData } from '../types.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
 export const LIVE_UPDATES_WEBSOCKET_PATH = '/'
+
+/** Emits server-terminal collision warnings, deduped by the caller's signature set. */
+export function warnReportTreePathCollisions(tests: Record<string, TestData>, reportedSignatures: Set<string>): void {
+  warnTreePathCollisions(tests, reportedSignatures, (message) => {
+    console.warn(`[Server] ${message}`)
+  })
+}
 
 export function broadcastToBrowsers(wsClients: Set<RuntimeWebSocket>, msg: object): void {
   const payload = JSON.stringify(msg)

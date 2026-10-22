@@ -25,6 +25,7 @@ function createCtx(mapping?: ContainerPathMapping): { ctx: HandlerContext; route
     reportData: routesContext.reportData,
     wsClients: new Set(),
     currentRunIds: new Set(),
+    reportedTreePathCollisions: new Set(),
     isFilteredRun: false,
     saveReport: () => Promise.resolve(),
     scheduleReportSave: () => {},

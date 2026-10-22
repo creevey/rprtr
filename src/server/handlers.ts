@@ -9,7 +9,7 @@ import { resolveBaselineSnapshotPath, type ApprovalRouting } from './artifact-ro
 import { rewriteContainerPath, type ContainerPathMapping } from './docker-support.ts'
 import type { RoutesContext } from './routes.ts'
 import type { RunController } from './run-controller.ts'
-import { broadcastToBrowsers } from './utils.ts'
+import { broadcastToBrowsers, warnReportTreePathCollisions } from './utils.ts'
 import type { RuntimeWebSocket } from './ws.ts'
 
 export interface HandlerContext {
@@ -23,6 +23,8 @@ export interface HandlerContext {
   }
   wsClients: Set<RuntimeWebSocket>
   currentRunIds: Set<string>
+  /** Signatures of tree-path collisions already warned about this session. */
+  reportedTreePathCollisions: Set<string>
   // True when the in-progress run was started with a filter (a subset of tests),
   // so run-end must NOT cull tests that were not part of this run.
   isFilteredRun: boolean
@@ -95,6 +97,7 @@ export function handleTestEnd(ctx: HandlerContext, data: TestEndData): void {
   const errNote = data.error !== null && data.error !== undefined ? `\n    Error: ${data.error}` : ''
   console.log(`  ${icon} [${test.browser}] ${test.title}${dur}${diffNote}${errNote}`)
   ctx.scheduleReportSave()
+  warnReportTreePathCollisions(ctx.reportData.tests, ctx.reportedTreePathCollisions)
   const message: ClientWebSocketMessage = { type: 'test-update', data: test }
   broadcastToBrowsers(ctx.wsClients, message)
 }

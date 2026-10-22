@@ -47,6 +47,7 @@ function createHandlerContext(): { ctx: HandlerContext; clients: Set<MockWebSock
     reportData: state.reportData,
     wsClients: clients as unknown as Set<RuntimeWebSocket>,
     currentRunIds: state.currentRunIds,
+    reportedTreePathCollisions: new Set(),
     isFilteredRun: false,
     saveReport: () => Promise.resolve(),
     scheduleReportSave: () => undefined,
