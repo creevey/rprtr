@@ -13,5 +13,5 @@
 
 ## 3. Documentation and full gate
 
-- [ ] 3.1 Add one sentence to the `README.md` sidebar hierarchy section stating that a group with any failed descendant is shown as failed even when other descendants are skipped or pending. Verify: `bun run format:check`.
-- [ ] 3.2 Run the complete gate from the repository root: `bun run check`, plus `bun run test:playwright` because the sidebar status dot rendering changes. Verify: both commands exit 0.
+- [x] 3.1 Add one sentence to the `README.md` sidebar hierarchy section stating that a group with any failed descendant is shown as failed even when other descendants are skipped or pending. Verify: `bun run format:check`.
+- [x] 3.2 Run the complete gate from the repository root: `bun run check`, plus `bun run test:playwright` because the sidebar status dot rendering changes. Verify: both commands exit 0.
