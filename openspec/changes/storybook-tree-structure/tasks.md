@@ -16,8 +16,8 @@
 
 ## 3. Selection and URL parity
 
-- [ ] 3.1 Add a test asserting that `getTestPath(test)` for a story test resolves through `getSuiteByPath(treeifyTests(...))` to the same test node. Verify it fails while the tree and URL paths disagree.
-- [ ] 3.2 Confirm the selection wiring in `src/client/App.svelte` and `src/client/components/TreeItem.svelte` needs no change; verify `bun run typecheck` and a manual check of a story-path URL under the dev UI.
+- [x] 3.1 Add a test asserting that `getTestPath(test)` for a story test resolves through `getSuiteByPath(treeifyTests(...))` to the same test node. Verify it fails while the tree and URL paths disagree.
+- [x] 3.2 Confirm the selection wiring in `src/client/App.svelte` and `src/client/components/TreeItem.svelte` needs no change; verify `bun run typecheck` and a manual check of a story-path URL under the dev UI.
 
 ## 4. Collision diagnostics
 

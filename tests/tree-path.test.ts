@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { getTestPath } from '../src/client/helpers'
+import { getSuiteByPath, getTestPath, treeifyTests } from '../src/client/helpers'
 import { testTreePath } from '../src/report-tree'
 import type { TestData } from '../src/types'
 
@@ -115,5 +115,23 @@ describe('authored path and file fallback', () => {
     })
 
     expect(testTreePath(first)).not.toEqual(testTreePath(second))
+  })
+})
+
+describe('selection path parity', () => {
+  test('a story test path resolves to the same test node in the rendered tree', () => {
+    const testData = makeTest({
+      id: 'story-test',
+      titlePath: ['Components/Button'],
+      title: 'Primary',
+      fileTokens: ['tests', 'button.spec.ts'],
+      browser: 'chromium',
+    })
+    const tree = treeifyTests({ [testData.id]: testData })
+
+    const node = getSuiteByPath(tree, getTestPath(testData))
+    expect(node).toBeDefined()
+    if (node === undefined || !('id' in node)) return
+    expect(node.id).toBe(testData.id)
   })
 })
