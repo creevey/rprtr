@@ -9,10 +9,10 @@
 
 ## 2. Tree construction and live-sync parity
 
-- [ ] 2.1 Update `tests/tree-sync.test.ts` expectations and add a discovery/live parity case: a discovered Storybook test and its streamed replacement resolve to the same authored hierarchy. Verify the parity test fails while `treeifyTests` still prepends `fileTokens`.
-- [ ] 2.2 Make `treeifyTests` and `pathTokensFor` use the shared path builder from task 1.2, and verify `bun test tree-sync.test.ts` passes.
-- [ ] 2.3 Add a regression test that `syncTreeState` updates and removes a story test under its authored path without creating a duplicate file-path subtree. Verify it fails before the `pathTokensFor` change and passes after.
-- [ ] 2.4 Add a regression test for a story visual test plus a manual interaction test authored beneath it (`Components/Button/Primary` + `opens menu`), asserting that `Primary` contains both the visual project leaf and the manual-test branch with its own project leaf. Verify `bun test tree-sync.test.ts` passes.
+- [x] 2.1 Update `tests/tree-sync.test.ts` expectations and add a discovery/live parity case: a discovered Storybook test and its streamed replacement resolve to the same authored hierarchy. Verify the parity test fails while `treeifyTests` still prepends `fileTokens`.
+- [x] 2.2 Make `treeifyTests` and `pathTokensFor` use the shared path builder from task 1.2, and verify `bun test tree-sync.test.ts` passes.
+- [x] 2.3 Add a regression test that `syncTreeState` updates and removes a story test under its authored path without creating a duplicate file-path subtree. Verify it fails before the `pathTokensFor` change and passes after.
+- [x] 2.4 Add a regression test for a story visual test plus a manual interaction test authored beneath it (`Components/Button/Primary` + `opens menu`), asserting that `Primary` contains both the visual project leaf and the manual-test branch with its own project leaf. Verify `bun test tree-sync.test.ts` passes.
 
 ## 3. Selection and URL parity
 

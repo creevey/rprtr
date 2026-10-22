@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { collectTestsById, markTestsPending, syncTreeState, treeifyTests } from '../src/client/helpers'
+import { collectTestsById, getSuiteByPath, markTestsPending, syncTreeState, treeifyTests } from '../src/client/helpers'
 import type { CrvyRprtrSuite, TestData } from '../src/types'
 
 function makeTest(overrides: Partial<TestData> = {}): TestData {
@@ -33,25 +33,28 @@ function findTest(
   return null
 }
 
-describe('fileTokens tree grouping', () => {
-  test('fileTokens nest the test under directory and file suites in treeifyTests', () => {
+describe('authored-path tree grouping', () => {
+  test('authored paths nest the test without filesystem suites', () => {
     const tree = treeifyTests({
-      'test-1': makeTest({ id: 'test-1', fileTokens: ['tests', 'example.spec.ts'] }),
+      'test-1': makeTest({
+        id: 'test-1',
+        titlePath: ['Components/Button'],
+        title: 'Primary',
+        fileTokens: ['tests', 'example.spec.ts'],
+      }),
     })
 
-    const tests = tree.children?.['tests']
-    expect(tests).toBeDefined()
-    if (tests === undefined || 'id' in tests) return
-    const file = tests.children?.['example.spec.ts']
-    expect(file).toBeDefined()
-    if (file === undefined || 'id' in file) return
-    const suite = file.children?.['Suite']
-    expect(suite).toBeDefined()
-    if (suite === undefined || 'id' in suite) return
-    const title = suite.children?.['Test']
-    expect(title).toBeDefined()
-    if (title === undefined || 'id' in title) return
-    expect(title.children?.['chromium']).toBeDefined()
+    const components = tree.children?.['Components']
+    expect(components).toBeDefined()
+    if (components === undefined || 'id' in components) return
+    const button = components.children?.['Button']
+    expect(button).toBeDefined()
+    if (button === undefined || 'id' in button) return
+    const primary = button.children?.['Primary']
+    expect(primary).toBeDefined()
+    if (primary === undefined || 'id' in primary) return
+    expect(primary.children?.['chromium']).toBeDefined()
+    expect(tree.children?.['tests']).toBeUndefined()
   })
 
   test('a discovered test and its streamed replacement land on the same tree path', () => {
@@ -81,6 +84,102 @@ describe('fileTokens tree grouping', () => {
     const after = findTest(tree, 'live-1')
     expect(after).not.toBeNull()
     expect(after?.browserKey).toBe(before?.browserKey)
+  })
+
+  test('a discovered Storybook test and its streamed replacement resolve to the same authored hierarchy', () => {
+    const discoveredId = 'discovered:tests/button.spec.ts:chromium:Components > Button > Primary'
+    const tree = treeifyTests({
+      [discoveredId]: makeTest({
+        id: discoveredId,
+        titlePath: ['Components/Button'],
+        title: 'Primary',
+        fileTokens: ['tests', 'button.spec.ts'],
+        status: 'pending',
+        results: undefined,
+      }),
+    })
+
+    expect(tree.children?.['Components']).toBeDefined()
+    expect(tree.children?.['tests']).toBeUndefined()
+    const before = findTest(tree, discoveredId)
+    expect(before).not.toBeNull()
+
+    syncTreeState(tree, {
+      'live-1': makeTest({
+        id: 'live-1',
+        titlePath: ['Components/Button'],
+        title: 'Primary',
+        fileTokens: ['tests', 'button.spec.ts'],
+        status: 'success',
+        results: [{ status: 'success', retries: 0 }],
+      }),
+    })
+
+    expect(findTest(tree, discoveredId)).toBeNull()
+    const after = findTest(tree, 'live-1')
+    expect(after).not.toBeNull()
+    expect(after?.browserKey).toBe(before?.browserKey)
+    expect(tree.children?.['tests']).toBeUndefined()
+  })
+})
+
+describe('story paths with live sync', () => {
+  test('syncTreeState updates and removes a story test under its authored path without a file subtree', () => {
+    const tree = treeifyTests({
+      'test-1': makeTest({
+        id: 'test-1',
+        titlePath: ['Components/Button'],
+        title: 'Primary',
+        fileTokens: ['tests', 'button.spec.ts'],
+        status: 'failed',
+      }),
+    })
+
+    syncTreeState(tree, {
+      'test-1': makeTest({
+        id: 'test-1',
+        titlePath: ['Components/Button'],
+        title: 'Primary',
+        fileTokens: ['tests', 'button.spec.ts'],
+        status: 'success',
+      }),
+    })
+
+    expect(findTest(tree, 'test-1')?.test.status).toBe('success')
+    expect(tree.children?.['tests']).toBeUndefined()
+
+    syncTreeState(tree, {})
+
+    expect(findTest(tree, 'test-1')).toBeNull()
+    expect(tree.children?.['Components']).toBeUndefined()
+  })
+
+  test('a story visual test and a manual interaction test coexist beneath the story', () => {
+    const tree = treeifyTests({
+      visual: makeTest({
+        id: 'visual',
+        titlePath: ['Components/Button'],
+        title: 'Primary',
+        browser: 'chromium',
+      }),
+      manual: makeTest({
+        id: 'manual',
+        titlePath: ['Components/Button', 'Primary'],
+        title: 'opens menu',
+        browser: 'chromium',
+        fileTokens: ['tests', 'manual.spec.ts'],
+      }),
+    })
+
+    const visualNode = getSuiteByPath(tree, ['Components', 'Button', 'Primary', 'chromium'])
+    expect(visualNode).toBeDefined()
+    if (visualNode === undefined || !('id' in visualNode)) return
+    expect(visualNode.id).toBe('visual')
+
+    const manualNode = getSuiteByPath(tree, ['Components', 'Button', 'Primary', 'opens menu', 'chromium'])
+    expect(manualNode).toBeDefined()
+    if (manualNode === undefined || !('id' in manualNode)) return
+    expect(manualNode.id).toBe('manual')
   })
 })
 

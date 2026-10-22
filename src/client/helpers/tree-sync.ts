@@ -1,3 +1,4 @@
+import { testTreePath } from '../../report-tree'
 import {
   type CrvyRprtrSuite,
   type CrvyRprtrTest,
@@ -7,7 +8,7 @@ import {
   getChildrenArray,
   getChildrenKeys,
 } from '../../types'
-import { browserKeyFor, getSuiteByPath } from './path'
+import { getSuiteByPath } from './path'
 import { calcStatus } from './status'
 import { isTestDataEqual, copyMutableFields } from './test-equality'
 
@@ -46,18 +47,11 @@ export function collectTestsById(suite: CrvyRprtrSuite): Record<string, TestData
 }
 
 function pathTokensFor(test: TestData): { suitePath: string[]; browserKey: string } | null {
-  const titlePath = test.titlePath ?? []
-  const fileTokens = test.fileTokens ?? []
-  const title = test.title
-  if (title === undefined || title === '') return null
-  const browser = browserKeyFor(test.browser ?? '')
-  const pathParts: string[] = [...fileTokens, ...titlePath, title, browser].filter(
-    (p): p is string => p !== undefined && p !== '',
-  )
-  const reversed = pathParts.reverse()
-  const browserKey = reversed[0]
+  if (test.title === undefined || test.title === '') return null
+  const pathParts = testTreePath(test)
+  const browserKey = pathParts.at(-1)
   if (browserKey === undefined) return null
-  return { suitePath: reversed.slice(1).reverse(), browserKey }
+  return { suitePath: pathParts.slice(0, -1), browserKey }
 }
 
 function ensureSuitePath(root: CrvyRprtrSuite, path: string[]): CrvyRprtrSuite {

@@ -65,18 +65,11 @@ export function parseFilterString(value: string): {
 }
 
 function appendTestToTree(rootSuite: CrvyRprtrSuite, test: TestData): void {
-  const titlePath = test.titlePath ?? []
-  const fileTokens = test.fileTokens ?? []
-  const browser = browserKeyFor(test.browser ?? '')
-  const title = test.title
-
-  const pathParts: string[] = [...fileTokens, ...titlePath, title, browser].filter(
-    (p): p is string => p !== undefined && p !== '',
-  )
-  const [browserName, ...testPathParts] = pathParts.reverse()
+  const pathParts = testTreePath(test)
+  const browserName = pathParts.at(-1)
   if (browserName === undefined) return
 
-  const lastSuite = testPathParts.reverse().reduce((suite, token) => {
+  const lastSuite = pathParts.slice(0, -1).reduce((suite, token) => {
     suite.children = suite.children ?? {}
     suite.children[token] ??= {
       path: [...suite.path, token],
