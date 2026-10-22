@@ -8,9 +8,9 @@
 
 ## 2. Hierarchy and view-only behavior
 
-- [ ] 2.1 Add failing tests proving a filtered tree keeps only ancestors of matches and omits suites with no matching descendants; verify `cd tests && bun test suite-filter.test.ts` fails before the predicate change if it still leaks non-matching statuses, and passes after.
-- [ ] 2.2 Add a test asserting filtering does not mutate test statuses, results, approvals, or suite statuses; verify `cd tests && bun test suite-filter.test.ts` passes and `bun run typecheck` passes.
-- [ ] 2.3 Add tests preserving text-only title matching (including a matching suite retaining descendants) and the existing combined text-plus-status precedence; verify `cd tests && bun test suite-filter.test.ts` passes.
+- [x] 2.1 Add failing tests proving a filtered tree keeps only ancestors of matches and omits suites with no matching descendants; verify `cd tests && bun test suite-filter.test.ts` fails before the predicate change if it still leaks non-matching statuses, and passes after.
+- [x] 2.2 Add a test asserting filtering does not mutate test statuses, results, approvals, or suite statuses; verify `cd tests && bun test suite-filter.test.ts` passes and `bun run typecheck` passes.
+- [x] 2.3 Add tests preserving text-only title matching (including a matching suite retaining descendants) and the existing combined text-plus-status precedence; verify `cd tests && bun test suite-filter.test.ts` passes.
 
 ## 3. Documentation and full gate
 
