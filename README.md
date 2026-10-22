@@ -225,6 +225,8 @@ The sidebar mirrors the Storybook tree, not the spec file layout. A test's autho
 
 Manual interaction tests that an author nests under a story with an extra path segment (`Components/Button/Primary` plus `opens menu`) appear beside that story's project leaves. Plain Playwright tests without an authored path — no describe levels and a title without `/` — keep file grouping, so same-named tests in different spec files stay distinct. If two tests still resolve to the exact same authored path and project, rprtr logs one console warning naming the shared path and both tests; results, approval, grouping, and run completion are unchanged. The live UI, offline replay, and the static `crvy-rprtr.html` artifact all use this hierarchy and emit the same warning shape. A group with any failed descendant is shown as failed even when other descendants are skipped or pending.
 
+Status filters match test status exactly, except that `status:failed` keeps running reruns visible until they settle; skipped tests remain under `status:pending`.
+
 ## Vitest Browser Mode
 
 Crvy Rprtr also reports [Vitest Browser Mode](https://vitest.dev/guide/browser/) `toMatchScreenshot()` results (Vitest ≥ 4 < 5) — a complete, annotated example lives in [examples/vitest-browser](./examples/vitest-browser). Install the reporter together with a browser provider:

@@ -14,5 +14,5 @@
 
 ## 3. Documentation and full gate
 
-- [ ] 3.1 Add one sentence to the `README.md` sidebar section stating that status filters match test status exactly, skipped tests remain under `status:pending`, and `status:failed` keeps running reruns visible until they settle; verify `bun run format:check`.
-- [ ] 3.2 Run the complete gate from the repository root: `bun run check` and `bun run test:playwright`; verify both exit 0.
+- [x] 3.1 Add one sentence to the `README.md` sidebar section stating that status filters match test status exactly, skipped tests remain under `status:pending`, and `status:failed` keeps running reruns visible until they settle; verify `bun run format:check`.
+- [x] 3.2 Run the complete gate from the repository root: `bun run check` and `bun run test:playwright`; verify both exit 0.
