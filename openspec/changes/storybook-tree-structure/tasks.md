@@ -29,7 +29,7 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Document the hierarchy in `README.md` (Component Testing section) and `examples/component-testing/README.md`: authored Storybook paths drive the sidebar, projects are the only added level, plain tests without an authored path keep file grouping, and exact path collisions are reported as console warnings. Verify `bun run format:check`.
+- [x] 5.1 Document the hierarchy in `README.md` (Component Testing section) and `examples/component-testing/README.md`: authored Storybook paths drive the sidebar, projects are the only added level, plain tests without an authored path keep file grouping, and exact path collisions are reported as console warnings. Verify `bun run format:check`.
 
 ## 6. Full gate
 

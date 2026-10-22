@@ -219,6 +219,12 @@ Docker mode covers both runners: Playwright runs execute inside the container, w
 
 Crvy Rprtr works with [Playwright Component Testing](https://playwright.dev/docs/test-components) (the stories + gallery model, Playwright ≥ 1.62) out of the box — component tests are regular Playwright tests, so live reporting, baseline display, diffs, approval, and Docker mode all work unchanged. See the complete, annotated example in [examples/component-testing](./examples/component-testing).
 
+### Sidebar hierarchy
+
+The sidebar mirrors the Storybook tree, not the spec file layout. A test's authored path — its describe levels followed by its title — drives the hierarchy, and `/` inside a kind or story title expands into nested rows: `Components/Button` plus `Primary` renders as `Components` → `Button` → `Primary`. The Playwright project is the only level rprtr adds beneath the authored path (`Primary` → `chromium`). Filesystem folders and spec filenames do not appear for tests that carry an authored path.
+
+Manual interaction tests that an author nests under a story with an extra path segment (`Components/Button/Primary` plus `opens menu`) appear beside that story's project leaves. Plain Playwright tests without an authored path — no describe levels and a title without `/` — keep file grouping, so same-named tests in different spec files stay distinct. If two tests still resolve to the exact same authored path and project, rprtr logs one console warning naming the shared path and both tests; results, approval, grouping, and run completion are unchanged. The live UI, offline replay, and the static `crvy-rprtr.html` artifact all use this hierarchy and emit the same warning shape.
+
 ## Vitest Browser Mode
 
 Crvy Rprtr also reports [Vitest Browser Mode](https://vitest.dev/guide/browser/) `toMatchScreenshot()` results (Vitest ≥ 4 < 5) — a complete, annotated example lives in [examples/vitest-browser](./examples/vitest-browser). Install the reporter together with a browser provider:

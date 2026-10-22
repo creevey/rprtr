@@ -38,6 +38,32 @@ Three concepts ([docs](https://playwright.dev/docs/test-components)):
 
 Because component tests are regular Playwright tests, `@crvy/rprtr` needs **zero configuration** to report them: it sees the same test events, the same `toHaveScreenshot` steps, and the same snapshot files as for e2e tests.
 
+## Sidebar hierarchy
+
+The rprtr sidebar mirrors the Storybook tree, not the spec file layout. Author the story path in your describe levels and test titles, and `/` expands into nested rows:
+
+```ts
+test.describe('components/Button', () => {
+  test('Primary', async ({ mount }) => {
+    const button = await mount('components/Button/Primary')
+    await expect(button).toHaveScreenshot('primary.png')
+  })
+
+  // A manual interaction test authored beneath the story.
+  test.describe('Primary', () => {
+    test('opens menu', async ({ mount }) => {
+      const button = await mount('components/Button/Primary')
+      await button.getByRole('button', { name: 'Menu' }).click()
+      await expect(button).toHaveScreenshot('primary-menu.png')
+    })
+  })
+})
+```
+
+This renders `components` → `Button` → `Primary`, with the `components` Playwright project as the only added level beneath the visual test, and the `opens menu` branch (with its own project leaf) beside it. Paths are not duplicated by filesystem rows.
+
+The specs shipped in this example are intentionally flat: they are top-level tests whose titles contain no `/`, so they take the file fallback and appear under their spec file (for example `tests/components/button.spec.ts`). That keeps plain Playwright tests with the same title in different files distinct. If two tests resolve to the exact same authored path and project, rprtr logs one console warning naming the shared path and both tests; the run, results, approvals, and grouping are unaffected.
+
 ## Project layout
 
 ```
