@@ -1,4 +1,6 @@
 import { evaluateBrowserPinPolicy, type BrowserPinPolicy, type RunEnvironments } from './browser-pins.ts'
+import { DOCKER_BROWSER_REVISIONS_ENV, DOCKER_IMAGE_ENV } from './docker-image.ts'
+import { parseImageBrowserRevisionsEnv, type ImageBrowserRevisions } from './image-browsers.ts'
 import {
   buildVitestEnvironments,
   resolveVitestPins,
@@ -21,10 +23,12 @@ export interface ResolveVitestRunEnvironmentsInput {
 }
 
 /** Reads the managed-sidecar env vars the server exports for Vitest docker runs. */
-function sidecarEnv(): { browserWs?: string; dockerImage?: string } {
+function sidecarEnv(): { browserWs?: string; dockerImage?: string; imageBrowsers?: ImageBrowserRevisions } {
+  const imageBrowsers = parseImageBrowserRevisionsEnv(process.env[DOCKER_BROWSER_REVISIONS_ENV])
   return {
     ...(process.env.CRVY_RPRTR_BROWSER_WS === undefined ? {} : { browserWs: process.env.CRVY_RPRTR_BROWSER_WS }),
-    ...(process.env.CRVY_RPRTR_DOCKER_IMAGE === undefined ? {} : { dockerImage: process.env.CRVY_RPRTR_DOCKER_IMAGE }),
+    ...(process.env[DOCKER_IMAGE_ENV] === undefined ? {} : { dockerImage: process.env[DOCKER_IMAGE_ENV] }),
+    ...(imageBrowsers === undefined ? {} : { imageBrowsers }),
   }
 }
 

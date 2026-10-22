@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 import { formatRecord, type DebugLogger } from '../debug-log.ts'
+import type { ImageBrowserRevisions } from '../image-browsers.ts'
 import { resolvePlaywrightVersion } from '../playwright-install.ts'
 import { type DockerOptions } from './docker-launcher.ts'
 import { buildBrowserSidecarRunArgs, resolveSidecarCommand } from './docker-run-args.ts'
@@ -14,6 +15,7 @@ import {
   resolveDockerImage,
   type DockerExec,
 } from './docker-support.ts'
+import { createImageBrowserProbe } from './image-browsers.ts'
 import { recordSidecarFailure, type SidecarEvidenceDeps } from './sidecar-evidence.ts'
 import { resolvePublishedPort, tcpProbe, waitForEndpoint } from './sidecar-readiness.ts'
 
@@ -78,6 +80,8 @@ export interface BrowserSidecar {
   readonly endpoint: string | undefined
   /** Docker image of the warm sidecar, once one has started. */
   readonly image: string | undefined
+  /** Browser revisions present in the started image; null when it cannot be inspected. */
+  browsers(): Promise<ImageBrowserRevisions | null>
   /** Resolves the image the sidecar would start for this context; null when it cannot be derived. */
   resolveImage(ctx: { cwd: string }): string | null
   /** Ensures a ready sidecar exists and returns its WebSocket endpoint. */
@@ -239,6 +243,7 @@ export function createBrowserSidecar(options: BrowserSidecarOptions = {}): Brows
   let endpoint: string | undefined
   let publishedPort: number | undefined
   let startedImage: string | undefined
+  const probe = createImageBrowserProbe(deps.exec)
 
   return {
     get endpoint(): string | undefined {
@@ -247,6 +252,7 @@ export function createBrowserSidecar(options: BrowserSidecarOptions = {}): Brows
     get image(): string | undefined {
       return startedImage
     },
+    browsers: (): Promise<ImageBrowserRevisions | null> => probe(startedImage),
     resolveImage(ctx): string | null {
       return resolveDockerImage({ image: deps.docker?.image, version: deps.getVersion(ctx.cwd) })
     },
@@ -271,6 +277,7 @@ export function createBrowserSidecar(options: BrowserSidecarOptions = {}): Brows
       endpoint = undefined
       publishedPort = undefined
       startedImage = undefined
+      probe.reset()
       void forceRemoveContainer(deps.exec, deps.containerName)
     },
   }

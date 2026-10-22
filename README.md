@@ -139,8 +139,11 @@ new CrvyRprtrVitestReporter({
 - A Vitest run resolves the effective build from the browser package its provider launches —
   the project's installed `playwright` — and, in Docker mode, from the version-pinned sidecar
   image (`playwright run-server`) derived from that same install, recording the image with the
-  environment. Non-Playwright providers, remote endpoints, branded channels, explicit
-  executables, and custom images are reported as `unverifiable`.
+  environment. A custom image (an enterprise mirror, a `-jammy` tag, or a rebranded image) is
+  probed offline for its Playwright browser cache; when the installed manifest's revision is
+  present, the pin resolves to `pinned`/`drift` instead of `unverifiable`. Non-Playwright
+  providers, remote endpoints, branded channels, explicit executables, and images whose cache
+  cannot be probed remain `unverifiable`.
 
 ### Migrating from creevey
 

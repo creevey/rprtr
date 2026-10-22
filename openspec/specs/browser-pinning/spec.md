@@ -110,7 +110,7 @@ For every pinned project, the reporter SHALL resolve the effective browser build
 
 ### Requirement: Unverifiable environments
 
-Projects that do not run Playwright's bundled browsers — for example projects configuring a branded browser channel or an explicit browser executable — SHALL be reported as unverifiable and SHALL NOT be reported as drift, even when a pin is declared, because the reporter cannot observe the launched build. A Vitest project SHALL be reported as unverifiable when its browser provider is not Playwright, when it connects to a remote endpoint that is not the managed sidecar, when it launches through a branded channel or an explicit executable, or when the run uses a custom Docker image, because the reporter cannot observe the build those paths launch. Projects without a pin SHALL be reported as unpinned and SHALL NOT produce drift warnings.
+Projects that do not run Playwright's bundled browsers — for example projects configuring a branded browser channel or an explicit browser executable — SHALL be reported as unverifiable and SHALL NOT be reported as drift, even when a pin is declared, because the reporter cannot observe the launched build. A Vitest project SHALL be reported as unverifiable when its browser provider is not Playwright, when it connects to a remote endpoint that is not the managed sidecar, when it launches through a branded channel or an explicit executable, or when the run uses a custom Docker image whose browser revisions could not be probed, because the reporter cannot observe the build those paths launch. For a custom Docker image the reporter SHALL resolve the image's browser builds by probing its Playwright browser cache offline, and SHALL report pinned or drift when the installed manifest's revision for the project browser is present in that image; an image that cannot be probed, or whose revision is absent, SHALL remain unverifiable. Projects without a pin SHALL be reported as unpinned and SHALL NOT produce drift warnings.
 
 #### Scenario: Channel project is unverifiable
 
@@ -132,9 +132,14 @@ Projects that do not run Playwright's bundled browsers — for example projects 
 - **WHEN** a pinned Vitest project connects to a browser endpoint that the server did not launch as its managed sidecar
 - **THEN** its pin status is unverifiable and it is never reported as drift
 
-#### Scenario: Vitest custom Docker image is unverifiable
+#### Scenario: Vitest custom Docker image is probed
 
-- **WHEN** a pinned Vitest sidecar run uses a custom Docker image rather than the image derived from the installed Playwright version
+- **WHEN** a pinned Vitest sidecar run uses a custom Docker image (an enterprise mirror, a different distro tag, or a rebranded image) whose browser cache contains the installed manifest's revision
+- **THEN** its pin status resolves to pinned or drift from the observed revision and it records the image alongside the environment
+
+#### Scenario: Unprobeable Vitest custom Docker image is unverifiable
+
+- **WHEN** a pinned Vitest sidecar run uses a custom Docker image whose browser cache cannot be probed, or does not contain the installed manifest's revision
 - **THEN** its pin status is unverifiable and it is never reported as drift
 
 ### Requirement: Pin policy and diagnostics

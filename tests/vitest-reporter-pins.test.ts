@@ -58,13 +58,22 @@ async function createFixtureProject(manifest: FixtureManifest = PINNED_MANIFEST)
   return dir
 }
 
-function mockProject(root: string, name: string, engine: string): unknown {
+function mockProject(
+  root: string,
+  name: string,
+  engine: string,
+  providerOptions: Record<string, unknown> = {},
+): unknown {
   return {
     name,
     config: {
       root,
       attachmentsDir: join(root, '.vitest-attachments'),
-      browser: { name: engine, screenshotDirectory: '__screenshots__', provider: { name: 'playwright', options: {} } },
+      browser: {
+        name: engine,
+        screenshotDirectory: '__screenshots__',
+        provider: { name: 'playwright', options: providerOptions },
+      },
     },
   }
 }
@@ -194,6 +203,35 @@ describe('CrvyRprtrVitestReporter browser pins', () => {
     })
 
     expect(environments).toEqual({ 'desktop (chromium)': PINNED_ENVIRONMENT })
+  })
+
+  test('a probed custom sidecar image verifies the pinned build', async () => {
+    const root = await createFixtureProject()
+    const endpoint = 'ws://127.0.0.1:49153/'
+    const image = 'registry.example/playwright:v1.59.0'
+    const previousBrowserWs = process.env.CRVY_RPRTR_BROWSER_WS
+    const previousImage = process.env.CRVY_RPRTR_DOCKER_IMAGE
+    const previousRevisions = process.env.CRVY_RPRTR_DOCKER_BROWSER_REVISIONS
+    process.env.CRVY_RPRTR_BROWSER_WS = endpoint
+    process.env.CRVY_RPRTR_DOCKER_IMAGE = image
+    process.env.CRVY_RPRTR_DOCKER_BROWSER_REVISIONS = '{"chromium":["1217"]}'
+
+    try {
+      const environments = await runOffline(
+        root,
+        [mockProject(root, 'desktop (chromium)', 'chromium', { connectOptions: { wsEndpoint: endpoint } })],
+        { browserPin: { browser: 'chromium', version: '147' } },
+      )
+
+      expect(environments?.['desktop (chromium)']).toEqual({ ...PINNED_ENVIRONMENT, dockerImage: image })
+    } finally {
+      if (previousBrowserWs === undefined) delete process.env.CRVY_RPRTR_BROWSER_WS
+      else process.env.CRVY_RPRTR_BROWSER_WS = previousBrowserWs
+      if (previousImage === undefined) delete process.env.CRVY_RPRTR_DOCKER_IMAGE
+      else process.env.CRVY_RPRTR_DOCKER_IMAGE = previousImage
+      if (previousRevisions === undefined) delete process.env.CRVY_RPRTR_DOCKER_BROWSER_REVISIONS
+      else process.env.CRVY_RPRTR_DOCKER_BROWSER_REVISIONS = previousRevisions
+    }
   })
 
   test('an unpinned browser project is recorded unpinned', async () => {

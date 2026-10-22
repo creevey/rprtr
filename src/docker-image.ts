@@ -5,3 +5,6 @@ export function playwrightImageTag(version: string): string {
 
 /** Env var carrying the image a Docker/sidecar-backed run actually uses, for offline pin resolution. */
 export const DOCKER_IMAGE_ENV = 'CRVY_RPRTR_DOCKER_IMAGE'
+
+/** Env var carrying the browser revisions probed from a custom Docker image, as JSON. */
+export const DOCKER_BROWSER_REVISIONS_ENV = 'CRVY_RPRTR_DOCKER_BROWSER_REVISIONS'

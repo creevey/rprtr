@@ -500,6 +500,51 @@ describe('BrowserSidecar.dispose', () => {
   })
 })
 
+describe('BrowserSidecar.browsers', () => {
+  test('returns null before a sidecar image is started', async () => {
+    const { sidecar } = sidecarFixture({})
+    expect(await sidecar.browsers()).toBeNull()
+  })
+
+  test('probes the started image once and caches its revisions', async () => {
+    const { exec, calls } = execScript({
+      info: ok,
+      'image inspect': ok,
+      'run -d': ok,
+      'port crvy-rprtr-browser-1': { exitCode: 0, stdout: '127.0.0.1:49153\n', stderr: '' },
+      'run --rm': { exitCode: 0, stdout: 'chromium-1217\nfirefox-1511\nwebkit-2272\n', stderr: '' },
+    })
+    const { sidecar } = sidecarFixture({ exec })
+    await sidecar.ensure({ cwd: '/proj' }, noopProgress)
+
+    expect(await sidecar.browsers()).toEqual({
+      chromium: ['1217'],
+      firefox: ['1511'],
+      webkit: ['2272'],
+    })
+    expect(await sidecar.browsers()).toEqual({
+      chromium: ['1217'],
+      firefox: ['1511'],
+      webkit: ['2272'],
+    })
+    expect(calls.filter((call) => call[0] === 'run' && call[1] === '--rm')).toHaveLength(1)
+  })
+
+  test('returns null when the image probe fails', async () => {
+    const { exec } = execScript({
+      info: ok,
+      'image inspect': ok,
+      'run -d': ok,
+      'port crvy-rprtr-browser-1': { exitCode: 0, stdout: '127.0.0.1:49153\n', stderr: '' },
+      'run --rm': fail,
+    })
+    const { sidecar } = sidecarFixture({ exec })
+    await sidecar.ensure({ cwd: '/proj' }, noopProgress)
+
+    expect(await sidecar.browsers()).toBeNull()
+  })
+})
+
 describe('BrowserSidecar image provenance', () => {
   test('resolveImage derives the canonical tag from the project version', () => {
     const { sidecar } = sidecarFixture({})

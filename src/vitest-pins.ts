@@ -1,6 +1,5 @@
 import {
   BrowserPinValidationError,
-  matchesVersionPrefix,
   parseBrowserPin,
   resolveProjectEnvironment,
   type BrowserManifest,
@@ -10,12 +9,19 @@ import {
   type RunEnvironments,
 } from './browser-pins.ts'
 import { playwrightImageTag } from './docker-image.ts'
+import type { ImageBrowserRevisions } from './image-browsers.ts'
 import {
   readInstalledBrowserManifest,
   resolveInstalledExecutablePath,
   resolvePlaywrightVersion,
 } from './playwright-install.ts'
 import { PIN_BROWSERS, type BrowserPin } from './schemas/pins.ts'
+import {
+  hasRevisionOverrides,
+  sidecarEnvironment,
+  unverifiableEnvironment,
+  type InstalledContext,
+} from './vitest-pin-environments.ts'
 
 const PIN_BROWSER_SET: ReadonlySet<string> = new Set(PIN_BROWSERS)
 
@@ -146,16 +152,12 @@ export interface BuildVitestEnvironmentsInput {
   browserWs?: string
   /** `CRVY_RPRTR_DOCKER_IMAGE`: image of the managed browser sidecar, when the run uses one. */
   dockerImage?: string
+  /** Browser revisions probed from that image; makes custom images verifiable. */
+  imageBrowsers?: ImageBrowserRevisions
   /** Fixture seams; default to reading each project's installed Playwright. */
   manifest?: BrowserManifest | null
   playwrightVersion?: string | null
   executablePathFor?: (project: VitestProjectPin) => string | null
-}
-
-/** Module-private: the installed-Playwright facts resolution reads off one project root. */
-interface InstalledContext {
-  manifest: BrowserManifest
-  playwrightVersion: string | null
 }
 
 function installedContext(root: string, input: BuildVitestEnvironmentsInput): InstalledContext {
@@ -168,57 +170,26 @@ function installedContext(root: string, input: BuildVitestEnvironmentsInput): In
   }
 }
 
-function hasRevisionOverrides(entry: BrowserManifest['browsers'][number]): boolean {
-  return entry.revisionOverrides !== undefined && Object.keys(entry.revisionOverrides).length > 0
-}
+function resolveSidecarProject(
+  project: VitestProjectPin,
+  input: BuildVitestEnvironmentsInput,
+  context: InstalledContext,
+  dockerImage: string | undefined,
+  sidecarBacked: boolean,
+  canonicalImage: boolean,
+): ProjectEnvironment {
+  const unverifiable = (): ProjectEnvironment =>
+    unverifiableEnvironment({ project, context, dockerImage: dockerImage === '' ? undefined : dockerImage })
+  if (!sidecarBacked || dockerImage === undefined || dockerImage === '') return unverifiable()
 
-/** Unverifiable build: the reporter cannot observe what the project launches. */
-function unverifiableEnvironment(input: {
-  project: VitestProjectPin
-  context: InstalledContext
-  dockerImage?: string | undefined
-}): ProjectEnvironment {
-  const { project, context } = input
-  return {
-    playwrightVersion: context.playwrightVersion,
-    browser: project.browser,
-    browserVersion: null,
-    revision: null,
-    ...(input.dockerImage === undefined || input.dockerImage === '' ? {} : { dockerImage: input.dockerImage }),
-    ...(project.pin === undefined ? {} : { pin: project.pin }),
-    status: project.pin === undefined ? 'unpinned' : 'unverifiable',
-  }
-}
-
-/** Sidecar-backed run: the image's browsers come from the installed manifest's default revision. */
-function sidecarEnvironment(input: {
-  project: VitestProjectPin
-  context: InstalledContext
-  image: string
-}): ProjectEnvironment {
-  const { project, context } = input
-  const entry = context.manifest.browsers.find((browser) => browser.name === project.browser)
-  if (entry === undefined || hasRevisionOverrides(entry)) {
-    return unverifiableEnvironment({ project, context, dockerImage: input.image })
-  }
-  const browserVersion = entry.browserVersion ?? null
-  const status =
-    project.pin === undefined
-      ? 'unpinned'
-      : browserVersion === null
-        ? 'unverifiable'
-        : matchesVersionPrefix(project.pin.version, browserVersion)
-          ? 'pinned'
-          : 'drift'
-  return {
-    playwrightVersion: context.playwrightVersion,
-    browser: project.browser,
-    browserVersion,
-    revision: entry.revision,
-    dockerImage: input.image,
-    ...(project.pin === undefined ? {} : { pin: project.pin }),
-    status,
-  }
+  const observedRevisions = input.imageBrowsers?.[project.browser]
+  if (observedRevisions === undefined && !canonicalImage) return unverifiable()
+  return sidecarEnvironment({
+    project,
+    context,
+    image: dockerImage,
+    ...(observedRevisions === undefined ? {} : { observedRevisions }),
+  })
 }
 
 function resolveVitestProjectEnvironment(
@@ -229,13 +200,13 @@ function resolveVitestProjectEnvironment(
   const context = installedContext(root, input)
   const dockerImage = input.dockerImage
   const managedEndpoint = input.browserWs
-  const managedImage =
+  const sidecarBacked =
+    managedEndpoint !== undefined && managedEndpoint !== '' && project.wsEndpoint === managedEndpoint
+  const canonicalImage =
     dockerImage !== undefined &&
     dockerImage !== '' &&
     context.playwrightVersion !== null &&
     dockerImage === playwrightImageTag(context.playwrightVersion)
-  const sidecarBacked =
-    managedImage && managedEndpoint !== undefined && managedEndpoint !== '' && project.wsEndpoint === managedEndpoint
 
   const unverifiable = (): ProjectEnvironment =>
     unverifiableEnvironment({ project, context, dockerImage: dockerImage === '' ? undefined : dockerImage })
@@ -243,8 +214,7 @@ function resolveVitestProjectEnvironment(
   if (project.provider !== undefined && project.provider !== 'playwright') return unverifiable()
 
   if (project.wsEndpoint !== undefined) {
-    if (!sidecarBacked || dockerImage === undefined || dockerImage === '') return unverifiable()
-    return sidecarEnvironment({ project, context, image: dockerImage })
+    return resolveSidecarProject(project, input, context, dockerImage, sidecarBacked, canonicalImage)
   }
 
   // A run carrying sidecar provenance that the project does not connect to

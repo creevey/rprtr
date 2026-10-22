@@ -1,4 +1,5 @@
 import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
+import type { ImageBrowserRevisions } from '../image-browsers.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
 import type { BrowserSidecar } from './browser-sidecar.ts'
 import type { RunContext } from './run-controller.ts'
@@ -23,7 +24,11 @@ export interface RunPreparationDeps {
 }
 
 export type PrepareRunResult =
-  | { ok: true; sidecar?: { endpoint: string; image?: string }; notices?: string[] }
+  | {
+      ok: true
+      sidecar?: { endpoint: string; image?: string; browsers?: ImageBrowserRevisions }
+      notices?: string[]
+    }
   | { ok: false; reason: 'docker-unavailable' }
 
 function warnSink(deps: RunPreparationDeps): (message: string) => void {
@@ -99,6 +104,7 @@ async function prepareVitestRun(ctx: RunContext, deps: RunPreparationDeps): Prom
     sidecar: {
       endpoint: prepared.endpoint,
       ...(prepared.image === undefined ? {} : { image: prepared.image }),
+      ...(prepared.browsers === undefined ? {} : { browsers: prepared.browsers }),
     },
   }
 }

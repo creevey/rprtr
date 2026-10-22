@@ -263,6 +263,90 @@ describe('buildVitestEnvironments', () => {
     expect(environments['desktop (chromium)']?.dockerImage).toBe('custom/img:1')
   })
 
+  test('a probed custom image resolves the manifest build', () => {
+    const environments = buildVitestEnvironments({
+      projects: [resolvedProject({ wsEndpoint: MANAGED_ENDPOINT, pin: PIN_147 })],
+      browserWs: MANAGED_ENDPOINT,
+      dockerImage: 'registry.example/playwright:v1.59.0',
+      imageBrowsers: { chromium: ['1217'] },
+      manifest: MANIFEST,
+      playwrightVersion: PLAYWRIGHT_VERSION,
+      executablePathFor: () => {
+        throw new Error('sidecar runs must not resolve a host executable')
+      },
+    })
+
+    expect(environments['desktop (chromium)']).toEqual({
+      playwrightVersion: PLAYWRIGHT_VERSION,
+      browser: 'chromium',
+      browserVersion: '147.0.7727.15',
+      revision: '1217',
+      dockerImage: 'registry.example/playwright:v1.59.0',
+      pin: { browser: 'chromium', version: '147' },
+      status: 'pinned',
+    })
+  })
+
+  test('a probed custom image resolves drift against the manifest build', () => {
+    const environments = buildVitestEnvironments({
+      projects: [resolvedProject({ wsEndpoint: MANAGED_ENDPOINT, pin: PIN_149 })],
+      browserWs: MANAGED_ENDPOINT,
+      dockerImage: 'registry.example/playwright:v1.59.0',
+      imageBrowsers: { chromium: ['1217'] },
+      manifest: MANIFEST,
+      playwrightVersion: PLAYWRIGHT_VERSION,
+    })
+
+    expect(environments['desktop (chromium)']?.status).toBe('drift')
+    expect(environments['desktop (chromium)']?.dockerImage).toBe('registry.example/playwright:v1.59.0')
+  })
+
+  test('a probed custom image without the expected revision is unverifiable', () => {
+    const environments = buildVitestEnvironments({
+      projects: [resolvedProject({ wsEndpoint: MANAGED_ENDPOINT, pin: PIN_147 })],
+      browserWs: MANAGED_ENDPOINT,
+      dockerImage: 'registry.example/playwright:v1.59.0',
+      imageBrowsers: { chromium: ['1290'] },
+      manifest: MANIFEST,
+      playwrightVersion: PLAYWRIGHT_VERSION,
+    })
+
+    expect(environments['desktop (chromium)']?.status).toBe('unverifiable')
+    expect(environments['desktop (chromium)']?.browserVersion).toBeNull()
+  })
+
+  test('a probed custom image with an override revision is unverifiable', () => {
+    const environments = buildVitestEnvironments({
+      projects: [
+        resolvedProject({
+          browser: 'webkit',
+          wsEndpoint: MANAGED_ENDPOINT,
+          pin: { browser: 'webkit', version: '26.4' },
+        }),
+      ],
+      browserWs: MANAGED_ENDPOINT,
+      dockerImage: 'registry.example/playwright:v1.59.0',
+      imageBrowsers: { webkit: ['2274'] },
+      manifest: OVERRIDE_MANIFEST,
+      playwrightVersion: PLAYWRIGHT_VERSION,
+    })
+
+    expect(environments['desktop (chromium)']?.status).toBe('unverifiable')
+  })
+
+  test('a canonical image with a probed revision that does not match stays unverifiable', () => {
+    const environments = buildVitestEnvironments({
+      projects: [resolvedProject({ wsEndpoint: MANAGED_ENDPOINT, pin: PIN_147 })],
+      browserWs: MANAGED_ENDPOINT,
+      dockerImage: MANAGED_IMAGE,
+      imageBrowsers: { chromium: ['1290'] },
+      manifest: MANIFEST,
+      playwrightVersion: PLAYWRIGHT_VERSION,
+    })
+
+    expect(environments['desktop (chromium)']?.status).toBe('unverifiable')
+  })
+
   test('a manifest entry with revision overrides is unverifiable', () => {
     const environments = buildVitestEnvironments({
       projects: [resolvedProject({ browser: 'webkit', pin: { browser: 'webkit', version: '26.4' } })],

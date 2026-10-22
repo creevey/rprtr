@@ -700,6 +700,7 @@ function createVitestPreflightFixture(input: {
     browserSidecar: {
       endpoint: ENDPOINT,
       image: IMAGE,
+      browsers: () => Promise.resolve(null),
       resolveImage: () => IMAGE,
       ensure: () => {
         ensureCalls.value += 1

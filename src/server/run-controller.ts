@@ -1,8 +1,7 @@
 import { resolvePlaywrightVersion } from '../browser-pins.ts'
 import { DEBUG_ENV, formatEnvironment, formatRecord } from '../debug-log.ts'
-import { DOCKER_IMAGE_ENV } from '../docker-image.ts'
+import type { ImageBrowserRevisions } from '../image-browsers.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
-import { BROWSER_WS_ENV } from './browser-sidecar.ts'
 import { rewriteContainerTestDescriptors } from './docker-support.ts'
 import { attachRunCapture, type RunCapture } from './run-capture.ts'
 import {
@@ -25,7 +24,7 @@ import type { RunLauncher, LaunchSpec } from './run-launcher.ts'
 import { prepareRunForContext } from './run-preparation.ts'
 import { createRealSpawn, createRealTimers } from './run-process.ts'
 import { emitExitRecord, emitLog, emitWarn, renderLaunchRecord } from './run-records.ts'
-import { buildVitestArgs, resolveVitestLaunchPlan } from './vitest-backend.ts'
+import { buildVitestArgs, buildVitestSidecarEnv, resolveVitestLaunchPlan } from './vitest-backend.ts'
 
 export type {
   ChildProcessLike,
@@ -57,6 +56,8 @@ export class RunController {
   private browserWs: string | null = null
   /** Image of the sidecar backing the current Vitest run, exported for offline pin resolution. */
   private browserImage: string | null = null
+  /** Browser revisions probed from that image, exported for offline pin resolution. */
+  private browserRevisions: ImageBrowserRevisions | null = null
   /** Host-service divergence notices collected by the last prepareRun, broadcast with the run. */
   private runNotices: string[] = []
 
@@ -202,11 +203,7 @@ export class RunController {
 
     const spec = launcher.launch({ ctx, playwrightArgs: args })
     if (ctx.runner === 'vitest' && mode === 'docker' && this.browserWs !== null) {
-      spec.env = {
-        ...spec.env,
-        [BROWSER_WS_ENV]: this.browserWs,
-        ...(this.browserImage === null ? {} : { [DOCKER_IMAGE_ENV]: this.browserImage }),
-      }
+      spec.env = { ...spec.env, ...buildVitestSidecarEnv(this.browserWs, this.browserImage, this.browserRevisions) }
     }
     emitLog(this.deps, renderLaunchRecord(mode, ctx, filters, spec, tests))
     const startedAt = (this.deps.now ?? Date.now)()
@@ -258,6 +255,7 @@ export class RunController {
     if (prepared.sidecar !== undefined) {
       this.browserWs = prepared.sidecar.endpoint
       this.browserImage = prepared.sidecar.image ?? null
+      this.browserRevisions = prepared.sidecar.browsers ?? null
     }
     this.runNotices = prepared.notices ?? []
     return prepared.notices === undefined ? { ok: true } : { ok: true, notices: prepared.notices }
@@ -266,6 +264,7 @@ export class RunController {
   dispose(): void {
     this.deps.browserSidecar?.dispose()
     this.browserImage = null
+    this.browserRevisions = null
     if (this.child === null) return
     if (this.sigkillTimer !== null) this.deps.timers.clearTimeout(this.sigkillTimer)
     this.sigkillTimer = null

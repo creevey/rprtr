@@ -1,4 +1,6 @@
 import type { PinBrowser, ResolvedProjectPin } from '../browser-pins.ts'
+import { DOCKER_BROWSER_REVISIONS_ENV, DOCKER_IMAGE_ENV } from '../docker-image.ts'
+import type { ImageBrowserRevisions } from '../image-browsers.ts'
 import type { RunTestDescriptor } from '../schemas.ts'
 import type { ClientWebSocketMessage } from '../types.ts'
 import { BROWSER_WS_ENV, hasBrowserEndpointHook, type BrowserSidecar } from './browser-sidecar.ts'
@@ -95,10 +97,30 @@ export function buildVitestArgs(
   return args
 }
 
+/** Env the Vitest child needs to attribute a sidecar-backed run to its image and builds. */
+export function buildVitestSidecarEnv(
+  endpoint: string,
+  image: string | null,
+  browsers: ImageBrowserRevisions | null,
+): Record<string, string> {
+  return {
+    [BROWSER_WS_ENV]: endpoint,
+    ...(image === null ? {} : { [DOCKER_IMAGE_ENV]: image }),
+    ...(browsers === null ? {} : { [DOCKER_BROWSER_REVISIONS_ENV]: JSON.stringify(browsers) }),
+  }
+}
+
 export interface PrepareVitestSidecarInput {
   ctx: RunContext
   sidecar: BrowserSidecar | undefined
   broadcast: (message: ClientWebSocketMessage) => void
+}
+
+export interface PreparedVitestSidecar {
+  ok: true
+  endpoint: string
+  image?: string
+  browsers?: ImageBrowserRevisions
 }
 
 /**
@@ -108,16 +130,23 @@ export interface PrepareVitestSidecarInput {
  */
 export async function prepareVitestSidecar(
   input: PrepareVitestSidecarInput,
-): Promise<{ ok: true; endpoint: string; image?: string } | { ok: false }> {
+): Promise<PreparedVitestSidecar | { ok: false }> {
   if (input.sidecar === undefined) return { ok: false }
   try {
     const endpoint = await input.sidecar.ensure(input.ctx, (phase) => {
       input.broadcast({ type: 'run-status', data: { running: true, mode: 'docker', phase } })
     })
+    let browsers: ImageBrowserRevisions | null = null
+    try {
+      browsers = await input.sidecar.browsers()
+    } catch {
+      // An unreadable image probe only downgrades pin verification.
+    }
     return {
       ok: true,
       endpoint,
       ...(input.sidecar.image === undefined ? {} : { image: input.sidecar.image }),
+      ...(browsers === null ? {} : { browsers }),
     }
   } catch (error) {
     input.broadcast({ type: 'run-status', data: { running: false, mode: 'docker' } })
@@ -145,7 +174,7 @@ export interface PrepareVitestSidecarRunInput {
  */
 export async function prepareVitestSidecarRun(
   input: PrepareVitestSidecarRunInput,
-): Promise<{ ok: true; endpoint: string; image?: string } | { ok: false }> {
+): Promise<PreparedVitestSidecar | { ok: false }> {
   const resolvedImage = input.sidecar?.resolveImage(input.ctx) ?? null
   if (resolvedImage !== null) {
     try {
@@ -165,5 +194,10 @@ export async function prepareVitestSidecarRun(
   const prepared = await prepareVitestSidecar({ ctx: input.ctx, sidecar: input.sidecar, broadcast: input.broadcast })
   if (!prepared.ok) return { ok: false }
   const image = prepared.image ?? resolvedImage
-  return image === null ? { ok: true, endpoint: prepared.endpoint } : { ok: true, endpoint: prepared.endpoint, image }
+  return {
+    ok: true,
+    endpoint: prepared.endpoint,
+    ...(image === null ? {} : { image }),
+    ...(prepared.browsers === undefined ? {} : { browsers: prepared.browsers }),
+  }
 }

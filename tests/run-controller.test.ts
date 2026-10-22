@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import { createDebugLogger } from '../src/debug-log'
+import type { ImageBrowserRevisions } from '../src/image-browsers'
 import type { ContainerPathMapping } from '../src/server/docker-support'
 import { gteMinor, resolveReporterDefault } from '../src/server/run-command-helpers'
 import {
@@ -85,6 +86,7 @@ interface Fixture {
   setLauncherMode: (mode: 'local' | 'docker') => void
   setHasBrowserHook: (value: boolean) => void
   setSidecarEnsureFails: (value: boolean) => void
+  setSidecarBrowsers: (value: ImageBrowserRevisions | null) => void
   sidecarEnsureCalls: { value: number }
   sidecarDisposeCalls: { value: number }
   sidecarPhases: string[]
@@ -126,6 +128,7 @@ function createFixture(
   let containerSpec: { image: string; name: string } | undefined
   let hasBrowserHook = false
   let sidecarEnsureFails = false
+  let sidecarBrowsers: ImageBrowserRevisions | null = null
   const sidecarEnsureCalls = { value: 0 }
   const sidecarDisposeCalls = { value: 0 }
   const sidecarPhases: string[] = []
@@ -208,6 +211,7 @@ function createFixture(
         if (sidecarEnsureFails) return Promise.reject(new Error('sidecar unavailable'))
         return Promise.resolve('ws://127.0.0.1:49153/')
       },
+      browsers: (): Promise<ImageBrowserRevisions | null> => Promise.resolve(sidecarBrowsers),
       dispose: (): void => {
         sidecarDisposeCalls.value += 1
       },
@@ -286,6 +290,9 @@ function createFixture(
     },
     setSidecarEnsureFails: (value): void => {
       sidecarEnsureFails = value
+    },
+    setSidecarBrowsers: (value): void => {
+      sidecarBrowsers = value
     },
     sidecarEnsureCalls,
     sidecarDisposeCalls,
@@ -979,6 +986,31 @@ describe('RunController.prepareRun Vitest sidecar', () => {
       { type: 'run-status', data: { running: true, mode: 'docker', phase: 'starting-sidecar' } },
     ])
     expect(f.prepareCalls.value).toBe(0)
+  })
+
+  test('a sidecar image probe exports its browser revisions to the Vitest run', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    f.setSidecarBrowsers({ chromium: ['1217'], firefox: ['1511'] })
+    await f.controller.prepareRun()
+
+    expect(f.controller.start({})).toEqual({ ok: true })
+    const env = f.spawnCalls[0]!.opts.env as Record<string, string | undefined>
+    expect(env.CRVY_RPRTR_DOCKER_BROWSER_REVISIONS).toBe('{"chromium":["1217"],"firefox":["1511"]}')
+  })
+
+  test('an unprobeable sidecar image exports no browser revisions', async () => {
+    const f = createFixture(VITEST_CTX)
+    f.setRunMode('docker')
+    f.setLauncherMode('docker')
+    f.setHasBrowserHook(true)
+    await f.controller.prepareRun()
+
+    expect(f.controller.start({})).toEqual({ ok: true })
+    const env = f.spawnCalls[0]!.opts.env as Record<string, string | undefined>
+    expect(env.CRVY_RPRTR_DOCKER_BROWSER_REVISIONS).toBeUndefined()
   })
 
   test('sidecar ensure failure reports docker-unavailable and the run never spawns', async () => {
