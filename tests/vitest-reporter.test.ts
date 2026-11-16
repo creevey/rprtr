@@ -760,6 +760,37 @@ describe('CrvyRprtrVitestReporter', () => {
     ).toBe(true)
   })
 
+  test('CI mode with reportOnlyFailedTests drops passing tests from the offline report', async () => {
+    const fixture = await createReporterFixture()
+    cleanupDirs.push(fixture.paths.root)
+    const offlineReportPath = join(fixture.paths.root, 'crvy-rprtr-0.json')
+
+    const reporter = new CrvyRprtrVitestReporter({
+      ci: true,
+      reportOnlyFailedTests: true,
+      offlineReportPath,
+      reportHtmlPath: join(fixture.paths.root, 'crvy-rprtr.html'),
+      screenshotDir: fixture.screenshotDir,
+      serverUrl: 'ws://127.0.0.1:9',
+    })
+    reporter.onInit(createMockVitest(fixture.paths.root) as never)
+
+    const passing = createTestCase({ id: 'vitest-pass', name: 'passes', file: fixture.paths.testFile, state: 'passed' })
+    const failing = createTestCase({ id: 'vitest-fail', name: 'fails', file: fixture.paths.testFile })
+    for (const testCase of [passing, failing]) {
+      reporter.onTestCaseReady?.(testCase as never)
+      reporter.onTestCaseResult?.(testCase as never)
+    }
+    await reporter.onTestRunEnd?.([], [], 'failed')
+
+    const report = OfflineReportSchema.parse(JSON.parse(await readFile(offlineReportPath, 'utf-8')))
+    expect(report.events.map((event) => `${event.type}:${(event.data as { id?: string }).id ?? ''}`)).toEqual([
+      'test-begin:vitest-fail',
+      'test-end:vitest-fail',
+      'run-end:',
+    ])
+  })
+
   test('CI mode falls back to one worker when maxWorkers is unavailable', async () => {
     const fixture = await createReporterFixture()
     cleanupDirs.push(fixture.paths.root)

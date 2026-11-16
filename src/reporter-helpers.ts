@@ -13,6 +13,8 @@ export interface CrvyRprtrOptions {
   playwrightSnapshotPathTemplate?: string
   playwrightToHaveScreenshotPathTemplate?: string
   ci?: boolean
+  /** CI/offline artifacts keep only failed tests; live server runs ignore it. */
+  reportOnlyFailedTests?: boolean
   /**
    * What to do when a declared browser pin drifts from the effective browser
    * build: `warn` (default) annotates the run, `fail` fails it at reporter init.
