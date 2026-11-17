@@ -10,7 +10,15 @@ export interface ReporterTransportOptions {
   reportHtmlPath?: string
   workerIndex?: number
   ci?: boolean
+  /**
+   * CI/offline artifacts keep only failed tests: passed and skipped results are
+   * dropped from the offline report and static HTML, and their screenshots are
+   * not copied. Live server runs ignore it so the UI can still approve passing tests.
+   */
+  reportOnlyFailedTests?: boolean
 }
+
+const NON_FAILED_STATUSES = new Set(['passed', 'skipped'])
 
 function normalizeWorkerCount(count: number | undefined): number {
   if (count === undefined || !Number.isFinite(count)) return 1
@@ -34,6 +42,7 @@ export class ReporterTransport {
   private isOfflineMode = false
   private runEvents: RunEvent[] = []
   readonly ci: boolean
+  private readonly reportOnlyFailedTests: boolean
 
   constructor(options: ReporterTransportOptions = {}) {
     this.serverUrl = options.serverUrl ?? process.env.CRVY_RPRTR_SERVER_URL ?? 'ws://localhost:3000'
@@ -43,6 +52,22 @@ export class ReporterTransport {
     this.reportHtmlPath = options.reportHtmlPath ?? './crvy-rprtr.html'
     this.ci = options.ci ?? isCI()
     if (this.ci) this.isOfflineMode = true
+    this.reportOnlyFailedTests = this.ci && options.reportOnlyFailedTests === true
+  }
+
+  /**
+   * Whether a finished test belongs in the run's artifacts. A dropped result also
+   * removes its pending `test-begin`, so the test leaves no trace; earlier failed
+   * attempts of a retried test stay.
+   */
+  keepsResult(testId: string, status: string): boolean {
+    if (!this.reportOnlyFailedTests || !NON_FAILED_STATUSES.has(status)) return true
+    const index = this.runEvents.findLastIndex(
+      ({ type, data }) =>
+        type === 'test-begin' && typeof data === 'object' && data !== null && 'id' in data && data.id === testId,
+    )
+    if (index !== -1) this.runEvents.splice(index, 1)
+    return false
   }
 
   /** Provider-resolved worker capacity for the run-level `workers` field. */

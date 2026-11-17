@@ -189,6 +189,7 @@ export class CrvyRprtr implements Reporter {
       duration: result.duration,
     }
     try {
+      if (!this.transport.keepsResult(test.id, result.status)) return
       if (this.ci) {
         const baselineInput = result.status === 'passed' ? this.baselineInput(test, screenshotDeclarations) : null
         const resolvedTargets = baselineInput === null ? [] : resolveBaselineTargets(baselineInput)

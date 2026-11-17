@@ -196,6 +196,7 @@ export class CrvyRprtrVitestReporter implements Reporter {
     }
 
     try {
+      if (!this.transport.keepsResult(testCase.id, data.status)) return
       if (this.ci) {
         this.pendingArtifacts.push({ testId: testCase.id, nativeAttachments: attachments, eventData: data })
       }
